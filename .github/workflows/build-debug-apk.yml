@@ -15,6 +15,13 @@ jobs:
       - name: Checkout project
         uses: actions/checkout@v4
 
+      - name: Fetch metroproto
+        run: |
+          rm -rf metroproto
+          git clone --depth 1 https://github.com/MetrolistGroup/metroproto.git metroproto
+          ls -la metroproto
+          test -f metroproto/listentogether.proto
+
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
