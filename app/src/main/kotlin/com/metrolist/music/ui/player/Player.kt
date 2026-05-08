@@ -1140,16 +1140,13 @@ fun BottomSheetPlayer(
                             } else {
                                 FilledIconButton(
                                     onClick = {
-                                        val intent =
-                                            Intent().apply {
-                                                action = Intent.ACTION_SEND
-                                                type = "text/plain"
-                                                putExtra(
-                                                    Intent.EXTRA_TEXT,
-                                                    "https://music.youtube.com/watch?v=${mediaMetadata.id}",
-                                                )
-                                            }
-                                        context.startActivity(Intent.createChooser(intent, null))
+                                        Toast
+                                            .makeText(
+                                                context,
+                                                context.getString(R.string.start_radio),
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                        playerConnection.startRadioSeamlessly()
                                     },
                                     shape = shareShape,
                                     colors =
@@ -1160,7 +1157,7 @@ fun BottomSheetPlayer(
                                     modifier = Modifier.size(42.dp),
                                 ) {
                                     Icon(
-                                        painter = painterResource(R.drawable.share),
+                                        painter = painterResource(R.drawable.radio),
                                         contentDescription = null,
                                         modifier = Modifier.size(24.dp),
                                     )
@@ -1262,20 +1259,17 @@ fun BottomSheetPlayer(
                                         .clip(RoundedCornerShape(24.dp))
                                         .background(textButtonColor)
                                         .clickable {
-                                            val intent =
-                                                Intent().apply {
-                                                    action = Intent.ACTION_SEND
-                                                    type = "text/plain"
-                                                    putExtra(
-                                                        Intent.EXTRA_TEXT,
-                                                        "https://music.youtube.com/watch?v=${mediaMetadata.id}",
-                                                    )
-                                                }
-                                            context.startActivity(Intent.createChooser(intent, null))
+                                            Toast
+                                                .makeText(
+                                                    context,
+                                                    context.getString(R.string.start_radio),
+                                                    Toast.LENGTH_SHORT,
+                                                ).show()
+                                            playerConnection.startRadioSeamlessly()
                                         },
                             ) {
                                 Icon(
-                                    painter = painterResource(R.drawable.share),
+                                    painter = painterResource(R.drawable.radio),
                                     contentDescription = null,
                                     tint = iconButtonColor,
                                     modifier =
@@ -1809,7 +1803,6 @@ fun BottomSheetPlayer(
 
         when (LocalConfiguration.current.orientation) {
             Configuration.ORIENTATION_LANDSCAPE -> {
-                // Calculate vertical padding like OuterTune
                 val density = LocalDensity.current
                 val verticalPadding =
                     max(
@@ -1824,72 +1817,64 @@ fun BottomSheetPlayer(
                         Modifier
                             .windowInsetsPadding(
                                 WindowInsets.systemBars.only(WindowInsetsSides.Horizontal).add(verticalWindowInsets),
-                            ).padding(bottom = 24.dp)
+                            )
+                            .padding(bottom = 12.dp)
                             .fillMaxSize(),
                 ) {
-                    Row(
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .fillMaxSize(),
-                    ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .nestedScroll(state.preUpPostDownNestedScrollConnection),
-                    ) {
-                        // Remember lambdas to prevent unnecessary recomposition
-                        val currentSliderPosition by rememberUpdatedState(sliderPosition)
-                        val sliderPositionProvider = remember { { currentSliderPosition } }
-                        val isExpandedProvider = remember(state) { { state.isExpanded } }
-                        AnimatedContent(
-                            targetState = showInlineLyrics,
-                            label = "Lyrics",
-                            transitionSpec = { fadeIn() togetherWith fadeOut() },
-                        ) { showLyrics ->
-                            if (showLyrics) {
-                                InlineLyricsView(
-                                    mediaMetadata = mediaMetadata,
-                                    showLyrics = showLyrics,
-                                    positionProvider = { effectivePosition },
-                                )
-                            } else {
-                                Thumbnail(
-                                    sliderPositionProvider = sliderPositionProvider,
-                                    modifier = Modifier.animateContentSize(),
-                                    isPlayerExpanded = isExpandedProvider,
-                                    isLandscape = true,
-                                    isListenTogetherGuest = isListenTogetherGuest,
-                                )
-                            }
-                        }
-                    }
-
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier =
                             Modifier
-                                .weight(if (showInlineLyrics) 0.65f else 1f, false)
-                                .animateContentSize()
-                                .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top)),
+                                .weight(0.45f)
+                                .fillMaxSize()
+                                .padding(horizontal = 20.dp, vertical = 8.dp)
+                                .nestedScroll(state.preUpPostDownNestedScrollConnection),
                     ) {
-                        Spacer(Modifier.weight(1f))
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                        ) {
+                            val currentSliderPosition by rememberUpdatedState(sliderPosition)
+                            val sliderPositionProvider = remember { { currentSliderPosition } }
+                            val isExpandedProvider = remember(state) { { state.isExpanded } }
+
+                            AnimatedContent(
+                                targetState = showInlineLyrics,
+                                label = "Lyrics",
+                                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                            ) { showLyrics ->
+                                if (showLyrics) {
+                                    InlineLyricsView(
+                                        mediaMetadata = mediaMetadata,
+                                        showLyrics = showLyrics,
+                                        positionProvider = { effectivePosition },
+                                    )
+                                } else {
+                                    Thumbnail(
+                                        sliderPositionProvider = sliderPositionProvider,
+                                        modifier = Modifier.animateContentSize(),
+                                        isPlayerExpanded = isExpandedProvider,
+                                        isLandscape = true,
+                                        isListenTogetherGuest = isListenTogetherGuest,
+                                    )
+                                }
+                            }
+                        }
 
                         mediaMetadata?.let {
                             controlsContent(it)
                         }
 
-                        Spacer(Modifier.weight(1f))
-                    }
-                
+                        Spacer(Modifier.height(12.dp))
                     }
 
                     Box(
                         modifier =
                             Modifier
-                                .weight(1f)
+                                .weight(0.55f)
                                 .fillMaxSize()
                                 .padding(start = 8.dp),
                     ) {
@@ -1916,7 +1901,7 @@ fun BottomSheetPlayer(
                             },
                         )
                     }
-}
+                }
             }
 
             else -> {
