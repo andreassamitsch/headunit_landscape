@@ -43,21 +43,39 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Restore persistent debug keystore
-        shell: bash
+      - name: Restore Dudu7 debug keystore
+        id: dudu7_keystore
+        uses: actions/cache/restore@v4
+        with:
+          path: app/dudu7-debug.keystore
+          key: dudu7-debug-keystore-v1
+
+      - name: Generate Dudu7 debug keystore
+        if: steps.dudu7_keystore.outputs.cache-hit != 'true'
         run: |
-          if [ -z "${{ secrets.DEBUG_KEYSTORE }}" ]; then
-            echo "DEBUG_KEYSTORE secret is missing"
-            exit 1
-          fi
-          echo "${{ secrets.DEBUG_KEYSTORE }}" | base64 --decode > app/persistent-debug.keystore
-          test -s app/persistent-debug.keystore
+          keytool -genkeypair -v \
+            -keystore app/dudu7-debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Metrolist Dudu7 Test,O=Metrolist,C=AT"
+
+      - name: Save Dudu7 debug keystore
+        if: steps.dudu7_keystore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: app/dudu7-debug.keystore
+          key: ${{ steps.dudu7_keystore.outputs.cache-primary-key }}
 
       - name: Build installable GMS Debug APK (No Lint)
         run: ./gradlew --console=plain assembleGmsDebug --warning-mode summary -x lint -x lintGmsDebug
         env:
           METROLIST_APPLICATION_ID: com.metrolist.music.test
           METROLIST_APP_NAME: Metrolist Dudu7 Test
+          METROLIST_DEBUG_KEYSTORE_PATH: dudu7-debug.keystore
           PULL_REQUEST: "false"
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
