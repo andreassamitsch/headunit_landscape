@@ -13,17 +13,20 @@ on:
       - ".github/ISSUE_TEMPLATE/**"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build_quick:
-    name: Quick Universal Release Build
+    name: Quick GMS Debug Build
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: recursive
+
+      - name: Apply Dudu7 voice and playback fixes
+        run: python3 scripts/apply_dudu7_fixes.py
 
       - name: Set up JDK 21
         uses: actions/setup-java@v5
@@ -40,34 +43,29 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build Release APK (No Lint)
-        run: ./gradlew --console=plain assembleFossRelease --warning-mode summary -x lint -x lintFossRelease
+      - name: Restore persistent debug keystore
+        shell: bash
+        run: |
+          if [ -z "${{ secrets.DEBUG_KEYSTORE }}" ]; then
+            echo "DEBUG_KEYSTORE secret is missing"
+            exit 1
+          fi
+          echo "${{ secrets.DEBUG_KEYSTORE }}" | base64 --decode > app/persistent-debug.keystore
+          test -s app/persistent-debug.keystore
+
+      - name: Build installable GMS Debug APK (No Lint)
+        run: ./gradlew --console=plain assembleGmsDebug --warning-mode summary -x lint -x lintGmsDebug
         env:
           METROLIST_APPLICATION_ID: com.metrolist.music.test
-          METROLIST_APP_NAME: Metrolist Testing
+          METROLIST_APP_NAME: Metrolist Dudu7 Test
           PULL_REQUEST: "false"
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
 
-      - name: Sign APK
-        uses: ilharp/sign-android-release@v2.0.0
-        with:
-          releaseDir: app/build/outputs/apk/foss/release/
-          signingKey: ${{ secrets.KEYSTORE }}
-          keyAlias: ${{ secrets.KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
-          buildToolsVersion: 35.0.0
-
-      - name: Move signed APK
-        run: |
-          OUTPUT_DIR="app/build/outputs/apk/foss/release"
-          mkdir -p "$OUTPUT_DIR/out"
-          find "$OUTPUT_DIR" -name "*-signed.apk" -o -name "*-unsigned-signed.apk" | xargs -I{} mv {} "$OUTPUT_DIR/out/app-universal-test-release.apk"
-
-      - name: Upload Signed APK
+      - name: Upload installable APK
         uses: actions/upload-artifact@v6
         with:
-          name: app-universal-test-release
-          path: app/build/outputs/apk/foss/release/out/*
+          name: metrolist-dudu7-test-apk
+          path: app/build/outputs/apk/gms/debug/*.apk
+          if-no-files-found: error
