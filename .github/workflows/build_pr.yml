@@ -62,8 +62,11 @@ jobs:
           path: app/pr-debug.keystore
           key: ${{ steps.pr_keystore.outputs.cache-primary-key }}
 
-      - name: Build and Lint FOSS Debug APK
-        run: ./gradlew --console=plain assembleFossDebug :app:lintFossDebug --warning-mode summary
+      - name: Build FOSS Debug APK
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew --console=plain assembleFossDebug --warning-mode summary 2>&1 | tee gradle-build.log
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           METROLIST_APPLICATION_ID: com.metrolist.music.pr.p${{ github.event.number }}
@@ -72,6 +75,17 @@ jobs:
           PULL_REQUEST: "true"
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+
+      - name: Upload Gradle diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: gradle-diagnostics-pr-${{ github.event.number }}
+          path: gradle-build.log
+          if-no-files-found: error
+
+      - name: Run FOSS Debug Lint
+        run: ./gradlew --console=plain :app:lintFossDebug --warning-mode summary
 
       - name: Upload APK
         uses: actions/upload-artifact@v6
