@@ -17,10 +17,8 @@ data class PlaylistPage(
 ) {
     companion object {
         fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer): SongItem? {
-            // Extract library tokens using the new method that properly handles multiple toggle items
             val libraryTokens = PageHelper.extractLibraryTokensFromMenuItems(renderer.menu?.menuRenderer?.items)
 
-            // Split the secondary line by bullet separator to separate artists from other metadata (like views)
             val secondaryLineRuns = renderer.flexColumns
                 .getOrNull(1)
                 ?.musicResponsiveListItemFlexColumnRenderer
@@ -29,7 +27,7 @@ data class PlaylistPage(
                 ?.splitBySeparator()
 
             return SongItem(
-                id = renderer.playlistItemData?.videoId ?: return null,
+                id = renderer.videoId ?: return null,
                 title = renderer.flexColumns.firstOrNull()
                     ?.musicResponsiveListItemFlexColumnRenderer?.text
                     ?.runs?.firstOrNull()?.text ?: return null,
@@ -52,7 +50,7 @@ data class PlaylistPage(
                     it.musicInlineBadgeRenderer?.icon?.iconType == "MUSIC_EXPLICIT_BADGE"
                 } != null,
                 endpoint = renderer.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchEndpoint,
-                setVideoId = renderer.playlistItemData.playlistSetVideoId ?: return null,
+                setVideoId = renderer.playlistSetVideoId ?: return null,
                 libraryAddToken = libraryTokens.addToken,
                 libraryRemoveToken = libraryTokens.removeToken,
                 isEpisode = renderer.isEpisode
