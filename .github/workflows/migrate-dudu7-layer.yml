@@ -38,11 +38,24 @@ jobs:
           from pathlib import Path
           path = Path("scripts/migrate_dudu7_core_v2.py")
           text = path.read_text(encoding="utf-8")
-          old = '"                            expandedBound = maxHeight,\\n                        )\\n\\n                    val playerAwareWindowInsets ="'
-          new = '"                        expandedBound = maxHeight,\\n                    )\\n\\n                val playerAwareWindowInsets ="'
-          if old not in text:
-              raise SystemExit("MainActivity formatting anchor was not found in migration script")
-          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          replacements = [
+              (
+                  '"                            expandedBound = maxHeight,\\n                        )\\n\\n                    val playerAwareWindowInsets ="',
+                  '"                        expandedBound = maxHeight,\\n                    )\\n\\n                val playerAwareWindowInsets ="',
+              ),
+              (
+                  "r'                    LaunchedEffect\\(playerConnection\\) \\{.*?\\n                    \\}\\n\\n                    DisposableEffect'",
+                  "r'                LaunchedEffect\\(playerConnection\\) \\{.*?\\n                \\}\\n\\n                DisposableEffect'",
+              ),
+          ]
+
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f"Migration formatting anchor was not found: {old[:80]}")
+              text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding="utf-8")
           PY
 
       - name: Materialize fixes and migrate architecture
