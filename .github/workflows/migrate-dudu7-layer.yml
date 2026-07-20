@@ -11,13 +11,17 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: dudu7-layer-migration
+  cancel-in-progress: true
+
 jobs:
   migrate-and-validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: agent/dudu7-layer
+          ref: ${{ github.sha }}
           fetch-depth: 0
           submodules: recursive
 
@@ -177,6 +181,16 @@ jobs:
           name: metrolist-dudu7-migrated-apk
           path: dist/Metrolist-Dudu7-Migrated.apk
           if-no-files-found: error
+
+      - name: Remove one-time migration machinery
+        run: |
+          rm -f \
+            scripts/apply_dudu7_fixes.py \
+            scripts/apply_liked_playlist_fixes.py \
+            scripts/migrate_dudu7_core.py \
+            scripts/migrate_dudu7_core_v2.py \
+            .github/workflows/migrate-dudu7-layer.yml
+          python3 scripts/verify_dudu7_architecture.py
 
       - name: Commit validated migration
         run: |
