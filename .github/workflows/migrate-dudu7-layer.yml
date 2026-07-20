@@ -32,6 +32,19 @@ jobs:
 
       - run: chmod +x gradlew
 
+      - name: Align bootstrap with current MainActivity formatting
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/migrate_dudu7_core_v2.py")
+          text = path.read_text(encoding="utf-8")
+          old = '"                            expandedBound = maxHeight,\\n                        )\\n\\n                    val playerAwareWindowInsets ="'
+          new = '"                        expandedBound = maxHeight,\\n                    )\\n\\n                val playerAwareWindowInsets ="'
+          if old not in text:
+              raise SystemExit("MainActivity formatting anchor was not found in migration script")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+
       - name: Materialize fixes and migrate architecture
         shell: bash
         run: |
