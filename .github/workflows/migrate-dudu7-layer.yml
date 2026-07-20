@@ -33,7 +33,21 @@ jobs:
       - run: chmod +x gradlew
 
       - name: Materialize fixes and migrate architecture
-        run: python3 scripts/migrate_dudu7_core_v2.py
+        shell: bash
+        run: |
+          set +e
+          python3 scripts/migrate_dudu7_core_v2.py > migration.log 2>&1
+          STATUS=$?
+          cat migration.log
+          exit $STATUS
+
+      - name: Upload migration diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: dudu7-migration-diagnostics
+          path: migration.log
+          if-no-files-found: warn
 
       - name: Create migration debug keystore
         run: |
