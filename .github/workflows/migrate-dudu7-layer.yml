@@ -1,0 +1,81 @@
+name: Migrate Dudu7 Layer
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["agent/dudu7-layer"]
+    paths:
+      - "scripts/migrate_dudu7_core.py"
+      - ".github/workflows/migrate-dudu7-layer.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  migrate-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/dudu7-layer
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: "21"
+          distribution: temurin
+
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-cleanup: on-success
+
+      - run: chmod +x gradlew
+
+      - name: Materialize fixes and migrate architecture
+        run: python3 scripts/migrate_dudu7_core.py
+
+      - name: Create migration debug keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore app/migration-debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Metrolist Dudu7 Migration,O=Metrolist,C=AT"
+
+      - name: Validate standard and Dudu7 variants
+        run: |
+          ./gradlew --console=plain \
+            assembleFossStandardDebug :app:lintFossStandardDebug \
+            assembleGmsDudu7Debug :app:lintGmsDudu7Debug \
+            testGmsDudu7DebugUnitTest \
+            --warning-mode summary
+        env:
+          METROLIST_DEBUG_KEYSTORE_PATH: migration-debug.keystore
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+
+      - name: Upload validated Dudu7 APK
+        run: |
+          mkdir -p dist
+          find app/build/outputs/apk -name '*.apk' -print
+          find app/build/outputs/apk -path '*gmsDudu7*' -name '*.apk' -print -quit | xargs -r -I{} cp {} dist/Metrolist-Dudu7-Migrated.apk
+          test -f dist/Metrolist-Dudu7-Migrated.apk
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: metrolist-dudu7-migrated-apk
+          path: dist/Metrolist-Dudu7-Migrated.apk
+          if-no-files-found: error
+
+      - name: Commit validated migration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "architecture: materialize maintainable Dudu7 layer"
+          git push origin HEAD:agent/dudu7-layer
