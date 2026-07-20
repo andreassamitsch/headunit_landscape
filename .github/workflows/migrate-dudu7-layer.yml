@@ -92,16 +92,29 @@ jobs:
             -dname "CN=Metrolist Dudu7 Migration,O=Metrolist,C=AT"
 
       - name: Validate standard and Dudu7 variants
+        shell: bash
         run: |
+          set +e
           ./gradlew --console=plain \
             assembleFossStandardDebug :app:lintFossStandardDebug \
             assembleGmsDudu7Debug :app:lintGmsDudu7Debug \
             testGmsDudu7DebugUnitTest \
-            --warning-mode summary
+            --warning-mode summary > gradle-validation.log 2>&1
+          STATUS=$?
+          tail -n 240 gradle-validation.log
+          exit $STATUS
         env:
           METROLIST_DEBUG_KEYSTORE_PATH: migration-debug.keystore
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+
+      - name: Upload Gradle diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: dudu7-gradle-diagnostics
+          path: gradle-validation.log
+          if-no-files-found: warn
 
       - name: Collect validated Dudu7 APK
         shell: bash
