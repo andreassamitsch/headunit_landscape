@@ -111,6 +111,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import coil3.compose.AsyncImage
@@ -130,6 +131,7 @@ import com.metrolist.music.constants.DarkModeKey
 import com.metrolist.music.constants.DefaultOpenTabKey
 import com.metrolist.music.constants.DisableScreenshotKey
 import com.metrolist.music.constants.DynamicThemeKey
+import com.metrolist.music.constants.Dudu7AlwaysStartPlayerKey
 import com.metrolist.music.constants.EnableHighRefreshRateKey
 import com.metrolist.music.constants.ExperimentalLyricsKey
 import com.metrolist.music.constants.LastSeenVersionKey
@@ -185,6 +187,8 @@ import com.metrolist.music.ui.theme.MetrolistTheme
 import com.metrolist.music.ui.theme.extractThemeColor
 import com.metrolist.music.ui.utils.appBarScrollBehavior
 import com.metrolist.music.ui.utils.resetHeightOffset
+import com.metrolist.music.variant.VehicleSettingsScreen
+import com.metrolist.music.variant.VehicleVariantConfig
 import com.metrolist.music.utils.SyncUtils
 import com.metrolist.music.utils.Updater
 import com.metrolist.music.utils.dataStore
@@ -751,10 +755,15 @@ class MainActivity : ComponentActivity() {
                                 (if (!showRail && shouldShowNavigationBar) navPadding else 0.dp) +
                                 (if (useNewMiniPlayerDesign) MiniPlayerBottomSpacing else 0.dp) +
                                 MiniPlayerHeight,
-                        expandedBound = maxHeight,
-                    )
+                            expandedBound = maxHeight,
+                        )
+                    val (dudu7AlwaysStartPlayer) =
+                        rememberPreference(
+                            Dudu7AlwaysStartPlayerKey,
+                            defaultValue = VehicleVariantConfig.playerStartsExpanded,
+                        )
 
-                val playerAwareWindowInsets =
+                    val playerAwareWindowInsets =
                     remember(
                         bottomInset,
                         shouldShowNavigationBar,
@@ -829,20 +838,18 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                LaunchedEffect(playerConnection) {
-                    val player = playerConnection?.player ?: return@LaunchedEffect
-                    if (player.currentMediaItem == null) {
-                        if (!playerBottomSheetState.isDismissed) {
-                            playerBottomSheetState.dismiss()
-                        }
-                    } else {
-                        if (playerBottomSheetState.isDismissed) {
+                    LaunchedEffect(playerConnection, dudu7AlwaysStartPlayer) {
+                        val player = playerConnection?.player ?: return@LaunchedEffect
+                        if (VehicleVariantConfig.isDudu7 && dudu7AlwaysStartPlayer) {
+                            if (!playerBottomSheetState.isExpanded) playerBottomSheetState.expandSoft()
+                        } else if (player.currentMediaItem == null) {
+                            if (!playerBottomSheetState.isDismissed) playerBottomSheetState.dismiss()
+                        } else if (playerBottomSheetState.isDismissed) {
                             playerBottomSheetState.collapseSoft()
                         }
                     }
-                }
 
-                DisposableEffect(playerConnection, playerBottomSheetState) {
+                    DisposableEffect(playerConnection, playerBottomSheetState) {
                     val player = playerConnection?.player ?: return@DisposableEffect onDispose { }
                     val listener =
                         object : Player.Listener {
@@ -1310,6 +1317,9 @@ class MainActivity : ComponentActivity() {
                                         activity = this@MainActivity,
                                         snackbarHostState = snackbarHostState,
                                     )
+                                    composable("vehicle_settings") {
+                                        VehicleSettingsScreen(navController)
+                                    }
                                 }
                             }
                         }

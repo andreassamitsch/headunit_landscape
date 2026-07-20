@@ -46,6 +46,25 @@ object YTPlayerUtils {
 
     private val poTokenGenerator = PoTokenGenerator()
 
+    private val webRemixFailedIds =
+        java.util.Collections.newSetFromMap(
+            java.util.concurrent.ConcurrentHashMap<String, Boolean>(),
+        )
+
+    fun markWebRemixFailed(videoId: String) {
+        webRemixFailedIds.add(videoId)
+    }
+
+    private const val POTOKEN_WARMUP_VIDEO_ID = "jNQXAC9IVRw"
+
+    suspend fun prewarmPoToken() {
+        val sessionId = YouTube.visitorData ?: return
+        if (!MAIN_CLIENT.useWebPoTokens) return
+        runCatching {
+            poTokenGenerator.getWebClientPoToken(POTOKEN_WARMUP_VIDEO_ID, sessionId)
+        }.onFailure { Timber.tag(TAG).w(it, "PoToken prewarm skipped: ${it.message}") }
+    }
+
     private val MAIN_CLIENT: YouTubeClient = WEB_REMIX
 
     private val STREAM_FALLBACK_CLIENTS: Array<YouTubeClient> = arrayOf(
@@ -169,7 +188,7 @@ object YTPlayerUtils {
         // For age-restricted: skip main client, start with fallbacks
         // For normal content: standard order
         val startIndex = when {
-            isAgeRestricted -> 0
+            isAgeRestricted || videoId in webRemixFailedIds -> 0
             else -> -1
         }
 
@@ -308,6 +327,14 @@ object YTPlayerUtils {
                 }
 
                 Timber.tag(logTag).d("Stream expires in: $streamExpiresInSeconds seconds")
+
+                if (clientIndex == -1) {
+                    // WEB_REMIX CDN URLs can reject HEAD while the actual range GET works.
+                    // Let ExoPlayer perform the real request; a 403/410 is retried with fallbacks.
+                    Timber.tag(logTag).d("Using WEB_REMIX without HEAD validation")
+                    Timber.tag(TAG).i("Playback: client=${currentClient.clientName}, videoId=$videoId")
+                    break
+                }
 
                 if (clientIndex == STREAM_FALLBACK_CLIENTS.size - 1) {
                     /** skip [validateStatus] for last client */

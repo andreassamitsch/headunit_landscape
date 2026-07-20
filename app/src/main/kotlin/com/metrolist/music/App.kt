@@ -31,12 +31,15 @@ import com.metrolist.music.di.ApplicationScope
 import com.metrolist.music.extensions.toEnum
 import com.metrolist.music.extensions.toInetSocketAddress
 import com.metrolist.music.utils.CrashHandler
+import com.metrolist.music.utils.YTPlayerUtils
 import com.metrolist.music.utils.cipher.CipherDeobfuscator
 import com.metrolist.music.utils.dataStore
 import com.metrolist.music.utils.reportException
+import com.metrolist.music.variant.VehicleVariantDefaults
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -84,7 +87,25 @@ class App :
 
         // تهيئة إعدادات التطبيق عند الإقلاع
         applicationScope.launch {
+            // Apply locale/proxy/session settings before creating cached network/WebView helpers.
             initializeSettings()
+            VehicleVariantDefaults.apply(this@App)
+
+            launch(Dispatchers.IO) {
+                delay(1_500)
+                CipherDeobfuscator.prewarm()
+            }
+
+            launch(Dispatchers.IO) {
+                delay(2_500)
+                var waitedMs = 0
+                while (YouTube.visitorData == null && waitedMs < 12_000) {
+                    delay(500)
+                    waitedMs += 500
+                }
+                YTPlayerUtils.prewarmPoToken()
+            }
+
             observeSettingsChanges()
         }
     }

@@ -102,8 +102,11 @@ import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
 import androidx.navigation.NavController
 import com.metrolist.music.LocalListenTogetherManager
 import com.metrolist.music.LocalPlayerConnection
+import com.metrolist.music.BuildConfig
 import com.metrolist.music.R
 import com.metrolist.music.constants.ListItemHeight
+import com.metrolist.music.constants.Dudu7AutoCenterQueueKey
+import com.metrolist.music.constants.Dudu7SwipeToRemoveQueueKey
 import com.metrolist.music.constants.PlayerBackgroundStyle
 import com.metrolist.music.constants.QueueEditLockKey
 import com.metrolist.music.constants.UseNewPlayerDesignKey
@@ -125,6 +128,7 @@ import com.metrolist.music.ui.utils.ShowMediaInfo
 import com.metrolist.music.utils.dataStore
 import com.metrolist.music.utils.makeTimeString
 import com.metrolist.music.utils.rememberPreference
+import com.metrolist.music.variant.VehicleVariantConfig
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -214,7 +218,12 @@ fun Queue(
         BackHandler(onBack = onExitSelectionMode)
     }
 
-    var locked by rememberPreference(QueueEditLockKey, defaultValue = true)
+    var locked by rememberPreference(
+        QueueEditLockKey,
+        defaultValue = VehicleVariantConfig.queueEditLockedDefault,
+    )
+    val (dudu7SwipeToRemoveQueue) = rememberPreference(Dudu7SwipeToRemoveQueueKey, defaultValue = true)
+    val (dudu7AutoCenterQueue) = rememberPreference(Dudu7AutoCenterQueueKey, defaultValue = true)
 
     val (useNewPlayerDesign, onUseNewPlayerDesignChange) =
         rememberPreference(
@@ -737,8 +746,8 @@ fun Queue(
             }
         }
 
-        LaunchedEffect(mutableQueueWindows, currentWindowIndex) {
-            if (currentWindowIndex != -1) {
+        LaunchedEffect(mutableQueueWindows, currentWindowIndex, dudu7AutoCenterQueue) {
+            if (currentWindowIndex != -1 && (!BuildConfig.IS_DUDU7 || dudu7AutoCenterQueue)) {
                 lazyListState.scrollToItem(currentWindowIndex)
             }
         }
@@ -932,7 +941,7 @@ fun Queue(
                             }
                         }
 
-                        if (locked) {
+                        if (locked || (BuildConfig.IS_DUDU7 && !dudu7SwipeToRemoveQueue)) {
                             content()
                         } else {
                             SwipeToDismissBox(
@@ -1071,6 +1080,14 @@ fun Queue(
                     exit = fadeOut() + slideOutVertically { it },
                 ) {
                     Row {
+                        if (BuildConfig.IS_DUDU7) {
+                            IconButton(onClick = { navController.navigate("vehicle_settings") }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.settings),
+                                    contentDescription = "Dudu7 settings",
+                                )
+                            }
+                        }
                         IconButton(
                             onClick = { locked = !locked },
                             modifier = Modifier.padding(horizontal = 6.dp),

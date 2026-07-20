@@ -135,9 +135,12 @@ import com.metrolist.music.LocalDatabase
 import com.metrolist.music.LocalDownloadUtil
 import com.metrolist.music.LocalListenTogetherManager
 import com.metrolist.music.LocalPlayerConnection
+import com.metrolist.music.BuildConfig
 import com.metrolist.music.R
 import com.metrolist.music.constants.CropAlbumArtKey
 import com.metrolist.music.constants.DarkModeKey
+import com.metrolist.music.constants.Dudu7PlayerPaneWeightKey
+import com.metrolist.music.constants.Dudu7StartWithLyricsKey
 import com.metrolist.music.constants.HidePlayerThumbnailKey
 import com.metrolist.music.constants.HideStatusBarOnFullscreenKey
 import com.metrolist.music.constants.KeepScreenOn
@@ -177,6 +180,9 @@ import com.metrolist.music.ui.theme.PlayerColorExtractor
 import com.metrolist.music.ui.theme.PlayerSliderColors
 import com.metrolist.music.ui.utils.ShowMediaInfo
 import com.metrolist.music.ui.utils.ShowOffsetDialog
+import com.metrolist.music.variant.Dudu7Layout
+import com.metrolist.music.variant.VehicleEmptyPlayer
+import com.metrolist.music.variant.VehicleVariantConfig
 import com.metrolist.music.utils.dataStore
 import com.metrolist.music.utils.makeTimeString
 import com.metrolist.music.utils.rememberEnumPreference
@@ -224,8 +230,9 @@ fun BottomSheetPlayer(
     val (hideStatusBarOnFullscreen) = rememberPreference(HideStatusBarOnFullscreenKey, false)
     val cropAlbumArt by rememberPreference(CropAlbumArtKey, false)
 
+    val (dudu7StartWithLyrics) = rememberPreference(Dudu7StartWithLyricsKey, defaultValue = false)
     var showInlineLyrics by rememberSaveable {
-        mutableStateOf(false)
+        mutableStateOf(BuildConfig.IS_DUDU7 && dudu7StartWithLyrics)
     }
 
     var isFullScreen by rememberSaveable {
@@ -257,7 +264,7 @@ fun BottomSheetPlayer(
         }
 
     val isPlaying by playerConnection.isPlaying.collectAsStateWithLifecycle()
-    val isKeepScreenOn by rememberPreference(KeepScreenOn, false)
+    val isKeepScreenOn by rememberPreference(KeepScreenOn, VehicleVariantConfig.keepScreenOnDefault)
     val keepScreenOn = isPlaying && isKeepScreenOn
 
     DisposableEffect(playerBackground, state.isExpanded, useDarkTheme, keepScreenOn, isFullScreen, hideStatusBarOnFullscreen) {
@@ -300,7 +307,11 @@ fun BottomSheetPlayer(
     }
 
     BackHandler(enabled = state.isExpanded) {
-        state.collapseSoft()
+        if (VehicleVariantConfig.isDudu7) {
+            (context as? android.app.Activity)?.moveTaskToBack(true)
+        } else {
+            state.collapseSoft()
+        }
     }
 
     val onBackgroundColor =
@@ -325,6 +336,9 @@ fun BottomSheetPlayer(
     val isMuted by playerConnection.isMuted.collectAsStateWithLifecycle()
 
     val sliderStyle by rememberEnumPreference(SliderStyleKey, SliderStyle.DEFAULT)
+    val (storedDudu7PlayerPaneWeight) =
+        rememberPreference(Dudu7PlayerPaneWeightKey, VehicleVariantConfig.defaultPlayerPaneWeight)
+    val dudu7PlayerPaneWeight = Dudu7Layout.sanitizePlayerPaneWeight(storedDudu7PlayerPaneWeight)
     val squigglySlider by rememberPreference(SquigglySliderKey, defaultValue = false)
 
     // Listen Together state (reactive)
@@ -1825,7 +1839,7 @@ fun BottomSheetPlayer(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier =
                             Modifier
-                                .weight(0.45f)
+                                .weight(if (BuildConfig.IS_DUDU7) dudu7PlayerPaneWeight else 0.45f)
                                 .fillMaxSize()
                                 .padding(horizontal = 20.dp, vertical = 8.dp)
                                 .nestedScroll(state.preUpPostDownNestedScrollConnection),
@@ -1864,8 +1878,16 @@ fun BottomSheetPlayer(
                             }
                         }
 
-                        mediaMetadata?.let {
-                            controlsContent(it)
+                        val currentMediaMetadata = mediaMetadata
+
+                        if (currentMediaMetadata != null) {
+
+                            controlsContent(currentMediaMetadata)
+
+                        } else {
+
+                            VehicleEmptyPlayer(navController = navController)
+
                         }
 
                         Spacer(Modifier.height(12.dp))
@@ -1874,8 +1896,8 @@ fun BottomSheetPlayer(
                     Box(
                         modifier =
                             Modifier
-                                .weight(0.55f)
-                                .fillMaxSize()
+                                .weight(if (BuildConfig.IS_DUDU7) 1f - dudu7PlayerPaneWeight else 0.55f)
+                            .fillMaxSize()
                                 .padding(start = 8.dp),
                     ) {
                         Queue(

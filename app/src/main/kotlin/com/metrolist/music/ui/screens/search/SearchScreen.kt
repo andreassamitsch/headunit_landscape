@@ -5,6 +5,13 @@
 
 package com.metrolist.music.ui.screens.search
 
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.speech.RecognizerIntent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.asPaddingValues
@@ -40,6 +47,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
@@ -70,6 +78,7 @@ import com.metrolist.music.utils.rememberPreference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.net.URLEncoder
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,6 +88,7 @@ fun SearchScreen(
     savedStateHandle: SavedStateHandle,
 ) {
     val database = LocalDatabase.current
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
     val focusRequester = remember { FocusRequester() }
@@ -169,6 +179,42 @@ fun SearchScreen(
                     insert(SearchHistory(query = searchQuery))
                 }
             }
+        }
+    }
+
+    val voiceSearchLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.StartActivityForResult(),
+        ) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                result.data
+                    ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                    ?.firstOrNull()
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let { spokenQuery ->
+                        query = TextFieldValue(spokenQuery)
+                        handleSearch(spokenQuery)
+                    }
+            }
+        }
+
+    fun startVoiceSearch() {
+        val intent =
+            Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, Locale.getDefault().toLanguageTag())
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+                putExtra(RecognizerIntent.EXTRA_PROMPT, "Musik suchen")
+            }
+
+        try {
+            voiceSearchLauncher.launch(intent)
+        } catch (_: ActivityNotFoundException) {
+            Toast
+                .makeText(context, "Keine Spracherkennung auf diesem Gerät verfügbar", Toast.LENGTH_LONG)
+                .show()
         }
     }
 
@@ -319,7 +365,7 @@ fun SearchScreen(
             HideOnScrollFAB(
                 lazyListState = lazyListState,
                 icon = R.drawable.mic,
-                onClick = { navController.navigate("recognition") },
+                onClick = { startVoiceSearch() },
             )
         }
     }

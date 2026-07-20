@@ -251,6 +251,12 @@ object CipherDeobfuscator {
         return result
     }
 
+    /** Best-effort warm-up so the first song does not pay the WebView/player-JS cold start. */
+    suspend fun prewarm() {
+        runCatching { getOrCreateWebView(forceRefresh = false) }
+            .onFailure { Timber.tag(TAG).w(it, "Cipher prewarm skipped: ${it.message}") }
+    }
+
     /**
      * Debug method: Get current state information
      */

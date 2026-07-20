@@ -1,0 +1,132 @@
+name: Sync MetroList Upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: metrolist-upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out maintained branch
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Merge official MetroList into review branch
+        id: merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/MetrolistGroup/Metrolist.git 2>/dev/null || true
+          git fetch upstream main
+          git fetch origin main
+          git checkout -B sync/metrolist-upstream origin/main
+
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Der gepflegte Branch enthält bereits den aktuellen MetroList-Upstream."
+            exit 0
+          fi
+
+          git merge --no-edit upstream/main
+          git push --force-with-lease origin sync/metrolist-upstream
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Set up JDK 21
+        if: steps.merge.outputs.changed == 'true'
+        uses: actions/setup-java@v5
+        with:
+          java-version: "21"
+          distribution: temurin
+
+      - name: Set up Gradle
+        if: steps.merge.outputs.changed == 'true'
+        uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-cleanup: on-success
+
+      - name: Prepare validation signing key
+        if: steps.merge.outputs.changed == 'true'
+        run: |
+          chmod +x gradlew
+          keytool -genkeypair -v \
+            -keystore app/upstream-sync-debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=MetroList Upstream Sync,O=Metrolist,C=AT"
+
+      - name: Verify architecture
+        if: steps.merge.outputs.changed == 'true'
+        run: python3 scripts/verify_dudu7_architecture.py
+
+      - name: Validate standard and Dudu7 variants
+        if: steps.merge.outputs.changed == 'true'
+        run: |
+          ./gradlew --console=plain \
+            assembleGmsStandardDebug :app:lintGmsStandardDebug \
+            assembleGmsDudu7Debug :app:lintGmsDudu7Debug \
+            testGmsDudu7DebugUnitTest \
+            --warning-mode summary
+        env:
+          METROLIST_DEBUG_KEYSTORE_PATH: upstream-sync-debug.keystore
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+
+      - name: Open or refresh upstream review PR
+        if: steps.merge.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          NUMBER="$(gh pr list \
+            --base main \
+            --head sync/metrolist-upstream \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')"
+
+          BODY=$(cat <<'EOF'
+          ## Automatische MetroList-Aktualisierung
+
+          Der offizielle `MetrolistGroup/Metrolist:main`-Stand wurde in einen Review-Branch übernommen.
+
+          Vor dem Öffnen dieses Pull Requests wurden erfolgreich geprüft:
+
+          - GMS-Standard-Build und Lint
+          - GMS-Dudu7-Build und Lint
+          - Dudu7-Unit-Tests
+          - strukturelle Dudu7-Architekturprüfung
+
+          Dieser Pull Request wird **nicht automatisch zusammengeführt**. Änderungen an Player, Navigation, Innertube und Wiedergabe müssen vor dem Merge geprüft werden.
+          EOF
+          )
+
+          if [ -z "$NUMBER" ]; then
+            gh pr create \
+              --base main \
+              --head sync/metrolist-upstream \
+              --title "MetroList-Upstream aktualisieren" \
+              --body "$BODY"
+          else
+            gh pr edit "$NUMBER" --body "$BODY"
+          fi
