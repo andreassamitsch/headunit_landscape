@@ -5,7 +5,7 @@ on:
   push:
     branches: ["agent/dudu7-layer"]
     paths:
-      - "scripts/migrate_dudu7_core.py"
+      - "scripts/migrate_dudu7_core_v2.py"
       - ".github/workflows/migrate-dudu7-layer.yml"
 
 permissions:
@@ -33,7 +33,7 @@ jobs:
       - run: chmod +x gradlew
 
       - name: Materialize fixes and migrate architecture
-        run: python3 scripts/migrate_dudu7_core.py
+        run: python3 scripts/migrate_dudu7_core_v2.py
 
       - name: Create migration debug keystore
         run: |
@@ -59,12 +59,14 @@ jobs:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
 
-      - name: Upload validated Dudu7 APK
+      - name: Collect validated Dudu7 APK
+        shell: bash
         run: |
           mkdir -p dist
-          find app/build/outputs/apk -name '*.apk' -print
-          find app/build/outputs/apk -path '*gmsDudu7*' -name '*.apk' -print -quit | xargs -r -I{} cp {} dist/Metrolist-Dudu7-Migrated.apk
-          test -f dist/Metrolist-Dudu7-Migrated.apk
+          find app/build/outputs/apk -type f -name '*.apk' -print
+          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep -Ei 'gms.*dudu7|dudu7.*gms' | head -n 1)"
+          test -n "$APK"
+          cp "$APK" dist/Metrolist-Dudu7-Migrated.apk
 
       - uses: actions/upload-artifact@v6
         with:
