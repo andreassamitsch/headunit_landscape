@@ -17,6 +17,7 @@ permissions:
 
 jobs:
   build_quick:
+    if: github.ref_name != 'agent/dudu7-layer'
     name: Quick GMS Debug Build
     runs-on: ubuntu-latest
 
