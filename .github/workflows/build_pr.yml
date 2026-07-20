@@ -7,6 +7,7 @@ on:
 
 jobs:
   build:
+    if: github.head_ref != 'agent/dudu7-layer'
     runs-on: ubuntu-latest
 
     steps:
