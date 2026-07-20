@@ -71,6 +71,19 @@ jobs:
           cat migration.log
           exit $STATUS
 
+      - name: Use the project JUnit dependency
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("app/build.gradle.kts")
+          text = path.read_text(encoding="utf-8")
+          old = 'testImplementation(kotlin("test"))'
+          new = 'testImplementation(libs.junit)'
+          if old not in text and new not in text:
+              raise SystemExit("Generated unit-test dependency was not found")
+          path.write_text(text.replace(old, new), encoding="utf-8")
+          PY
+
       - name: Fix delegated media metadata access
         run: |
           python3 - <<'PY'
