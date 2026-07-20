@@ -52,10 +52,6 @@ jobs:
                   '".weight(0.55f)\\n                            .fillMaxSize()"',
                   '".weight(0.55f)\\n                                .fillMaxSize()"',
               ),
-              (
-                  '"                        if (mediaMetadata != null) {\\n"\n    "                            controlsContent(mediaMetadata)\\n"',
-                  '"                        val currentMediaMetadata = mediaMetadata\\n"\n    "                        if (currentMediaMetadata != null) {\\n"\n    "                            controlsContent(currentMediaMetadata)\\n"',
-              ),
           ]
 
           for old, new in replacements:
@@ -74,6 +70,28 @@ jobs:
           STATUS=$?
           cat migration.log
           exit $STATUS
+
+      - name: Fix delegated media metadata access
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt")
+          text = path.read_text(encoding="utf-8")
+          old = """                        if (mediaMetadata != null) {
+                              controlsContent(mediaMetadata)
+                          } else {
+                              VehicleEmptyPlayer(navController = navController)
+                          }"""
+          new = """                        val currentMediaMetadata = mediaMetadata
+                          if (currentMediaMetadata != null) {
+                              controlsContent(currentMediaMetadata)
+                          } else {
+                              VehicleEmptyPlayer(navController = navController)
+                          }"""
+          if old not in text:
+              raise SystemExit("Migrated player metadata block was not found")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
 
       - name: Upload migration diagnostics
         if: always()
@@ -137,6 +155,7 @@ jobs:
 
       - name: Commit validated migration
         run: |
+          rm -f migration.log gradle-validation.log app/migration-debug.keystore
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
