@@ -943,7 +943,8 @@ object YouTube {
                         browseId = "VL$playlistId",
                         setLogin = true,
                     ).body<BrowseResponse>()
-            val base =
+
+            val twoColumnBase =
                 response.contents
                     ?.twoColumnBrowseResultsRenderer
                     ?.tabs
@@ -953,102 +954,114 @@ object YouTube {
                     ?.sectionListRenderer
                     ?.contents
                     ?.firstOrNull()
+            val singleColumnSection =
+                response.contents
+                    ?.singleColumnBrowseResultsRenderer
+                    ?.tabs
+                    ?.firstOrNull()
+                    ?.tabRenderer
+                    ?.content
+                    ?.sectionListRenderer
+            val singleColumnBase = singleColumnSection?.contents?.firstOrNull()
+            val base = twoColumnBase ?: singleColumnBase
             val header =
                 base?.musicResponsiveHeaderRenderer
                     ?: base?.musicEditablePlaylistDetailHeaderRenderer?.header?.musicResponsiveHeaderRenderer
-
+            val musicHeader = response.header?.musicHeaderRenderer
             val editable = base?.musicEditablePlaylistDetailHeaderRenderer != null
+
+            val author =
+                header?.straplineTextOne?.runs?.firstOrNull()?.let {
+                    Artist(name = it.text, id = it.navigationEndpoint?.browseEndpoint?.browseId)
+                } ?: musicHeader?.straplineTextOne?.runs?.firstOrNull()?.let {
+                    Artist(name = it.text, id = it.navigationEndpoint?.browseEndpoint?.browseId)
+                }
+
+            val twoColumnShelf =
+                response.contents
+                    ?.twoColumnBrowseResultsRenderer
+                    ?.secondaryContents
+                    ?.sectionListRenderer
+                    ?.contents
+                    ?.firstOrNull()
+            val singleColumnShelf = singleColumnSection?.contents?.firstOrNull()
+            val twoColumnContents =
+                twoColumnShelf?.musicPlaylistShelfRenderer?.contents
+                    ?: twoColumnShelf?.musicShelfRenderer?.contents
+            val singleColumnContents =
+                singleColumnShelf?.musicPlaylistShelfRenderer?.contents
+                    ?: singleColumnShelf?.musicShelfRenderer?.contents
+            val twoColumnContinuations =
+                twoColumnShelf?.musicPlaylistShelfRenderer?.continuations
+                    ?: twoColumnShelf?.musicShelfRenderer?.continuations
+            val singleColumnContinuations =
+                singleColumnShelf?.musicPlaylistShelfRenderer?.continuations
+                    ?: singleColumnShelf?.musicShelfRenderer?.continuations
+            val mergedContents = twoColumnContents ?: singleColumnContents
+            val mergedContinuations = twoColumnContinuations ?: singleColumnContinuations
 
             PlaylistPage(
                 playlist =
                     PlaylistItem(
                         id = playlistId,
                         title =
-                            header
-                                ?.title
-                                ?.runs
-                                ?.firstOrNull()
-                                ?.text!!,
-                        author =
-                            header.straplineTextOne?.runs?.firstOrNull()?.let {
-                                Artist(
-                                    name = it.text,
-                                    id = it.navigationEndpoint?.browseEndpoint?.browseId,
-                                )
-                            },
+                            header?.title?.runs?.firstOrNull()?.text
+                                ?: musicHeader?.title?.runs?.firstOrNull()?.text
+                                ?: "",
+                        author = author,
                         songCountText =
-                            header.secondSubtitle
+                            (header?.secondSubtitle ?: musicHeader?.secondSubtitle)
                                 ?.runs
                                 ?.firstOrNull()
                                 ?.text,
                         thumbnail =
-                            header.thumbnail
+                            header?.thumbnail
                                 ?.musicThumbnailRenderer
                                 ?.thumbnail
                                 ?.thumbnails
                                 ?.lastOrNull()
-                                ?.url!!,
+                                ?.url
+                                ?: musicHeader?.thumbnail
+                                    ?.musicThumbnailRenderer
+                                    ?.thumbnails
+                                    ?.lastOrNull()
+                                    ?.url
+                                ?: "",
                         playEndpoint = null,
                         shuffleEndpoint =
-                            header.buttons
-                                .lastOrNull()
-                                ?.menuRenderer
-                                ?.items
-                                ?.firstOrNull()
-                                ?.menuNavigationItemRenderer
-                                ?.navigationEndpoint
-                                ?.watchPlaylistEndpoint!!,
+                            header?.buttons?.lastOrNull()
+                                ?.menuRenderer?.items?.firstOrNull()
+                                ?.menuNavigationItemRenderer?.navigationEndpoint?.watchPlaylistEndpoint
+                                ?: musicHeader?.buttons?.lastOrNull()
+                                    ?.menuRenderer?.items?.firstOrNull()
+                                    ?.menuNavigationItemRenderer?.navigationEndpoint?.watchPlaylistEndpoint,
                         radioEndpoint =
-                            header.buttons
-                                .getOrNull(2)
-                                ?.menuRenderer
-                                ?.items
-                                ?.find {
+                            header?.buttons?.getOrNull(2)
+                                ?.menuRenderer?.items?.find {
                                     it.menuNavigationItemRenderer?.icon?.iconType == "MIX"
-                                }?.menuNavigationItemRenderer
-                                ?.navigationEndpoint
-                                ?.watchPlaylistEndpoint,
+                                }?.menuNavigationItemRenderer?.navigationEndpoint?.watchPlaylistEndpoint
+                                ?: musicHeader?.buttons?.getOrNull(2)
+                                    ?.menuRenderer?.items?.find {
+                                        it.menuNavigationItemRenderer?.icon?.iconType == "MIX"
+                                    }?.menuNavigationItemRenderer?.navigationEndpoint?.watchPlaylistEndpoint,
                         isEditable = editable,
                     ),
                 songs =
-                    response.contents
-                        ?.twoColumnBrowseResultsRenderer
-                        ?.secondaryContents
-                        ?.sectionListRenderer
-                        ?.contents
-                        ?.firstOrNull()
-                        ?.musicPlaylistShelfRenderer
-                        ?.contents
+                    mergedContents
                         ?.getItems()
-                        ?.mapNotNull {
-                            PlaylistPage.fromMusicResponsiveListItemRenderer(it)
-                        } ?: emptyList(),
+                        ?.mapNotNull { PlaylistPage.fromMusicResponsiveListItemRenderer(it) }
+                        ?: emptyList(),
                 songsContinuation =
-                    response.contents
-                        ?.twoColumnBrowseResultsRenderer
-                        ?.secondaryContents
-                        ?.sectionListRenderer
-                        ?.contents
-                        ?.firstOrNull()
-                        ?.musicPlaylistShelfRenderer
-                        ?.contents
-                        ?.getContinuation()
-                        ?: response.contents
-                            ?.twoColumnBrowseResultsRenderer
-                            ?.secondaryContents
-                            ?.sectionListRenderer
-                            ?.contents
-                            ?.firstOrNull()
-                            ?.musicPlaylistShelfRenderer
-                            ?.continuations
-                            ?.getContinuation(),
+                    mergedContents?.getContinuation()
+                        ?: mergedContinuations?.getContinuation(),
                 continuation =
                     response.contents
                         ?.twoColumnBrowseResultsRenderer
                         ?.secondaryContents
                         ?.sectionListRenderer
                         ?.continuations
-                        ?.getContinuation(),
+                        ?.getContinuation()
+                        ?: singleColumnSection?.continuations?.getContinuation(),
             )
         }
 

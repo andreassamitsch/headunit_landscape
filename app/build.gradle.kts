@@ -110,7 +110,7 @@ android {
         buildConfigField("String", "ARCHITECTURE", "\"universal\"")
     }
 
-    flavorDimensions += listOf("variant")
+    flavorDimensions += listOf("variant", "device")
     productFlavors {
         // FOSS variant (default) - F-Droid compatible, no Google Play Services
         create("foss") {
@@ -132,6 +132,18 @@ android {
             dimension = "variant"
             buildConfigField("Boolean", "CAST_AVAILABLE", "false")
             buildConfigField("Boolean", "UPDATER_AVAILABLE", "false")
+        }
+
+        create("standard") {
+            dimension = "device"
+            isDefault = true
+            buildConfigField("Boolean", "IS_DUDU7", "false")
+        }
+        create("dudu7") {
+            dimension = "device"
+            applicationIdSuffix = ".dudu7"
+            versionNameSuffix = "-dudu7"
+            buildConfigField("Boolean", "IS_DUDU7", "true")
         }
     }
 
@@ -397,4 +409,6 @@ dependencies {
     coreLibraryDesugaring(libs.desugaring)
 
     implementation(libs.timber)
+
+    testImplementation(libs.junit)
 }

@@ -74,6 +74,12 @@ val AlarmNextTriggerAtKey = longPreferencesKey("alarmNextTriggerAt")
 val AlarmEntriesKey = stringPreferencesKey("alarmEntries")
 val DeveloperModeKey = booleanPreferencesKey("developerMode")
 
+val Dudu7AlwaysStartPlayerKey = booleanPreferencesKey("dudu7AlwaysStartPlayer")
+val Dudu7PlayerPaneWeightKey = floatPreferencesKey("dudu7PlayerPaneWeight")
+val Dudu7StartWithLyricsKey = booleanPreferencesKey("dudu7StartWithLyrics")
+val Dudu7SwipeToRemoveQueueKey = booleanPreferencesKey("dudu7SwipeToRemoveQueue")
+val Dudu7AutoCenterQueueKey = booleanPreferencesKey("dudu7AutoCenterQueue")
+
 enum class SliderStyle {
     DEFAULT,
     WAVY,

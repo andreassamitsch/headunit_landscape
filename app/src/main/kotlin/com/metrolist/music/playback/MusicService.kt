@@ -61,6 +61,7 @@ import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
@@ -1064,6 +1065,12 @@ class MusicService :
                 .Builder(this)
                 .setMediaSourceFactory(createMediaSourceFactory())
                 .setRenderersFactory(createRenderersFactory(eqProcessor, silenceProcessor))
+                .setLoadControl(
+                    DefaultLoadControl
+                        .Builder()
+                        .setBufferDurationsMs(50_000, 50_000, 750, 2_000)
+                        .build(),
+                )
                 .setHandleAudioBecomingNoisy(true)
                 .setWakeMode(C.WAKE_MODE_NETWORK)
                 .setAudioAttributes(
@@ -2721,6 +2728,12 @@ class MusicService :
                 return
             }
 
+            error.errorCode == PlaybackException.ERROR_CODE_REMOTE_ERROR -> {
+                Timber.tag(TAG).d("Remote stream error detected, refreshing URL through fallback clients")
+                handleExpiredUrlError(mediaId)
+                return
+            }
+
             !isNetworkConnected.value || isNetworkRelatedError(error) -> {
                 Timber.tag(TAG).d("Network-related error detected, waiting for connection")
                 waitOnNetworkError()
@@ -2949,9 +2962,10 @@ class MusicService :
 
         incrementRetryCount(mediaId)
 
-        // Clear the cached URL
+        // Clear the cached URL and avoid retrying the same rejected WEB_REMIX URL.
         songUrlCache.remove(mediaId)
-        Timber.tag(TAG).d("Cleared cached URL for $mediaId")
+        YTPlayerUtils.markWebRemixFailed(mediaId)
+        Timber.tag(TAG).d("Cleared cached URL for $mediaId; switching to fallback stream clients")
 
         // Clear decryption caches
         try {
