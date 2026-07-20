@@ -1,7 +1,7 @@
 package com.metrolist.music.variant
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
+import org.junit.Assert.assertEquals
+import org.junit.Test
 
 class Dudu7LayoutTest {
     @Test
