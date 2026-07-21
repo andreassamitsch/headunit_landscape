@@ -20,15 +20,24 @@ jobs:
           ref: agent/dudu7-layout-corrections
           fetch-depth: 0
       - name: Apply focused source corrections
+        id: patch
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
-          if ! python3 scripts/apply_dudu7_layout_corrections.py >/tmp/dudu7-patch.log 2>&1; then
-            cat /tmp/dudu7-patch.log
-            exit 1
-          fi
+          set +e
+          python3 scripts/apply_dudu7_layout_corrections.py >/tmp/dudu7-patch.log 2>&1
+          status=$?
           cat /tmp/dudu7-patch.log
+          exit $status
+      - name: Upload patch diagnostics
+        if: steps.patch.outcome == 'failure'
+        uses: actions/upload-artifact@v6
+        with:
+          name: dudu7-patch-diagnostics
+          path: /tmp/dudu7-patch.log
+          if-no-files-found: error
       - name: Commit corrected source
+        if: steps.patch.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
@@ -40,3 +49,6 @@ jobs:
           git diff --cached --quiet && exit 0
           git commit -m "Apply Dudu7 visual corrections"
           git push origin HEAD:agent/dudu7-layout-corrections
+      - name: Fail when patching failed
+        if: steps.patch.outcome == 'failure'
+        run: exit 1
