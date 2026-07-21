@@ -1,0 +1,245 @@
+def patch_gradle() -> None:
+    replace_once(
+        "app/build.gradle.kts",
+        '    flavorDimensions += listOf("variant")\n',
+        '    flavorDimensions += listOf("variant", "device")\n',
+    )
+    anchor = '''        create("izzy") {
+            dimension = "variant"
+            buildConfigField("Boolean", "CAST_AVAILABLE", "false")
+            buildConfigField("Boolean", "UPDATER_AVAILABLE", "false")
+        }
+'''
+    addition = '''
+        create("standard") {
+            dimension = "device"
+            isDefault = true
+            buildConfigField("Boolean", "IS_DUDU7", "false")
+        }
+
+        create("dudu7") {
+            dimension = "device"
+            applicationIdSuffix = ".dudu7"
+            versionNameSuffix = "-dudu7"
+            buildConfigField("Boolean", "IS_DUDU7", "true")
+        }
+'''
+    insert_after("app/build.gradle.kts", anchor, addition)
+
+
+def patch_app() -> None:
+    insert_after(
+        "app/src/main/kotlin/com/metrolist/music/App.kt",
+        "import com.metrolist.music.utils.reportException\n",
+        "import com.metrolist.music.variant.VehicleVariantDefaults\n",
+    )
+    replace_once(
+        "app/src/main/kotlin/com/metrolist/music/App.kt",
+        "            initializeSettings()\n\n            // Warm the cipher WebView off the first-play critical path.",
+        "            initializeSettings()\n            VehicleVariantDefaults.apply(this@App)\n\n            // Warm the cipher WebView off the first-play critical path.",
+    )
+
+
+def patch_preferences() -> None:
+    anchor = 'val DeveloperModeKey = booleanPreferencesKey("developerMode")\n'
+    addition = '''
+val Dudu7AlwaysStartPlayerKey = booleanPreferencesKey("dudu7AlwaysStartPlayer")
+val Dudu7PlayerPaneWeightKey = floatPreferencesKey("dudu7PlayerPaneWeight")
+val Dudu7StartWithLyricsKey = booleanPreferencesKey("dudu7StartWithLyrics")
+val Dudu7SwipeToRemoveQueueKey = booleanPreferencesKey("dudu7SwipeToRemoveQueue")
+val Dudu7AutoCenterQueueKey = booleanPreferencesKey("dudu7AutoCenterQueue")
+'''
+    insert_after("app/src/main/kotlin/com/metrolist/music/constants/PreferenceKeys.kt", anchor, addition)
+
+
+def patch_main_activity() -> None:
+    path = "app/src/main/kotlin/com/metrolist/music/MainActivity.kt"
+    insert_after(path, "import com.metrolist.music.constants.DynamicThemeKey\n", "import com.metrolist.music.constants.Dudu7AlwaysStartPlayerKey\n")
+    insert_after(path, "import com.metrolist.music.ui.utils.resetHeightOffset\n", "import com.metrolist.music.variant.VehicleVariantConfig\nimport com.metrolist.music.variant.vehicleNavigation\n")
+
+    anchor = '''                val playerBottomSheetState =
+                    rememberBottomSheetState(
+                        dismissedBound = 0.dp,
+                        collapsedBound =
+                            bottomInset +
+                                (if (!showRail && shouldShowNavigationBar) navPadding else 0.dp) +
+                                (if (useNewMiniPlayerDesign) MiniPlayerBottomSpacing else 0.dp) +
+                                MiniPlayerHeight,
+                        expandedBound = maxHeight,
+                    )
+'''
+    addition = '''
+                val (dudu7AlwaysStartPlayer) =
+                    rememberPreference(
+                        Dudu7AlwaysStartPlayerKey,
+                        defaultValue = VehicleVariantConfig.playerStartsExpanded,
+                    )
+'''
+    insert_after(path, anchor, addition)
+
+    old = '''                LaunchedEffect(activePlayerConnection) {
+                    val player = runCatching { activePlayerConnection?.player }.getOrNull()
+                    if (player?.currentMediaItem == null) {
+                        if (!playerBottomSheetState.isDismissed) {
+                            playerBottomSheetState.dismiss()
+                        }
+                        return@LaunchedEffect
+                    }
+
+                    if (playerBottomSheetState.isDismissed) {
+                        playerBottomSheetState.collapseSoft()
+                    }
+                }
+'''
+    new = '''                LaunchedEffect(activePlayerConnection, dudu7AlwaysStartPlayer) {
+                    val player = runCatching { activePlayerConnection?.player }.getOrNull()
+                    if (VehicleVariantConfig.isDudu7 && dudu7AlwaysStartPlayer) {
+                        if (!playerBottomSheetState.isExpanded) {
+                            playerBottomSheetState.expandSoft()
+                        }
+                        return@LaunchedEffect
+                    }
+
+                    if (player?.currentMediaItem == null) {
+                        if (!playerBottomSheetState.isDismissed) {
+                            playerBottomSheetState.dismiss()
+                        }
+                        return@LaunchedEffect
+                    }
+
+                    if (playerBottomSheetState.isDismissed) {
+                        playerBottomSheetState.collapseSoft()
+                    }
+                }
+'''
+    replace_once(path, old, new)
+
+    insert_after(
+        path,
+        '''                                    navigationBuilder(
+                                        navController = navController,
+                                        scrollBehavior = topAppBarScrollBehavior,
+                                        latestVersionName = latestVersionName,
+                                        activity = this@MainActivity,
+                                        snackbarHostState = snackbarHostState,
+                                    )
+''',
+        "                                    vehicleNavigation(navController)\n",
+    )
+
+
+def patch_player() -> None:
+    path = "app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt"
+    insert_after(path, "import com.metrolist.music.constants.DarkModeKey\n", "import com.metrolist.music.constants.Dudu7PlayerPaneWeightKey\nimport com.metrolist.music.constants.Dudu7StartWithLyricsKey\n")
+    insert_after(path, "import com.metrolist.music.ui.utils.ShowOffsetDialog\n", "import com.metrolist.music.variant.Dudu7Layout\nimport com.metrolist.music.variant.VehicleEmptyPlayer\nimport com.metrolist.music.variant.VehicleLandscapeLayout\nimport com.metrolist.music.variant.VehicleVariantConfig\n")
+
+    replace_once(
+        path,
+        '''    var showInlineLyrics by rememberSaveable {
+        mutableStateOf(false)
+    }
+''',
+        '''    val (dudu7StartWithLyrics) = rememberPreference(Dudu7StartWithLyricsKey, defaultValue = false)
+    var showInlineLyrics by rememberSaveable {
+        mutableStateOf(VehicleVariantConfig.isDudu7 && dudu7StartWithLyrics)
+    }
+''',
+    )
+    replace_once(
+        path,
+        "    val isKeepScreenOn by rememberPreference(KeepScreenOn, false)\n",
+        "    val isKeepScreenOn by rememberPreference(KeepScreenOn, VehicleVariantConfig.keepScreenOnDefault)\n",
+    )
+    replace_once(
+        path,
+        '''    BackHandler(enabled = state.isExpanded) {
+        state.collapseSoft()
+    }
+''',
+        '''    BackHandler(enabled = state.isExpanded) {
+        if (VehicleVariantConfig.isDudu7) {
+            (context as? android.app.Activity)?.moveTaskToBack(true)
+        } else {
+            state.collapseSoft()
+        }
+    }
+''',
+    )
+    insert_after(
+        path,
+        "    val sliderStyle by rememberEnumPreference(SliderStyleKey, SliderStyle.DEFAULT)\n",
+        '''    val (storedDudu7PlayerPaneWeight) =
+        rememberPreference(Dudu7PlayerPaneWeightKey, VehicleVariantConfig.defaultPlayerPaneWeight)
+    val dudu7PlayerPaneWeight = Dudu7Layout.sanitizePlayerPaneWeight(storedDudu7PlayerPaneWeight)
+''',
+    )
+
+    start = read(path).index("            Configuration.ORIENTATION_LANDSCAPE -> {")
+    end_marker = "\n            else -> {"
+    end = read(path).index(end_marker, start)
+    text = read(path)
+    replacement = '''            Configuration.ORIENTATION_LANDSCAPE -> {
+                VehicleLandscapeLayout(
+                    state = state,
+                    showInlineLyrics = showInlineLyrics,
+                    playerPaneWeight = dudu7PlayerPaneWeight,
+                    thumbnailContent = {
+                        val currentSliderPosition by rememberUpdatedState(sliderPosition)
+                        val sliderPositionProvider = remember { { currentSliderPosition } }
+                        val isExpandedProvider = remember(state) { { state.isExpanded } }
+                        AnimatedContent(
+                            targetState = showInlineLyrics,
+                            label = "Lyrics",
+                            transitionSpec = { fadeIn() togetherWith fadeOut() },
+                        ) { showLyrics ->
+                            if (showLyrics) {
+                                InlineLyricsView(
+                                    mediaMetadata = mediaMetadata,
+                                    showLyrics = showLyrics,
+                                    positionProvider = { effectivePosition },
+                                )
+                            } else {
+                                Thumbnail(
+                                    sliderPositionProvider = sliderPositionProvider,
+                                    modifier = Modifier.animateContentSize(),
+                                    isPlayerExpanded = isExpandedProvider,
+                                    isLandscape = true,
+                                    isListenTogetherGuest = isListenTogetherGuest,
+                                )
+                            }
+                        }
+                    },
+                    controlsContent = {
+                        val currentMediaMetadata = mediaMetadata
+                        if (currentMediaMetadata != null) {
+                            controlsContent(currentMediaMetadata)
+                        } else {
+                            VehicleEmptyPlayer(navController = navController)
+                        }
+                    },
+                    queueContent = {
+                        Queue(
+                            state = queueSheetState,
+                            playerBottomSheetState = state,
+                            modifier = Modifier.fillMaxSize(),
+                            background =
+                                if (useBlackBackground) {
+                                    Color.Black
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceContainer
+                                },
+                            onBackgroundColor = onBackgroundColor,
+                            TextBackgroundColor = TextBackgroundColor,
+                            textButtonColor = textButtonColor,
+                            iconButtonColor = iconButtonColor,
+                            pureBlack = pureBlack,
+                            showInlineLyrics = showInlineLyrics,
+                            playerBackground = playerBackground,
+                            onToggleLyrics = { showInlineLyrics = !showInlineLyrics },
+                        )
+                    },
+                )
+            }
+'''
+    write(path, text[:start] + replacement + text[end:])
+
