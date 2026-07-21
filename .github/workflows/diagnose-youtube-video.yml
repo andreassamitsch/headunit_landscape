@@ -18,37 +18,24 @@ jobs:
       - name: Install yt-dlp
         run: python3 -m pip install --upgrade yt-dlp
 
-      - name: Inspect video with multiple YouTube clients
+      - name: Compare target and control video
         continue-on-error: true
         shell: bash
         run: |
-          VIDEO_URL="https://www.youtube.com/watch?v=Cx7QOJLFnug"
           : > diagnosis.txt
-
-          echo "===== BASIC METADATA =====" >> diagnosis.txt
-          yt-dlp --no-warnings --simulate \
-            --print "id=%(id)s" \
-            --print "title=%(title)s" \
-            --print "uploader=%(uploader)s" \
-            --print "availability=%(availability)s" \
-            --print "age_limit=%(age_limit)s" \
-            --print "live_status=%(live_status)s" \
-            --print "duration=%(duration)s" \
-            "$VIDEO_URL" >> diagnosis.txt 2>&1 || true
-
-          for CLIENT in default web web_music android ios tv; do
+          for VIDEO_ID in Cx7QOJLFnug dQw4w9WgXcQ; do
+            VIDEO_URL="https://www.youtube.com/watch?v=$VIDEO_ID"
+            echo "===== VIDEO: $VIDEO_ID =====" >> diagnosis.txt
+            for CLIENT in default web_music android ios; do
+              echo "--- CLIENT: $CLIENT ---" >> diagnosis.txt
+              if [ "$CLIENT" = "default" ]; then
+                yt-dlp -v --simulate --print "id=%(id)s title=%(title)s availability=%(availability)s age=%(age_limit)s selected=%(format_id)s %(ext)s %(protocol)s %(acodec)s %(vcodec)s" "$VIDEO_URL" >> diagnosis.txt 2>&1 || true
+              else
+                yt-dlp -v --simulate --extractor-args "youtube:player_client=$CLIENT" --print "id=%(id)s title=%(title)s availability=%(availability)s age=%(age_limit)s selected=%(format_id)s %(ext)s %(protocol)s %(acodec)s %(vcodec)s" "$VIDEO_URL" >> diagnosis.txt 2>&1 || true
+              fi
+            done
             echo >> diagnosis.txt
-            echo "===== CLIENT: $CLIENT =====" >> diagnosis.txt
-            if [ "$CLIENT" = "default" ]; then
-              yt-dlp -v --simulate --print "selected_format=%(format_id)s %(ext)s %(protocol)s %(acodec)s %(vcodec)s" "$VIDEO_URL" >> diagnosis.txt 2>&1 || true
-            else
-              yt-dlp -v --simulate --extractor-args "youtube:player_client=$CLIENT" --print "selected_format=%(format_id)s %(ext)s %(protocol)s %(acodec)s %(vcodec)s" "$VIDEO_URL" >> diagnosis.txt 2>&1 || true
-            fi
           done
-
-          echo >> diagnosis.txt
-          echo "===== FORMATS =====" >> diagnosis.txt
-          yt-dlp -F "$VIDEO_URL" >> diagnosis.txt 2>&1 || true
 
       - name: Upload diagnosis
         if: always()
