@@ -1,0 +1,186 @@
+def write_verifier_and_docs(upstream_sha: str) -> None:
+    write(
+        "scripts/verify_dudu7_architecture.py",
+        '''#!/usr/bin/env python3
+"""Fast structural checks for the maintainable Dudu7 overlay."""
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+HOOKS = (
+    "VehicleVariantConfig.kt",
+    "VehicleVariantDefaults.kt",
+    "VehicleEmptyPlayer.kt",
+    "VehicleSettingsScreen.kt",
+    "VehicleLandscapeLayout.kt",
+    "VehicleNavigation.kt",
+    "VehicleQueueActions.kt",
+    "VehicleVoiceSearch.kt",
+)
+required = [
+    "app/src/main/kotlin/com/metrolist/music/variant/Dudu7Layout.kt",
+    "app/src/test/kotlin/com/metrolist/music/variant/Dudu7LayoutTest.kt",
+    "app/src/dudu7/AndroidManifest.xml",
+    "app/keystore/dudu7-debug.keystore",
+    "docs/DUDU7_ARCHITECTURE.md",
+]
+for source_set in ("standard", "dudu7"):
+    required.extend(
+        f"app/src/{source_set}/kotlin/com/metrolist/music/variant/{name}" for name in HOOKS
+    )
+missing = [path for path in required if not (ROOT / path).is_file()]
+if missing:
+    raise SystemExit("Fehlende Dudu7-Dateien: " + ", ".join(missing))
+
+build = (ROOT / "app/build.gradle.kts").read_text(encoding="utf-8")
+for token in (
+    'flavorDimensions += listOf("variant", "device")',
+    'create("standard")',
+    'create("dudu7")',
+    'buildConfigField("Boolean", "IS_DUDU7", "false")',
+    'buildConfigField("Boolean", "IS_DUDU7", "true")',
+):
+    if token not in build:
+        raise SystemExit(f"Fehlende Gradle-Konfiguration: {token}")
+
+checks = {
+    "app/src/main/kotlin/com/metrolist/music/App.kt": ("VehicleVariantDefaults.apply",),
+    "app/src/main/kotlin/com/metrolist/music/MainActivity.kt": (
+        "VehicleVariantConfig.isDudu7 && dudu7AlwaysStartPlayer",
+        "vehicleNavigation(navController)",
+    ),
+    "app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt": (
+        "VehicleLandscapeLayout(",
+        "VehicleEmptyPlayer(navController = navController)",
+        "moveTaskToBack(true)",
+    ),
+    "app/src/main/kotlin/com/metrolist/music/ui/player/Queue.kt": (
+        "rememberReorderableLazyListState",
+        "moveMediaItem",
+        "VehicleQueueActions()",
+    ),
+    "app/src/main/kotlin/com/metrolist/music/ui/screens/search/SearchScreen.kt": (
+        "rememberVehicleVoiceSearch(",
+        "onClick = vehicleVoiceSearch",
+    ),
+    "app/src/main/kotlin/com/metrolist/music/utils/cipher/PlayerConfigStore.kt": (
+        "scheduleStartupRefresh",
+        "refreshAfterStreamRejection",
+    ),
+}
+for path, tokens in checks.items():
+    text = (ROOT / path).read_text(encoding="utf-8")
+    for token in tokens:
+        if token not in text:
+            raise SystemExit(f"Fehlender Erweiterungspunkt in {path}: {token}")
+
+print("Dudu7 architecture verification passed")
+''',
+    )
+    write(
+        "docs/DUDU7_ARCHITECTURE.md",
+        f'''# Dudu7 overlay architecture
+
+## Basis
+
+- Offizieller MetroList-Upstream: `MetrolistGroup/Metrolist`
+- Übernommener Upstream-Commit: `{upstream_sha}`
+- MetroList-Version: `13.6.1`
+
+## Prinzip
+
+Playback, Login, Innertube, Cipher und Player-Konfigurationen stammen unverändert aus dem offiziellen Upstream. Die Dudu7-Anpassungen liegen überwiegend in der zusätzlichen Flavor-Dimension `device`:
+
+- `app/src/standard`: unverändertes Standardverhalten
+- `app/src/dudu7`: Querformat-, Player-, Queue-, Sprach- und Einstellungs-Erweiterungen
+
+Der gemeinsame MetroList-Code enthält nur kleine, stabile Aufrufe an folgende Varianten-Hooks:
+
+- `VehicleVariantDefaults`
+- `VehicleLandscapeLayout`
+- `VehicleNavigation`
+- `VehicleQueueActions`
+- `rememberVehicleVoiceSearch`
+- `VehicleEmptyPlayer`
+
+## Dudu7-Verhalten
+
+- eigener Paket-Suffix `.dudu7`
+- feste Querformat-Ausrichtung
+- Player beim Start ausgeklappt
+- Player links, Warteschlange rechts
+- Queue per Drag-and-drop sortierbar
+- konfigurierbare Pane-Breite, Wischgeste und Auto-Zentrierung
+- Android-Spracherkennung statt Musikerkennungsseite
+- stabiler, im privaten Repository abgelegter Debug-Schlüssel für updatefähige Test-APKs
+
+## Upstream-Aktualisierung
+
+Der wöchentliche Workflow merged den offiziellen Upstream in einen Review-Branch, baut Standard und Dudu7 und öffnet einen Pull Request. Es findet kein automatischer Merge statt.
+''',
+    )
+
+
+def write_stable_keystore() -> None:
+    target = ROOT / "app/keystore/dudu7-debug.keystore"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.exists() and target.stat().st_size > 0:
+        return
+    subprocess.check_call(
+        [
+            "keytool",
+            "-genkeypair",
+            "-v",
+            "-keystore",
+            str(target),
+            "-storepass",
+            "android",
+            "-alias",
+            "androiddebugkey",
+            "-keypass",
+            "android",
+            "-keyalg",
+            "RSA",
+            "-keysize",
+            "2048",
+            "-validity",
+            "10000",
+            "-dname",
+            "CN=Metrolist Dudu7,O=Metrolist,C=AT",
+        ],
+        cwd=ROOT,
+    )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--source-ref", required=True)
+    parser.add_argument("--upstream-sha", required=True)
+    args = parser.parse_args()
+
+    materialize_source_sets(args.source_ref)
+    patch_gradle()
+    patch_app()
+    patch_preferences()
+    patch_main_activity()
+    patch_player()
+    patch_queue()
+    patch_search()
+    write_workflows()
+    write_stable_keystore()
+    write_verifier_and_docs(args.upstream_sha)
+
+    # The upstream implementation must remain present; these files are deliberately never copied
+    # from the older fork.
+    for path in (
+        "app/src/main/kotlin/com/metrolist/music/utils/YTPlayerUtils.kt",
+        "app/src/main/kotlin/com/metrolist/music/utils/cipher/PlayerConfigStore.kt",
+        "innertube/src/main/kotlin/com/metrolist/innertube/YouTube.kt",
+    ):
+        if not (ROOT / path).is_file():
+            raise RuntimeError(f"Missing required upstream playback file: {path}")
+
+    print("Dudu7 overlay materialized on upstream", args.upstream_sha)
+
+
+if __name__ == "__main__":
+    main()
