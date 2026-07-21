@@ -20,12 +20,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          RUN_ID="29813760803"
+          RUN_ID="29814664764"
           gh api "repos/$GH_REPO/actions/runs/$RUN_ID" > materialize-run-detail.json
           gh api "repos/$GH_REPO/actions/runs/$RUN_ID/jobs" > materialize-jobs.json
           JOB_ID="$(jq -r '.jobs[0].id' materialize-jobs.json)"
           gh api "repos/$GH_REPO/actions/jobs/$JOB_ID/logs" > materialize-job.log
-          tail -n 350 materialize-job.log > materialize-job-tail.txt
+          tail -n 400 materialize-job.log > materialize-job-tail.txt
           cat materialize-job-tail.txt
       - uses: actions/upload-artifact@v6
         with:
