@@ -1,0 +1,34 @@
+name: Apply Dudu7 Layout Corrections
+
+on:
+  push:
+    branches:
+      - agent/dudu7-layout-corrections
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.head_commit.message != 'Apply Dudu7 visual corrections'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/dudu7-layout-corrections
+          fetch-depth: 0
+      - name: Apply focused source corrections
+        run: python3 scripts/apply_dudu7_layout_corrections.py
+      - name: Commit corrected source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f scripts/apply_dudu7_layout_corrections.py
+          rm -f .github/workflows/apply_dudu7_layout_corrections.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "Apply Dudu7 visual corrections"
+          git push origin HEAD:agent/dudu7-layout-corrections
