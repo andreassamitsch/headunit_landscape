@@ -1883,6 +1883,7 @@ fun BottomSheetPlayer(
                                     modifier = Modifier.animateContentSize(),
                                     isPlayerExpanded = isExpandedProvider,
                                     isLandscape = true,
+                                    landscapeHorizontalPadding = 8.dp,
                                     isListenTogetherGuest = isListenTogetherGuest,
                                 )
                             }
@@ -2065,7 +2066,7 @@ fun BottomSheetPlayer(
         }
 
         AnimatedVisibility(
-            visible = !isFullScreen,
+            visible = !isFullScreen && !VehicleVariantConfig.isDudu7,
             enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
             exit = shrinkVertically(shrinkTowards = Alignment.Top) + slideOutVertically(targetOffsetY = { it }) + fadeOut(),
         ) {

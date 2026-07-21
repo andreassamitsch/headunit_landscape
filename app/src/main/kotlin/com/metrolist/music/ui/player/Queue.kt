@@ -765,7 +765,7 @@ fun Queue(
                         .add(
                             WindowInsets(
                                 top = ListItemHeight + 8.dp,
-                                bottom = ListItemHeight + 8.dp,
+                                bottom = if (VehicleVariantConfig.isDudu7) 8.dp else ListItemHeight + 8.dp,
                             ),
                         ).asPaddingValues(),
                 modifier = Modifier.nestedScroll(state.preUpPostDownNestedScrollConnection),
@@ -1185,9 +1185,10 @@ fun Queue(
             }
         }
 
-        val shuffleModeEnabled by playerConnection.shuffleModeEnabled.collectAsStateWithLifecycle()
+        if (!VehicleVariantConfig.isDudu7) {
+            val shuffleModeEnabled by playerConnection.shuffleModeEnabled.collectAsStateWithLifecycle()
 
-        Box(
+            Box(
             modifier =
                 Modifier
                     .background(
@@ -1263,6 +1264,7 @@ fun Queue(
                 )
             }
         }
+        }
 
         SnackbarHost(
             hostState = snackbarHostState,
@@ -1270,10 +1272,14 @@ fun Queue(
                 Modifier
                     .padding(
                         bottom =
-                            ListItemHeight +
-                                WindowInsets.systemBars
-                                    .asPaddingValues()
-                                    .calculateBottomPadding(),
+                            if (VehicleVariantConfig.isDudu7) {
+                                0.dp
+                            } else {
+                                ListItemHeight +
+                                    WindowInsets.systemBars
+                                        .asPaddingValues()
+                                        .calculateBottomPadding()
+                            },
                     ).align(Alignment.BottomCenter),
         )
     }

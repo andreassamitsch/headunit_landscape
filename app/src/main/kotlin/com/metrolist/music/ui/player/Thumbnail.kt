@@ -201,6 +201,7 @@ fun Thumbnail(
     modifier: Modifier = Modifier,
     isPlayerExpanded: () -> Boolean = { true },
     isLandscape: Boolean = false,
+    landscapeHorizontalPadding: Dp = PlayerHorizontalPadding,
     isListenTogetherGuest: Boolean = false,
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
@@ -356,7 +357,8 @@ fun Thumbnail(
                         calculateThumbnailDimensions(
                             containerWidth = maxWidth,
                             containerHeight = maxHeight,
-                            isLandscape = isLandscape
+                            horizontalPadding = if (isLandscape) landscapeHorizontalPadding else PlayerHorizontalPadding,
+                            isLandscape = isLandscape,
                         )
                     }
 
@@ -379,7 +381,7 @@ fun Thumbnail(
                         flingBehavior = rememberSnapFlingBehavior(thumbnailSnapLayoutInfoProvider),
                         userScrollEnabled = isScrollEnabled,
                         modifier = if (isLandscape) {
-                            Modifier.size(dimensions.thumbnailSize + (PlayerHorizontalPadding * 2))
+                            Modifier.size(dimensions.thumbnailSize + (landscapeHorizontalPadding * 2))
                         } else {
                             Modifier.fillMaxSize()
                         }
@@ -401,6 +403,7 @@ fun Thumbnail(
                                 playerConnection = playerConnection,
                                 context = context,
                                 isLandscape = isLandscape,
+                                landscapeHorizontalPadding = landscapeHorizontalPadding,
                                 isListenTogetherGuest = isListenTogetherGuest,
                                 currentMediaId = mediaMetadata?.id,
                                 currentMediaThumbnail = mediaMetadata?.thumbnailUrl
@@ -498,6 +501,7 @@ private fun ThumbnailItem(
     playerConnection: com.metrolist.music.playback.PlayerConnection,
     context: android.content.Context,
     isLandscape: Boolean = false,
+    landscapeHorizontalPadding: Dp = PlayerHorizontalPadding,
     isListenTogetherGuest: Boolean = false,
     currentMediaId: String? = null,
     currentMediaThumbnail: String? = null,
@@ -511,7 +515,7 @@ private fun ThumbnailItem(
         modifier = modifier
             .then(
                 if (isLandscape) {
-                    Modifier.size(dimensions.thumbnailSize + (PlayerHorizontalPadding * 2))
+                    Modifier.size(dimensions.thumbnailSize + (landscapeHorizontalPadding * 2))
                 } else {
                     Modifier
                         .width(dimensions.itemWidth)
