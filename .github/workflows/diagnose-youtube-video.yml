@@ -19,59 +19,39 @@ jobs:
         run: python3 -m pip install --upgrade yt-dlp
 
       - name: Inspect video with multiple YouTube clients
+        continue-on-error: true
         shell: bash
         run: |
-          set +e
           VIDEO_URL="https://www.youtube.com/watch?v=Cx7QOJLFnug"
           : > diagnosis.txt
+
+          echo "===== BASIC METADATA =====" >> diagnosis.txt
+          yt-dlp --no-warnings --simulate \
+            --print "id=%(id)s" \
+            --print "title=%(title)s" \
+            --print "uploader=%(uploader)s" \
+            --print "availability=%(availability)s" \
+            --print "age_limit=%(age_limit)s" \
+            --print "live_status=%(live_status)s" \
+            --print "duration=%(duration)s" \
+            "$VIDEO_URL" >> diagnosis.txt 2>&1 || true
+
           for CLIENT in default web web_music android ios tv; do
-            echo "===== CLIENT: $CLIENT =====" | tee -a diagnosis.txt
-            if [ "$CLIENT" = "default" ]; then
-              yt-dlp -v --simulate --dump-single-json "$VIDEO_URL" >> diagnosis.txt 2>&1
-            else
-              yt-dlp -v --simulate --dump-single-json --extractor-args "youtube:player_client=$CLIENT" "$VIDEO_URL" >> diagnosis.txt 2>&1
-            fi
             echo >> diagnosis.txt
+            echo "===== CLIENT: $CLIENT =====" >> diagnosis.txt
+            if [ "$CLIENT" = "default" ]; then
+              yt-dlp -v --simulate --print "selected_format=%(format_id)s %(ext)s %(protocol)s %(acodec)s %(vcodec)s" "$VIDEO_URL" >> diagnosis.txt 2>&1 || true
+            else
+              yt-dlp -v --simulate --extractor-args "youtube:player_client=$CLIENT" --print "selected_format=%(format_id)s %(ext)s %(protocol)s %(acodec)s %(vcodec)s" "$VIDEO_URL" >> diagnosis.txt 2>&1 || true
+            fi
           done
 
-          echo "===== FORMAT SUMMARY =====" | tee -a diagnosis.txt
-          yt-dlp -F "$VIDEO_URL" >> diagnosis.txt 2>&1
-
-          python3 - <<'PY' >> diagnosis.txt 2>&1
-          import json
-          import subprocess
-
-          url = "https://www.youtube.com/watch?v=Cx7QOJLFnug"
-          proc = subprocess.run(
-              ["yt-dlp", "--no-warnings", "--dump-single-json", url],
-              text=True,
-              capture_output=True,
-          )
-          print("===== PARSED SUMMARY =====")
-          print("returncode:", proc.returncode)
-          if proc.stdout.strip():
-              data = json.loads(proc.stdout)
-              formats = data.get("formats") or []
-              audio = [f for f in formats if f.get("acodec") not in (None, "none")]
-              audio_only = [f for f in audio if f.get("vcodec") == "none"]
-              print("id:", data.get("id"))
-              print("title:", data.get("title"))
-              print("uploader:", data.get("uploader"))
-              print("availability:", data.get("availability"))
-              print("age_limit:", data.get("age_limit"))
-              print("live_status:", data.get("live_status"))
-              print("duration:", data.get("duration"))
-              print("format_count:", len(formats))
-              print("audio_format_count:", len(audio))
-              print("audio_only_count:", len(audio_only))
-              print("audio_protocols:", sorted({str(f.get("protocol")) for f in audio_only}))
-              print("audio_exts:", sorted({str(f.get("ext")) for f in audio_only}))
-              print("has_drm:", any(bool(f.get("has_drm")) for f in formats))
-          if proc.stderr.strip():
-              print("stderr:", proc.stderr)
-          PY
+          echo >> diagnosis.txt
+          echo "===== FORMATS =====" >> diagnosis.txt
+          yt-dlp -F "$VIDEO_URL" >> diagnosis.txt 2>&1 || true
 
       - name: Upload diagnosis
+        if: always()
         uses: actions/upload-artifact@v6
         with:
           name: youtube-diagnosis-Cx7QOJLFnug
