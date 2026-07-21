@@ -1,8 +1,6 @@
 name: Materialize Dudu7 on MetroList 13.6.1
 
 on:
-  pull_request:
-    branches: ["main"]
   workflow_dispatch:
 
 permissions:
