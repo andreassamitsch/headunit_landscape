@@ -1,6 +1,8 @@
 name: Materialize Dudu7 on MetroList 13.6.1
 
 on:
+  push:
+    branches: ["agent/upstream-13.6.1-bootstrap"]
   workflow_dispatch:
 
 permissions:
@@ -74,22 +76,27 @@ jobs:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
 
-      - name: Commit and push validated branch
-        shell: bash
-        run: |
-          set -euo pipefail
-          git add -A
-          git add -f app/keystore/dudu7-debug.keystore
-          git commit -m "Dudu7: Overlay auf MetroList 13.6.1"
-          git push --force origin agent/upstream-13.6.1-dudu7
-
       - name: Collect Dudu7 APK
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p dist
           APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
           test -n "$APK"
           cp "$APK" dist/Metrolist-Dudu7-13.6.1.apk
+          sha256sum dist/Metrolist-Dudu7-13.6.1.apk | tee dist/Metrolist-Dudu7-13.6.1.sha256
+
+      - name: Commit and push validated branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Keep the official upstream workflow files in this bot-created commit.
+          # The maintained Dudu7 workflows are added afterwards through the GitHub API.
+          git restore --source=HEAD --staged --worktree .github/workflows
+          git add -A
+          git add -f app/keystore/dudu7-debug.keystore
+          git commit -m "Dudu7: Overlay auf MetroList 13.6.1"
+          git push --force origin agent/upstream-13.6.1-dudu7
 
       - name: Upload result and diagnostics
         if: always()
@@ -100,4 +107,5 @@ jobs:
             /tmp/migration-materialize.log
             migration-build.log
             dist/Metrolist-Dudu7-13.6.1.apk
+            dist/Metrolist-Dudu7-13.6.1.sha256
           if-no-files-found: warn
