@@ -66,6 +66,7 @@ jobs:
             assembleFossStandardDebug :app:lintFossStandardDebug \
             assembleGmsDudu7Debug :app:lintGmsDudu7Debug \
             testGmsDudu7DebugUnitTest \
+            --tests "com.metrolist.music.variant.Dudu7LayoutTest" \
             --warning-mode summary 2>&1 | tee migration-build.log
         env:
           METROLIST_APPLICATION_ID: com.metrolist.music
