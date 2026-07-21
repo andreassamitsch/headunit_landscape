@@ -1,0 +1,1 @@
+Trigger the one-time publication workflow from a ready pull request.
