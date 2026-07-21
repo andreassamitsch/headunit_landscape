@@ -25,8 +25,49 @@ jobs:
         shell: bash
         run: |
           set +e
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply_dudu7_layout_corrections.py')
+          text = path.read_text(encoding='utf-8')
+          old = '''replace_once(
+              "app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt",
+              "            visible = !isFullScreen,\\n",
+              "            visible = !isFullScreen && !VehicleVariantConfig.isDudu7,\\n",
+          )'''
+          new = '''player_path = "app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt"
+          player_text = read(player_path)
+          player_anchor = "            visible = !isFullScreen,\\n"
+          player_index = player_text.rfind(player_anchor)
+          if player_index < 0:
+              raise RuntimeError("Missing final queue visibility anchor")
+          write(player_path, player_text[:player_index] + "            visible = !isFullScreen && !VehicleVariantConfig.isDudu7,\\n" + player_text[player_index + len(player_anchor):])'''
+          if text.count(old) != 1:
+              raise SystemExit(f'current script visibility anchor count: {text.count(old)}')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
           python3 scripts/apply_dudu7_layout_corrections.py >/tmp/dudu7-patch.log 2>&1
           status=$?
+          if [ "$status" -eq 0 ]; then
+            python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/dudu7_overlay/rebuild_05_layout_corrections.py.part')
+          text = path.read_text(encoding='utf-8')
+          old = '''    replace_once(
+                  player,
+                  "            visible = !isFullScreen,\\n",
+                  "            visible = !isFullScreen && !VehicleVariantConfig.isDudu7,\\n",
+              )'''
+          new = '''    player_text = read(player)
+              player_anchor = "            visible = !isFullScreen,\\n"
+              player_index = player_text.rfind(player_anchor)
+              if player_index < 0:
+                  raise RuntimeError("Missing final queue visibility anchor")
+              write(player, player_text[:player_index] + "            visible = !isFullScreen && !VehicleVariantConfig.isDudu7,\\n" + player_text[player_index + len(player_anchor):])'''
+          if text.count(old) != 1:
+              raise SystemExit(f'overlay visibility anchor count: {text.count(old)}')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          fi
           cat /tmp/dudu7-patch.log
           exit $status
       - name: Upload patch diagnostics
