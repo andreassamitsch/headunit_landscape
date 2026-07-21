@@ -1,0 +1,62 @@
+name: Build Dudu7 APK
+
+on:
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Dudu7 APK artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: "21"
+          distribution: temurin
+
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: true
+          cache-cleanup: on-success
+
+      - name: Prepare
+        run: |
+          chmod +x gradlew
+          python3 scripts/verify_dudu7_architecture.py
+
+      - name: Build Dudu7 APK
+        run: |
+          ./gradlew --console=plain assembleGmsDudu7Debug --warning-mode summary -x lint
+        env:
+          METROLIST_APPLICATION_ID: com.metrolist.music
+          METROLIST_APP_NAME: Metrolist Dudu7
+          METROLIST_DEBUG_KEYSTORE_PATH: keystore/dudu7-debug.keystore
+          PULL_REQUEST: "false"
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+
+      - name: Collect APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
+          test -n "$APK"
+          cp "$APK" dist/Metrolist-Dudu7-13.6.1-RVX.apk
+          sha256sum dist/Metrolist-Dudu7-13.6.1-RVX.apk > dist/Metrolist-Dudu7-13.6.1-RVX.sha256
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: Metrolist-Dudu7-13.6.1-RVX
+          path: dist/Metrolist-Dudu7-13.6.1-RVX.*
+          if-no-files-found: error
