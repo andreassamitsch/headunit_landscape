@@ -27,8 +27,16 @@ jobs:
           gh api "repos/$GH_REPO/actions/runs/$RUN_ID" > materialize-run-detail.json
           gh api "repos/$GH_REPO/actions/runs/$RUN_ID/jobs" > materialize-jobs.json
           gh api -H "Accept: application/vnd.github+json" "repos/$GH_REPO/commits/$HEAD_SHA/check-runs" > materialize-check-runs.json
+          JOB_ID="$(jq -r '.jobs[0].id // empty' materialize-jobs.json)"
+          if [ -n "$JOB_ID" ]; then
+            gh api "repos/$GH_REPO/actions/jobs/$JOB_ID/logs" > materialize-job.log
+            tail -n 300 materialize-job.log > materialize-job-tail.txt
+          else
+            echo "No job found" > materialize-job-tail.txt
+          fi
           jq '{id,status,conclusion,event,path,display_title,run_started_at,updated_at}' materialize-run-detail.json | tee materialize-detail-summary.txt
           jq '.check_runs[] | {name,status,conclusion,details_url,output}' materialize-check-runs.json | tee materialize-check-summary.txt
+          cat materialize-job-tail.txt
       - uses: actions/upload-artifact@v6
         with:
           name: materialize-run-inspection
@@ -40,4 +48,5 @@ jobs:
             materialize-check-runs.json
             materialize-detail-summary.txt
             materialize-check-summary.txt
+            materialize-job-tail.txt
           if-no-files-found: error
