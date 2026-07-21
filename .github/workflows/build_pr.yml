@@ -24,7 +24,7 @@ concurrency:
 jobs:
   dudu7:
     name: Dudu7 compile and unit tests
-    if: github.actor != 'dependabot[bot]' && github.actor != 'renovate[bot]'
+    if: github.head_ref != 'sync/metrolist-upstream' && github.actor != 'dependabot[bot]' && github.actor != 'renovate[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
