@@ -67,87 +67,89 @@ fun ColumnScope.VehiclePlayerControls(
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
     ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.headlineSmall,
+            style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             color = textColor,
             modifier = Modifier.fillMaxWidth().clickable(onClick = onTitleClick),
         )
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(2.dp))
         Text(
             text = artists,
             style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            color = textColor.copy(alpha = 0.82f),
+            color = textColor.copy(alpha = 0.78f),
             modifier = Modifier.fillMaxWidth().clickable(onClick = onArtistClick),
         )
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(8.dp))
 
         Row(
-            horizontalArrangement = Arrangement.spacedBy(34.dp),
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(
                 onClick = onPrevious,
                 enabled = canSkipPrevious,
-                modifier = Modifier.size(58.dp),
+                modifier = Modifier.size(52.dp),
                 colors = IconButtonDefaults.iconButtonColors(contentColor = sideButtonContentColor),
             ) {
                 Icon(
                     painter = painterResource(R.drawable.skip_previous),
-                    contentDescription = null,
-                    modifier = Modifier.size(34.dp),
+                    contentDescription = "Vorheriger Titel",
+                    modifier = Modifier.size(31.dp),
                 )
             }
 
             FilledIconButton(
                 onClick = onPlayPause,
                 shape = CircleShape,
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = playButtonContainerColor,
-                    contentColor = playButtonContentColor,
-                ),
-                modifier = Modifier.size(74.dp),
+                colors =
+                    IconButtonDefaults.filledIconButtonColors(
+                        containerColor = playButtonContainerColor,
+                        contentColor = playButtonContentColor,
+                    ),
+                modifier = Modifier.size(68.dp),
             ) {
                 Icon(
-                    painter = painterResource(
-                        when {
-                            isGuest && isMuted -> R.drawable.volume_off
-                            isGuest -> R.drawable.volume_up
-                            isEnded -> R.drawable.replay
-                            isPlaying -> R.drawable.pause
-                            else -> R.drawable.play
-                        },
-                    ),
-                    contentDescription = null,
-                    modifier = Modifier.size(38.dp),
+                    painter =
+                        painterResource(
+                            when {
+                                isGuest && isMuted -> R.drawable.volume_off
+                                isGuest -> R.drawable.volume_up
+                                isEnded -> R.drawable.replay
+                                isPlaying -> R.drawable.pause
+                                else -> R.drawable.play
+                            },
+                        ),
+                    contentDescription = "Wiedergabe",
+                    modifier = Modifier.size(36.dp),
                 )
             }
 
             IconButton(
                 onClick = onNext,
                 enabled = canSkipNext,
-                modifier = Modifier.size(58.dp),
+                modifier = Modifier.size(52.dp),
                 colors = IconButtonDefaults.iconButtonColors(contentColor = sideButtonContentColor),
             ) {
                 Icon(
                     painter = painterResource(R.drawable.skip_next),
-                    contentDescription = null,
-                    modifier = Modifier.size(34.dp),
+                    contentDescription = "Nächster Titel",
+                    modifier = Modifier.size(31.dp),
                 )
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(5.dp))
 
         Slider(
             value = safeSliderValue.toFloat(),
@@ -173,27 +175,27 @@ fun ColumnScope.VehiclePlayerControls(
             )
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(4.dp))
 
         Row(
-            horizontalArrangement = Arrangement.spacedBy(44.dp),
-            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             VehicleAction(
                 icon = R.drawable.radio,
-                label = "Radio",
+                description = "Radio starten",
                 color = textColor,
                 onClick = onStartRadio,
             )
             VehicleAction(
                 icon = R.drawable.share,
-                label = "Teilen",
+                description = "Teilen",
                 color = textColor,
                 onClick = onShare,
             )
             VehicleAction(
                 icon = if (isFavorite) R.drawable.favorite else R.drawable.favorite_border,
-                label = "Like",
+                description = "Gefällt mir",
                 color = if (isFavorite) MaterialTheme.colorScheme.primary else textColor,
                 onClick = onToggleLike,
             )
@@ -204,25 +206,19 @@ fun ColumnScope.VehiclePlayerControls(
 @Composable
 private fun VehicleAction(
     @DrawableRes icon: Int,
-    label: String,
+    description: String,
     color: Color,
     onClick: () -> Unit,
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 4.dp),
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(52.dp),
     ) {
         Icon(
             painter = painterResource(icon),
-            contentDescription = label,
+            contentDescription = description,
             tint = color,
-            modifier = Modifier.size(30.dp),
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = color,
+            modifier = Modifier.size(29.dp),
         )
     }
 }
