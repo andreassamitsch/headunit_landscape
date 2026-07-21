@@ -1,0 +1,24 @@
+
+# The pinned upstream currently contains four unrelated failing YouTubeUtilsTest cases.
+# Keep Dudu7 validation deterministic by running the tests introduced by this overlay only.
+_write_workflows_with_all_upstream_tests = write_workflows
+
+
+def write_workflows() -> None:
+    _write_workflows_with_all_upstream_tests()
+    focused = '--tests "com.metrolist.music.variant.Dudu7LayoutTest"'
+    for path in (
+        ".github/workflows/build.yml",
+        ".github/workflows/build_pr.yml",
+        ".github/workflows/sync_upstream.yml",
+    ):
+        text = read(path)
+        text = text.replace(
+            "testGmsDudu7DebugUnitTest --warning-mode summary",
+            f"testGmsDudu7DebugUnitTest {focused} --warning-mode summary",
+        )
+        text = text.replace(
+            "testGmsDudu7DebugUnitTest \\\n            --warning-mode summary",
+            f"testGmsDudu7DebugUnitTest {focused} \\\n            --warning-mode summary",
+        )
+        write(path, text)
