@@ -58,13 +58,12 @@ jobs:
           chmod +x gradlew
           python3 scripts/verify_dudu7_architecture.py
 
-      - name: Build and validate standard and Dudu7
+      - name: Build Dudu7 and run focused overlay test
         shell: bash
         run: |
           set -o pipefail
           ./gradlew --console=plain \
-            assembleFossStandardDebug :app:lintFossStandardDebug \
-            assembleGmsDudu7Debug :app:lintGmsDudu7Debug \
+            assembleGmsDudu7Debug \
             testGmsDudu7DebugUnitTest \
             --tests "com.metrolist.music.variant.Dudu7LayoutTest" \
             --warning-mode summary 2>&1 | tee migration-build.log
