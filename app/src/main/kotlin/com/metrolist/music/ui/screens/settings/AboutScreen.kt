@@ -90,6 +90,7 @@ private data class Contributor(
     val githubHandle: String,
     val avatarUrl: String = "https://github.com/$githubHandle.png",
     val githubUrl: String = "https://github.com/$githubHandle",
+    val sponsorUrl: String? = null,
     val polygon: RoundedPolygon? = null,
     val favoriteSongVideoId: String? = null
 )
@@ -111,8 +112,8 @@ private val leadDeveloper = Contributor(
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 private val collaborators = listOf(
-    Contributor(name = "Adriel O'Connel", roleRes = R.string.credits_collaborator, githubHandle = "adrielGGmotion", polygon = MaterialShapes.Cookie4Sided, favoriteSongVideoId = "m2zUrruKjDQ"),
-    Contributor(name = "Nyx", roleRes = R.string.credits_collaborator, githubHandle = "nyxiereal", polygon = MaterialShapes.Cookie12Sided, favoriteSongVideoId = "zselaN6zPXw"),
+    Contributor(name = "Adriel O'Connel", roleRes = R.string.credits_collaborator, githubHandle = "adrielGGmotion", sponsorUrl = "https://github.com/sponsors/adrielGGmotion", polygon = MaterialShapes.Cookie4Sided, favoriteSongVideoId = "m2zUrruKjDQ"),
+    Contributor(name = "Nyx", roleRes = R.string.credits_collaborator, githubHandle = "nyxiereal", sponsorUrl = "https://github.com/sponsors/nyxiereal", polygon = MaterialShapes.Cookie12Sided, favoriteSongVideoId = "zselaN6zPXw"),
 )
 
 private val communityLinks = listOf(
@@ -160,7 +161,7 @@ private fun ContributorAvatar(
     contentDescription: String? = null,
     onClick: (() -> Unit)? = null
 ) {
-    val fallback = painterResource(R.drawable.small_icon)
+    val fallback = painterResource(R.drawable.about_icon)
     Surface(
         onClick = onClick ?: {},
         enabled = onClick != null,
@@ -190,7 +191,7 @@ private fun DeveloperSocials(
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         FilledTonalButton(
-            onClick = { uriHandler.openUri("https://metrolist.meowery.eu") },
+            onClick = { uriHandler.openUri("https://metrolist.cc") },
             modifier = Modifier.weight(1f).height(48.dp)
         ) {
             Icon(painterResource(R.drawable.language), contentDescription = null)
@@ -251,15 +252,18 @@ fun AboutScreen(
                     .fillMaxWidth()
                     .padding(24.dp)
             ) {
-                Image(
-                    painter = painterResource(R.drawable.small_icon),
-                    contentDescription = stringResource(R.string.metrolist),
-                    colorFilter = ColorFilter.tint(
-                        color = MaterialTheme.colorScheme.primary,
-                        blendMode = BlendMode.SrcIn,
-                    ),
-                    modifier = Modifier.size(64.dp)
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    Image(
+                        painter = painterResource(R.drawable.ic_logo_oval),
+                        contentDescription = null,
+                        modifier = Modifier.size(84.dp)
+                    )
+                    Image(
+                        painter = painterResource(R.drawable.about_icon),
+                        contentDescription = stringResource(R.string.metrolist),
+                        modifier = Modifier.size(64.dp)
+                    )
+                }
         
                 Spacer(Modifier.width(20.dp))
         
@@ -435,12 +439,34 @@ fun AboutScreen(
                     title = { Text(text = contributor.name, fontWeight = FontWeight.SemiBold) },
                     description = { Text(stringResource(contributor.roleRes)) },
                     trailingContent = {
-                        Icon(
-                            painter = painterResource(R.drawable.github),
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (contributor.sponsorUrl != null) {
+                                Surface(
+                                    onClick = { uriHandler.openUri(contributor.sponsorUrl) },
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.buymeacoffee),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                            Icon(
+                                painter = painterResource(R.drawable.github),
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     },
                     onClick = { uriHandler.openUri(contributor.githubUrl) }
                 )

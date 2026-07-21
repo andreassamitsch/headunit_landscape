@@ -67,8 +67,8 @@ fun VehicleSettingsScreen(navController: NavController) {
                 onCheckedChange = setAlwaysStartPlayer,
             )
             SwitchRow(
-                title = "Mit Songtext statt Warteschlange starten",
-                summary = "Die Warteschlange bleibt jederzeit über den rechten Bereich erreichbar.",
+                title = "Mit Songtext statt Cover starten",
+                summary = "Die Warteschlange bleibt rechts jederzeit sichtbar.",
                 checked = startWithLyrics,
                 onCheckedChange = setStartWithLyrics,
             )

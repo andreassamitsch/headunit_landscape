@@ -31,35 +31,47 @@ data class MusicResponsiveListItemRenderer(
     val navigationEndpoint: NavigationEndpoint?,
 ) {
     val isSong: Boolean
-        get() = navigationEndpoint == null ||
-            navigationEndpoint.watchEndpoint != null ||
-            navigationEndpoint.watchPlaylistEndpoint != null ||
-            overlay?.musicItemThumbnailOverlayRenderer
+        get() = navigationEndpoint == null
+            || navigationEndpoint.watchEndpoint != null
+            || navigationEndpoint.watchPlaylistEndpoint != null
+            || overlay?.musicItemThumbnailOverlayRenderer
                 ?.content?.musicPlayButtonRenderer
                 ?.playNavigationEndpoint?.watchEndpoint != null
     val isPlaylist: Boolean
         get() = navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType == MUSIC_PAGE_TYPE_PLAYLIST
     val isAlbum: Boolean
         get() = navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType == MUSIC_PAGE_TYPE_ALBUM ||
-            navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType == MUSIC_PAGE_TYPE_AUDIOBOOK
+                navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType == MUSIC_PAGE_TYPE_AUDIOBOOK
     val isArtist: Boolean
-        get() = navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType == MUSIC_PAGE_TYPE_ARTIST ||
-            navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType == MUSIC_PAGE_TYPE_LIBRARY_ARTIST
+        get() = navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType == MUSIC_PAGE_TYPE_ARTIST
+                || navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType == MUSIC_PAGE_TYPE_LIBRARY_ARTIST
     val isPodcast: Boolean
         get() = navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType == MUSIC_PAGE_TYPE_PODCAST_SHOW_DETAIL_PAGE
     val isUserChannel: Boolean
         get() = navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType == MUSIC_PAGE_TYPE_USER_CHANNEL
     val isEpisode: Boolean
         get() {
+            // Method 1: Check browse endpoint (for episode detail pages)
             if (navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType == MUSIC_PAGE_TYPE_NON_MUSIC_AUDIO_TRACK_PAGE) {
                 return true
             }
+            // Method 2: Check if first subtitle text is "Episode" (for search results)
             val firstSubtitleText = flexColumns.getOrNull(1)
                 ?.musicResponsiveListItemFlexColumnRenderer
                 ?.text?.runs?.firstOrNull()?.text
             if (firstSubtitleText == "Episode") {
                 return true
             }
+            // Method 3: Check for podcast link in subtitle (backup detection).
+            //
+            // Episode items that appear in filtered search results may have:
+            //   - navigationEndpoint.watchEndpoint  (playable) → isSong=true would wrongly match
+            //   - playlistItemData = null            (not in a playlist context)
+            //   - subtitle: [date · podcast-name]   (podcast-name links to PODCAST_SHOW_DETAIL_PAGE)
+            //
+            // The presence of a PODCAST_SHOW_DETAIL_PAGE browse link in the subtitle is unique to
+            // episodes — regular songs never carry such a link.  We accept either a playlistItemData
+            // videoId OR a direct watchEndpoint videoId to handle both playlist and standalone contexts.
             val hasPodcastLink = flexColumns.getOrNull(1)
                 ?.musicResponsiveListItemFlexColumnRenderer
                 ?.text?.runs?.any { run ->
@@ -68,7 +80,8 @@ data class MusicResponsiveListItemRenderer(
                         ?.browseEndpointContextMusicConfig
                         ?.pageType == MUSIC_PAGE_TYPE_PODCAST_SHOW_DETAIL_PAGE
                 } == true
-            return hasPodcastLink && videoId != null
+            val hasVideoId = videoId != null
+            return hasPodcastLink && hasVideoId
         }
 
     val musicVideoType: String?
@@ -81,21 +94,18 @@ data class MusicResponsiveListItemRenderer(
                 ?.musicVideoType
                 ?: navigationEndpoint?.musicVideoType
 
-    // YouTube may omit playlistItemData for Liked Music and other system playlists.
     val videoId: String?
         get() = playlistItemData?.videoId
-            ?: navigationEndpoint?.watchEndpoint?.videoId
-            ?: overlay?.musicItemThumbnailOverlayRenderer
-                ?.content?.musicPlayButtonRenderer
-                ?.playNavigationEndpoint?.watchEndpoint?.videoId
             ?: flexColumns.firstOrNull()
                 ?.musicResponsiveListItemFlexColumnRenderer
                 ?.text?.runs?.firstOrNull()
                 ?.navigationEndpoint?.watchEndpoint?.videoId
+            ?: overlay?.musicItemThumbnailOverlayRenderer
+                ?.content?.musicPlayButtonRenderer
+                ?.playNavigationEndpoint?.watchEndpoint?.videoId
 
     val playlistSetVideoId: String?
         get() = playlistItemData?.playlistSetVideoId
-            ?: navigationEndpoint?.watchEndpoint?.playlistSetVideoId
             ?: overlay?.musicItemThumbnailOverlayRenderer
                 ?.content?.musicPlayButtonRenderer
                 ?.playNavigationEndpoint?.watchEndpoint?.playlistSetVideoId

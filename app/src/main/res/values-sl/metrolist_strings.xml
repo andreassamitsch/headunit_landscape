@@ -165,8 +165,6 @@
     <string name="settings_section_ui">Vmesnik</string>
     <string name="settings_section_privacy">Zasebnost in varnost</string>
     <string name="update_channel_desc">Obvestila o novih različicah</string>
-    <string name="discord_use_details">Uporabi podrobnosti namesto statusa</string>
-    <string name="discord_use_details_description">Izpostavi naslov pesmi namesto izvajalca</string>
     <string name="integrations">Integracije</string>
     <string name="username">Uporabniško ime</string>
     <string name="password">Geslo</string>
@@ -229,7 +227,6 @@
     <string name="delete_desc">Trajno odstrani ta element</string>
     <string name="advanced_desc">Spremeni tempo in višino tona skladbe</string>
     <string name="equalizer_desc">Prilagodi izenačevalnik zvoka</string>
-    <string name="enable_dynamic_icon">Omogoči dinamično ikono</string>
     <string name="mini_player">Mini predvajalnik</string>
     <string name="pure_black_mini_player">Popolnoma črn mini predvajalnik</string>
     <string name="cache_size_warning_title">Pozor!</string>
