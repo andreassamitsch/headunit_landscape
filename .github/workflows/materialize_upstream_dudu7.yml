@@ -1,20 +1,21 @@
-name: Materialize Dudu7 on MetroList 13.6.1
+name: Publish validated Dudu7 13.6.1 source
 
 on:
-  pull_request:
-    branches: ["main"]
+  push:
+    branches: ["agent/upstream-13.6.1-bootstrap-final"]
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: materialize-upstream-dudu7
+  group: publish-validated-dudu7-13-6-1
   cancel-in-progress: true
 
 jobs:
-  materialize:
+  publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v6
         with:
@@ -26,19 +27,14 @@ jobs:
           java-version: "21"
           distribution: temurin
 
-      - uses: gradle/actions/setup-gradle@v5
-        with:
-          cache-cleanup: on-success
-
       - name: Assemble readable migration script
         shell: bash
         run: |
           set -euo pipefail
           cat .bootstrap/rebuild_*.py.part > /tmp/rebuild_dudu7_on_upstream.py
           python3 -m py_compile /tmp/rebuild_dudu7_on_upstream.py
-          sha256sum /tmp/rebuild_dudu7_on_upstream.py
 
-      - name: Materialize on pinned official upstream
+      - name: Materialize previously validated source tree
         shell: bash
         run: |
           set -euo pipefail
@@ -46,6 +42,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote add upstream https://github.com/MetrolistGroup/Metrolist.git 2>/dev/null || true
           git fetch upstream main
+          git fetch origin main
           git fetch origin c103e0fc4278e5fa9343938325b96483b6308627
           UPSTREAM_SHA="f0f91e4f7a7fa09fb3050dfe1d495e4c86542a99"
           test "$(git rev-parse upstream/main)" = "$UPSTREAM_SHA"
@@ -58,54 +55,27 @@ jobs:
           chmod +x gradlew
           python3 scripts/verify_dudu7_architecture.py
 
-      - name: Build Dudu7 and run focused overlay test
-        shell: bash
-        run: |
-          set -o pipefail
-          ./gradlew --console=plain \
-            assembleGmsDudu7Debug \
-            testGmsDudu7DebugUnitTest \
-            --tests "com.metrolist.music.variant.Dudu7LayoutTest" \
-            --warning-mode summary 2>&1 | tee migration-build.log
-        env:
-          METROLIST_APPLICATION_ID: com.metrolist.music
-          METROLIST_APP_NAME: Metrolist Dudu7
-          METROLIST_DEBUG_KEYSTORE_PATH: keystore/dudu7-debug.keystore
-          PULL_REQUEST: "false"
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
-          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
-
-      - name: Collect Dudu7 APK
+      - name: Publish as one content commit on current main
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist
-          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
-          test -n "$APK"
-          cp "$APK" dist/Metrolist-Dudu7-13.6.1.apk
-          sha256sum dist/Metrolist-Dudu7-13.6.1.apk | tee dist/Metrolist-Dudu7-13.6.1.sha256
-
-      - name: Commit and push validated branch
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Keep the official upstream workflow files in this bot-created commit.
-          # The maintained Dudu7 workflows are added afterwards through the GitHub API.
-          git restore --source=HEAD --staged --worktree .github/workflows
+          rm -rf .github/workflows
+          git checkout origin/main -- .github/workflows
           git add -A
           git add -f app/keystore/dudu7-debug.keystore
-          git commit -m "Dudu7: Overlay auf MetroList 13.6.1"
-          git push --force origin agent/upstream-13.6.1-dudu7
+          TREE="$(git write-tree)"
+          BASE="$(git rev-parse origin/main)"
+          COMMIT="$(printf '%s\n' 'Dudu7: MetroList 13.6.1 als aktuelle Basis [skip ci]' | git commit-tree "$TREE" -p "$BASE")"
+          git update-ref refs/heads/agent/upstream-13.6.1-dudu7 "$COMMIT"
+          git push --force origin refs/heads/agent/upstream-13.6.1-dudu7
+          echo "$COMMIT" | tee /tmp/published-commit.txt
 
-      - name: Upload result and diagnostics
+      - name: Upload publication diagnostics
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: dudu7-upstream-13.6.1-result
+          name: dudu7-upstream-13.6.1-publication
           path: |
             /tmp/migration-materialize.log
-            migration-build.log
-            dist/Metrolist-Dudu7-13.6.1.apk
-            dist/Metrolist-Dudu7-13.6.1.sha256
+            /tmp/published-commit.txt
           if-no-files-found: warn
