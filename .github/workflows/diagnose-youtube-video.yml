@@ -3,6 +3,8 @@ name: Diagnose YouTube Music Video
 on:
   push:
     branches: ["agent/diagnose-Cx7QOJLFnug"]
+  pull_request:
+    branches: ["main"]
 
 permissions:
   contents: read
