@@ -51,16 +51,25 @@ checks = {
         "VehiclePlayerControls(",
         "VehicleEmptyPlayer(navController = navController)",
         "moveTaskToBack(true)",
+        "visible = !isFullScreen && !VehicleVariantConfig.isDudu7",
+        "landscapeHorizontalPadding = 8.dp",
     ),
     "app/src/main/kotlin/com/metrolist/music/ui/player/Queue.kt": (
         "rememberReorderableLazyListState",
         "moveMediaItem",
         "VehicleQueueActions()",
+        "bottom = if (VehicleVariantConfig.isDudu7) 8.dp else ListItemHeight + 8.dp",
         "isExpandable = !VehicleVariantConfig.isDudu7",
     ),
     "app/src/main/kotlin/com/metrolist/music/ui/screens/search/SearchScreen.kt": (
         "rememberVehicleVoiceSearch(",
         "onClick = vehicleVoiceSearch",
+    ),
+    "app/src/main/kotlin/com/metrolist/music/ui/component/BottomSheet.kt": (
+        "if (!isExpandable || !state.isCollapsed)",
+    ),
+    "app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt": (
+        "landscapeHorizontalPadding: Dp = PlayerHorizontalPadding",
     ),
     "app/src/main/kotlin/com/metrolist/music/utils/cipher/PlayerConfigStore.kt": (
         "scheduleStartupRefresh",

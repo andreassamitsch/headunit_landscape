@@ -29,6 +29,8 @@ Der gemeinsame MetroList-Code enthält nur kleine, stabile Aufrufe an folgende V
 - feste Querformat-Ausrichtung
 - Player beim Start ausgeklappt
 - RVX-inspirierter Player links, permanente Warteschlange rechts
+- feste rechte Queue ohne zusätzliches Smartphone-Bottom-Sheet
+- kompakter RVX-Player mit großem Cover und reiner Icon-Aktionsleiste
 - rechte Tabs für Warteschlange, Playlists und Bibliothek
 - Queue per Drag-and-drop sortierbar
 - konfigurierbare Pane-Breite, Wischgeste und Auto-Zentrierung

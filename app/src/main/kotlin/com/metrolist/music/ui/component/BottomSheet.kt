@@ -85,7 +85,7 @@ fun BottomSheet(
                 val y = (state.expandedBound - state.value)
                     .toPx()
                     .coerceAtLeast(0f)
-                translationY = y
+                translationY = if (isExpandable) y else 0f
             }
             .pointerInput(state, isExpandable) {
                 if (!isExpandable) return@pointerInput
@@ -108,12 +108,12 @@ fun BottomSheet(
                 )
             }
             .graphicsLayer {
-                val cornerRadius = if (!state.isExpanded) 16.dp.toPx() else 0f
+                val cornerRadius = if (isExpandable && !state.isExpanded) 16.dp.toPx() else 0f
                 shape = RoundedCornerShape(topStart = cornerRadius, topEnd = cornerRadius)
                 clip = true
             }
     ) {
-        if (!state.isCollapsed && !state.isDismissed) {
+        if (isExpandable && !state.isCollapsed && !state.isDismissed) {
             PredictiveBackHandler { progress ->
                 val initialValue = state.value
                 try {
@@ -131,18 +131,18 @@ fun BottomSheet(
         }
 
         // main content
-        if (!state.isCollapsed) {
+        if (!isExpandable || !state.isCollapsed) {
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        alpha = ((state.progress - 0.15f) * 4).coerceIn(0f, 1f)
+                        alpha = if (isExpandable) ((state.progress - 0.15f) * 4).coerceIn(0f, 1f) else 1f
                     },
                 content = content
             )
         }
 
-        if (!state.isExpanded && (onDismiss == null || !state.isDismissed)) {
+        if (isExpandable && !state.isExpanded && (onDismiss == null || !state.isDismissed)) {
             Box(
                 modifier =
                 Modifier
