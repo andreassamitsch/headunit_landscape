@@ -1,45 +1,33 @@
-name: Build Maintained Flavors
+name: Build Maintained Dudu7
 
 on:
   workflow_dispatch:
   push:
     branches: ["main"]
-    paths-ignore:
-      - "README.md"
-      - "fastlane/**"
-      - "assets/**"
-      - ".github/**/*.md"
+    paths:
+      - "app/**"
+      - "build-logic/**"
+      - "gradle/**"
+      - "gradlew"
+      - "gradlew.bat"
+      - "*.gradle.kts"
+      - "gradle.properties"
+      - "scripts/verify_dudu7_architecture.py"
+      - ".github/workflows/build.yml"
 
 permissions:
   contents: read
 
+concurrency:
+  group: main-maintained-build
+  cancel-in-progress: true
+
 jobs:
-  debug:
-    name: Build ${{ matrix.label }}
+  validate:
+    name: Standard compatibility and Dudu7 validation
     if: github.actor != 'dependabot[bot]' && github.actor != 'renovate[bot]'
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: Standard FOSS
-            gradleVariant: FossStandard
-            outputDir: fossStandard
-            artifact: metrolist-standard-foss-debug
-            appName: Metrolist
-            runTests: false
-          - label: Standard GMS
-            gradleVariant: GmsStandard
-            outputDir: gmsStandard
-            artifact: metrolist-standard-gms-debug
-            appName: Metrolist GMS
-            runTests: false
-          - label: Dudu7 GMS
-            gradleVariant: GmsDudu7
-            outputDir: gmsDudu7
-            artifact: metrolist-dudu7-gms-debug
-            appName: Metrolist Dudu7
-            runTests: true
+    timeout-minutes: 35
 
     steps:
       - uses: actions/checkout@v6
@@ -59,34 +47,42 @@ jobs:
         run: |
           chmod +x gradlew
           python3 scripts/verify_dudu7_architecture.py
-          keytool -genkeypair -v -keystore app/nightly-debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Metrolist Nightly,O=Metrolist,C=AT"
+          keytool -genkeypair -v \
+            -keystore app/nightly-debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Metrolist Dudu7,O=Metrolist,C=AT"
 
-      - name: Build and lint
+      - name: Build standard compatibility and fully validate Dudu7
         run: |
           ./gradlew --console=plain \
-            assemble${{ matrix.gradleVariant }}Debug \
-            :app:lint${{ matrix.gradleVariant }}Debug \
+            assembleFossStandardDebug \
+            assembleGmsDudu7Debug \
+            :app:lintGmsDudu7Debug \
+            testGmsDudu7DebugUnitTest \
             --warning-mode summary
         env:
           METROLIST_APPLICATION_ID: com.metrolist.music
-          METROLIST_APP_NAME: ${{ matrix.appName }}
+          METROLIST_APP_NAME: Metrolist Dudu7
           METROLIST_DEBUG_KEYSTORE_PATH: nightly-debug.keystore
           PULL_REQUEST: "false"
           GITHUB_EVENT_NAME: ${{ github.event_name }}
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
 
-      - name: Run Dudu7 unit tests
-        if: matrix.runTests
-        run: ./gradlew --console=plain testGmsDudu7DebugUnitTest --warning-mode summary
-
-      - name: Collect APK
+      - name: Collect Dudu7 APK
         run: |
           mkdir -p dist
-          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/${{ matrix.outputDir }}/debug/' | head -n 1)"
+          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
           test -n "$APK"
-          cp "$APK" "dist/${{ matrix.artifact }}.apk"
+          cp "$APK" dist/Metrolist-Dudu7.apk
 
       - uses: actions/upload-artifact@v6
         with:
-          name: ${{ matrix.artifact }}
-          path: dist/${{ matrix.artifact }}.apk
+          name: metrolist-dudu7-apk
+          path: dist/Metrolist-Dudu7.apk
           if-no-files-found: error
