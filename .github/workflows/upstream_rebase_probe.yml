@@ -1,0 +1,60 @@
+name: Probe Dudu7 on Current Upstream
+
+on:
+  push:
+    branches: ["agent/upstream-13.6.1-bootstrap"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Probe cherry-pick onto upstream
+        shell: bash
+        run: |
+          set +e
+          git config user.name "Dudu7 Upstream Probe"
+          git config user.email "actions@users.noreply.github.com"
+          git remote add upstream https://github.com/MetrolistGroup/Metrolist.git
+          git fetch upstream main --tags
+          CURRENT_DUDU7="c103e0fc4278e5fa9343938325b96483b6308627"
+          UPSTREAM_SHA="$(git rev-parse upstream/main)"
+          {
+            echo "upstream_sha=$UPSTREAM_SHA"
+            echo "dudu7_commit=$CURRENT_DUDU7"
+          } > probe-summary.txt
+
+          git checkout --detach "$UPSTREAM_SHA"
+          git cherry-pick --no-commit "$CURRENT_DUDU7" > cherry-pick.log 2>&1
+          STATUS=$?
+          echo "cherry_pick_status=$STATUS" >> probe-summary.txt
+          echo "===== CONFLICTED FILES =====" >> probe-summary.txt
+          git diff --name-only --diff-filter=U >> probe-summary.txt
+          echo "===== STATUS =====" >> probe-summary.txt
+          git status --short >> probe-summary.txt
+          git diff --cc > conflict-diff.patch
+          git diff --stat > applied-stat.txt
+          git diff --name-status > applied-files.txt
+          cat probe-summary.txt
+          exit 0
+
+      - name: Upload probe
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: upstream-rebase-probe
+          path: |
+            probe-summary.txt
+            cherry-pick.log
+            conflict-diff.patch
+            applied-stat.txt
+            applied-files.txt
+          if-no-files-found: error
