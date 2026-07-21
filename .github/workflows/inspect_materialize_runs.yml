@@ -1,44 +1,14 @@
 name: Inspect Upstream Materialization Runs
 
 on:
-  pull_request:
-    branches: ["main"]
+  workflow_dispatch:
 
 permissions:
   actions: read
-  checks: read
   contents: read
 
 jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect failed materialization start
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          RUN_ID="29819318402"
-          gh api "repos/$GH_REPO/actions/runs/$RUN_ID" > materialize-run-detail.json
-          gh api "repos/$GH_REPO/actions/runs/$RUN_ID/jobs?filter=all" > materialize-jobs.json
-          JOB_ID="$(jq -r '.jobs[-1].id' materialize-jobs.json)"
-          gh api "repos/$GH_REPO/actions/jobs/$JOB_ID" > materialize-job-detail.json
-          HEAD_SHA="$(jq -r '.head_sha' materialize-run-detail.json)"
-          gh api -H "Accept: application/vnd.github+json" "repos/$GH_REPO/commits/$HEAD_SHA/check-runs" > materialize-check-runs.json
-          jq '{id,status,conclusion,event,head_sha,run_started_at,created_at,updated_at,path,display_title}' materialize-run-detail.json | tee materialize-run-summary.txt
-          jq '.jobs[] | {id,name,status,conclusion,started_at,completed_at,runner_name,runner_group_name,labels,steps}' materialize-jobs.json | tee materialize-job-summary.txt
-          jq '.check_runs[] | {id,name,status,conclusion,details_url,output}' materialize-check-runs.json | tee materialize-check-summary.txt
-      - uses: actions/upload-artifact@v6
-        with:
-          name: materialize-run-inspection
-          path: |
-            materialize-run-detail.json
-            materialize-jobs.json
-            materialize-job-detail.json
-            materialize-check-runs.json
-            materialize-run-summary.txt
-            materialize-job-summary.txt
-            materialize-check-summary.txt
-          if-no-files-found: error
+      - run: echo "Manual only"
