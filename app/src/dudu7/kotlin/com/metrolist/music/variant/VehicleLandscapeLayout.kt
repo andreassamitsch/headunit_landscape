@@ -98,7 +98,7 @@ fun VehicleLandscapeLayout(
             Modifier
                 .windowInsetsPadding(
                     WindowInsets.systemBars.only(WindowInsetsSides.Horizontal).add(verticalWindowInsets),
-                ).padding(bottom = 12.dp)
+                ).padding(bottom = 8.dp)
                 .fillMaxSize(),
     ) {
         Column(
@@ -107,7 +107,7 @@ fun VehicleLandscapeLayout(
                 Modifier
                     .weight(safePlayerWeight)
                     .fillMaxSize()
-                    .padding(horizontal = 20.dp, vertical = 8.dp)
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
                     .nestedScroll(state.preUpPostDownNestedScrollConnection),
         ) {
             Box(
@@ -116,22 +116,23 @@ fun VehicleLandscapeLayout(
                     Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        .padding(top = 2.dp, bottom = 2.dp)
                         .clickable(onClick = onToggleLyrics),
             ) {
                 thumbnailContent()
             }
             controlsContent()
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(2.dp))
         }
 
         Surface(
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.96f),
             modifier =
                 Modifier
                     .weight(1f - safePlayerWeight)
                     .fillMaxSize()
-                    .padding(start = 8.dp, end = 8.dp),
+                    .padding(start = 6.dp, end = 8.dp),
         ) {
             Column(Modifier.fillMaxSize()) {
                 TabRow(
@@ -155,12 +156,13 @@ fun VehicleLandscapeLayout(
 
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     CompositionLocalProvider(
-                        LocalPlayerAwareWindowInsets provides WindowInsets(
-                            left = 0.dp,
-                            top = 0.dp,
-                            right = 0.dp,
-                            bottom = 0.dp,
-                        ),
+                        LocalPlayerAwareWindowInsets provides
+                            WindowInsets(
+                                left = 0.dp,
+                                top = 0.dp,
+                                right = 0.dp,
+                                bottom = 0.dp,
+                            ),
                     ) {
                         when (selectedTab) {
                             VehicleRightPaneTab.QUEUE -> queueContent()
