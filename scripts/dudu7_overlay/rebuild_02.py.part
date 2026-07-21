@@ -1,0 +1,392 @@
+def patch_queue() -> None:
+    path = "app/src/main/kotlin/com/metrolist/music/ui/player/Queue.kt"
+    insert_after(path, "import com.metrolist.music.constants.ListItemHeight\n", "import com.metrolist.music.constants.Dudu7AutoCenterQueueKey\nimport com.metrolist.music.constants.Dudu7SwipeToRemoveQueueKey\n")
+    insert_after(path, "import com.metrolist.music.ui.utils.ShowMediaInfo\n", "import com.metrolist.music.variant.VehicleQueueActions\nimport com.metrolist.music.variant.VehicleVariantConfig\n")
+    replace_once(
+        path,
+        "    var locked by rememberPreference(QueueEditLockKey, defaultValue = true)\n",
+        '''    var locked by rememberPreference(
+        QueueEditLockKey,
+        defaultValue = VehicleVariantConfig.queueEditLockedDefault,
+    )
+    val (dudu7SwipeToRemoveQueue) = rememberPreference(Dudu7SwipeToRemoveQueueKey, defaultValue = true)
+    val (dudu7AutoCenterQueue) = rememberPreference(Dudu7AutoCenterQueueKey, defaultValue = true)
+''',
+    )
+    replace_once(
+        path,
+        '''        LaunchedEffect(mutableQueueWindows, currentWindowIndex) {
+            if (currentWindowIndex != -1) {
+                lazyListState.scrollToItem(currentWindowIndex)
+            }
+        }
+''',
+        '''        LaunchedEffect(mutableQueueWindows, currentWindowIndex, dudu7AutoCenterQueue) {
+            if (currentWindowIndex != -1 && (!VehicleVariantConfig.isDudu7 || dudu7AutoCenterQueue)) {
+                lazyListState.scrollToItem(currentWindowIndex)
+            }
+        }
+''',
+    )
+    replace_once(
+        path,
+        "                        if (locked) {\n",
+        "                        if (locked || (VehicleVariantConfig.isDudu7 && !dudu7SwipeToRemoveQueue)) {\n",
+    )
+    replace_once(
+        path,
+        """                ) {
+                    Row {
+                        IconButton(
+                            onClick = { locked = !locked },
+""",
+        """                ) {
+                    Row {
+                        VehicleQueueActions()
+                        IconButton(
+                            onClick = { locked = !locked },
+""",
+    )
+
+
+def patch_search() -> None:
+    path = "app/src/main/kotlin/com/metrolist/music/ui/screens/search/SearchScreen.kt"
+    insert_after(path, "import com.metrolist.music.utils.rememberPreference\n", "import com.metrolist.music.variant.rememberVehicleVoiceSearch\n")
+    anchor = "    val onSearch: (String) -> Unit = { searchQuery -> handleSearch(searchQuery) }\n"
+    addition = '''
+    val vehicleVoiceSearch =
+        rememberVehicleVoiceSearch(
+            onSearch = { spokenQuery ->
+                query = TextFieldValue(spokenQuery)
+                handleSearch(spokenQuery)
+            },
+            fallback = { navController.navigate("recognition") },
+        )
+'''
+    insert_after(path, anchor, addition)
+    replace_once(
+        path,
+        '                onClick = { navController.navigate("recognition") },\n',
+        "                onClick = vehicleVoiceSearch,\n",
+    )
+
+
+def write_workflows() -> None:
+    write(
+        ".github/workflows/build.yml",
+        '''name: Build Maintained Flavors
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths-ignore:
+      - "README.md"
+      - "fastlane/**"
+      - "assets/**"
+      - ".github/**/*.md"
+
+permissions:
+  contents: read
+
+jobs:
+  debug:
+    name: Build ${{ matrix.label }}
+    if: github.actor != 'dependabot[bot]' && github.actor != 'renovate[bot]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Standard FOSS
+            gradleVariant: FossStandard
+            outputDir: fossStandard
+            artifact: metrolist-standard-foss-debug
+            appName: Metrolist
+            runTests: false
+          - label: Standard GMS
+            gradleVariant: GmsStandard
+            outputDir: gmsStandard
+            artifact: metrolist-standard-gms-debug
+            appName: Metrolist GMS
+            runTests: false
+          - label: Dudu7 GMS
+            gradleVariant: GmsDudu7
+            outputDir: gmsDudu7
+            artifact: metrolist-dudu7-gms-debug
+            appName: Metrolist Dudu7
+            runTests: true
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v5
+        with:
+          java-version: "21"
+          distribution: temurin
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-cleanup: on-success
+      - name: Prepare
+        run: |
+          chmod +x gradlew
+          python3 scripts/verify_dudu7_architecture.py
+      - name: Build and lint
+        run: |
+          ./gradlew --console=plain \
+            assemble${{ matrix.gradleVariant }}Debug \
+            :app:lint${{ matrix.gradleVariant }}Debug \
+            --warning-mode summary
+        env:
+          METROLIST_APPLICATION_ID: com.metrolist.music
+          METROLIST_APP_NAME: ${{ matrix.appName }}
+          METROLIST_DEBUG_KEYSTORE_PATH: keystore/dudu7-debug.keystore
+          PULL_REQUEST: "false"
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+      - name: Run Dudu7 unit tests
+        if: matrix.runTests
+        run: ./gradlew --console=plain testGmsDudu7DebugUnitTest --warning-mode summary
+      - name: Collect APK
+        run: |
+          mkdir -p dist
+          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/${{ matrix.outputDir }}/debug/' | head -n 1)"
+          test -n "$APK"
+          cp "$APK" "dist/${{ matrix.artifact }}.apk"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}.apk
+          if-no-files-found: error
+''',
+    )
+
+    write(
+        ".github/workflows/build_pr.yml",
+        '''name: Build PR
+
+on:
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Standard FOSS
+            gradleVariant: FossStandard
+            outputDir: fossStandard
+            artifact: metrolist-standard-foss-pr
+            runTests: false
+          - label: Dudu7 GMS
+            gradleVariant: GmsDudu7
+            outputDir: gmsDudu7
+            artifact: metrolist-dudu7-gms-pr
+            runTests: true
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v5
+        with:
+          java-version: "21"
+          distribution: temurin
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: true
+          cache-cleanup: on-success
+      - name: Prepare
+        run: |
+          chmod +x gradlew
+          python3 scripts/verify_dudu7_architecture.py
+      - name: Build and lint
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew --console=plain \
+            assemble${{ matrix.gradleVariant }}Debug \
+            :app:lint${{ matrix.gradleVariant }}Debug \
+            --warning-mode summary 2>&1 | tee gradle-${{ matrix.outputDir }}.log
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          METROLIST_APPLICATION_ID: com.metrolist.music.pr.p${{ github.event.number }}
+          METROLIST_APP_NAME: Metrolist PR ${{ github.event.number }}
+          METROLIST_DEBUG_KEYSTORE_PATH: keystore/dudu7-debug.keystore
+          PULL_REQUEST: "true"
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+      - name: Run Dudu7 unit tests
+        if: matrix.runTests
+        run: ./gradlew --console=plain testGmsDudu7DebugUnitTest --warning-mode summary
+      - name: Collect APK
+        run: |
+          mkdir -p dist
+          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/${{ matrix.outputDir }}/debug/' | head -n 1)"
+          test -n "$APK"
+          cp "$APK" "dist/${{ matrix.artifact }}.apk"
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: diagnostics-${{ matrix.outputDir }}-pr-${{ github.event.number }}
+          path: gradle-${{ matrix.outputDir }}.log
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}.apk
+          if-no-files-found: error
+''',
+    )
+
+    write(
+        ".github/workflows/build_quick.yml",
+        '''name: Quick Dudu7 Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build_dudu7:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v5
+        with:
+          java-version: "21"
+          distribution: temurin
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-cleanup: on-success
+      - name: Prepare
+        run: |
+          chmod +x gradlew
+          python3 scripts/verify_dudu7_architecture.py
+      - name: Build
+        run: ./gradlew --console=plain assembleGmsDudu7Debug --warning-mode summary -x lint
+        env:
+          METROLIST_APPLICATION_ID: com.metrolist.music
+          METROLIST_APP_NAME: Metrolist Dudu7
+          METROLIST_DEBUG_KEYSTORE_PATH: keystore/dudu7-debug.keystore
+          PULL_REQUEST: "false"
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+      - name: Collect APK
+        run: |
+          mkdir -p dist
+          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
+          test -n "$APK"
+          cp "$APK" dist/Metrolist-Dudu7.apk
+      - uses: actions/upload-artifact@v6
+        with:
+          name: metrolist-dudu7-apk
+          path: dist/Metrolist-Dudu7.apk
+          if-no-files-found: error
+''',
+    )
+
+    write(
+        ".github/workflows/sync_upstream.yml",
+        '''name: Sync MetroList Upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: metrolist-upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          submodules: recursive
+      - name: Merge official MetroList into review branch
+        id: merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/MetrolistGroup/Metrolist.git 2>/dev/null || true
+          git fetch upstream main
+          git fetch origin main
+          git checkout -B sync/metrolist-upstream origin/main
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git merge --no-edit upstream/main
+          git push --force-with-lease origin sync/metrolist-upstream
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-java@v5
+        if: steps.merge.outputs.changed == 'true'
+        with:
+          java-version: "21"
+          distribution: temurin
+      - uses: gradle/actions/setup-gradle@v5
+        if: steps.merge.outputs.changed == 'true'
+        with:
+          cache-cleanup: on-success
+      - name: Validate standard and Dudu7 variants
+        if: steps.merge.outputs.changed == 'true'
+        run: |
+          chmod +x gradlew
+          python3 scripts/verify_dudu7_architecture.py
+          ./gradlew --console=plain \
+            assembleGmsStandardDebug :app:lintGmsStandardDebug \
+            assembleGmsDudu7Debug :app:lintGmsDudu7Debug \
+            testGmsDudu7DebugUnitTest \
+            --warning-mode summary
+        env:
+          METROLIST_DEBUG_KEYSTORE_PATH: keystore/dudu7-debug.keystore
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+      - name: Open or refresh upstream review PR
+        if: steps.merge.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          NUMBER="$(gh pr list --base main --head sync/metrolist-upstream --state open --json number --jq '.[0].number // empty')"
+          BODY=$(cat <<'EOF'
+          ## Automatische MetroList-Aktualisierung
+
+          Der offizielle `MetrolistGroup/Metrolist:main`-Stand wurde in einen Review-Branch übernommen und mit Standard- sowie Dudu7-Build geprüft.
+
+          Dieser Pull Request wird nicht automatisch zusammengeführt.
+          EOF
+          )
+          if [ -z "$NUMBER" ]; then
+            gh pr create --base main --head sync/metrolist-upstream --title "MetroList-Upstream aktualisieren" --body "$BODY"
+          else
+            gh pr edit "$NUMBER" --body "$BODY"
+          fi
+''',
+    )
+
