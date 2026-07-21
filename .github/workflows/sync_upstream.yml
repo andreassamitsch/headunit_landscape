@@ -16,7 +16,7 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
 
     steps:
       - name: Check out maintained branch
@@ -24,31 +24,97 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          submodules: recursive
 
-      - name: Merge official MetroList into review branch
-        id: merge
+      - name: Check official upstream
+        id: upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          git remote add upstream https://github.com/MetrolistGroup/Metrolist.git 2>/dev/null || true
+          git fetch upstream main
+          UPSTREAM_SHA="$(git rev-parse upstream/main)"
+          CURRENT_SHA="$(sed -n 's/^- Übernommener Upstream-Commit: `\([^`]*\)`.*/\1/p' docs/DUDU7_ARCHITECTURE.md | head -n 1)"
+          echo "sha=$UPSTREAM_SHA" >> "$GITHUB_OUTPUT"
+          if [ -n "$CURRENT_SHA" ] && [ "$CURRENT_SHA" = "$UPSTREAM_SHA" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "MetroList-Upstream ist unverändert: $UPSTREAM_SHA"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Neuer MetroList-Upstream: $CURRENT_SHA -> $UPSTREAM_SHA"
+          fi
+
+      - uses: actions/setup-java@v5
+        if: steps.upstream.outputs.changed == 'true'
+        with:
+          java-version: "21"
+          distribution: temurin
+
+      - uses: gradle/actions/setup-gradle@v5
+        if: steps.upstream.outputs.changed == 'true'
+        with:
+          cache-cleanup: on-success
+
+      - name: Rebuild Dudu7 overlay on current upstream
+        if: steps.upstream.outputs.changed == 'true'
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git remote add upstream https://github.com/MetrolistGroup/Metrolist.git 2>/dev/null || true
-          git fetch upstream main
           git fetch origin main
-          git checkout -B sync/metrolist-upstream origin/main
+          cat scripts/dudu7_overlay/rebuild_*.py.part > /tmp/rebuild_dudu7_on_upstream.py
+          python3 -m py_compile /tmp/rebuild_dudu7_on_upstream.py
 
-          if git merge-base --is-ancestor upstream/main HEAD; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Der gepflegte Branch enthält bereits den aktuellen MetroList-Upstream."
-            exit 0
-          fi
+          UPSTREAM_SHA="${{ steps.upstream.outputs.sha }}"
+          git checkout -B sync/metrolist-upstream "$UPSTREAM_SHA"
+          git checkout origin/main -- app/keystore/dudu7-debug.keystore
 
-          git merge --no-edit upstream/main
-          git push --force-with-lease origin sync/metrolist-upstream
-          echo "changed=true" >> "$GITHUB_OUTPUT"
+          python3 /tmp/rebuild_dudu7_on_upstream.py \
+            --source-ref origin/main \
+            --upstream-sha "$UPSTREAM_SHA"
+
+          rm -rf .github/workflows scripts/dudu7_overlay
+          git checkout origin/main -- .github/workflows scripts/dudu7_overlay
+          git submodule sync --recursive
+          git submodule update --init --recursive
+          chmod +x gradlew
+          python3 scripts/verify_dudu7_architecture.py
+
+      - name: Validate rebuilt Dudu7 variant
+        if: steps.upstream.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew --console=plain \
+            assembleGmsDudu7Debug \
+            testGmsDudu7DebugUnitTest \
+            --tests "com.metrolist.music.variant.Dudu7LayoutTest" \
+            --warning-mode summary
+        env:
+          METROLIST_APPLICATION_ID: com.metrolist.music
+          METROLIST_APP_NAME: Metrolist Dudu7 Upstream Test
+          METROLIST_DEBUG_KEYSTORE_PATH: keystore/dudu7-debug.keystore
+          PULL_REQUEST: "false"
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+
+      - name: Publish review branch
+        if: steps.upstream.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          TREE="$(git write-tree)"
+          BASE="$(git rev-parse origin/main)"
+          UPSTREAM_SHA="${{ steps.upstream.outputs.sha }}"
+          COMMIT="$(printf 'MetroList-Upstream %s mit Dudu7-Overlay\n' "$UPSTREAM_SHA" | git commit-tree "$TREE" -p "$BASE")"
+          git update-ref refs/heads/sync/metrolist-upstream "$COMMIT"
+          git push --force origin refs/heads/sync/metrolist-upstream
 
       - name: Open or refresh upstream review PR
-        if: steps.merge.outputs.changed == 'true'
+        if: steps.upstream.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -61,18 +127,18 @@ jobs:
             --json number \
             --jq '.[0].number // empty')"
 
-          BODY=$(cat <<'EOF'
+          BODY=$(cat <<EOF
           ## Automatische MetroList-Aktualisierung
 
-          Der offizielle `MetrolistGroup/Metrolist:main`-Stand wurde in einen Review-Branch übernommen.
+          Der offizielle MetroList-Stand `${{ steps.upstream.outputs.sha }}` wurde als neue Basis materialisiert. Darauf wurde ausschließlich die gepflegte Dudu7-Overlay-Schicht angewendet.
 
-          Die technische Prüfung erfolgt bewusst nur einmal über den normalen, kostensparenden Pull-Request-Check:
+          Erfolgreich geprüft:
 
           - Dudu7-GMS-Build
-          - Dudu7-Unit-Tests
+          - fokussierter Dudu7-Unit-Test
           - strukturelle Dudu7-Architekturprüfung
 
-          Der Pull Request wird **nicht automatisch zusammengeführt**. Änderungen an Player, Navigation, Innertube und Wiedergabe müssen vor dem Merge geprüft werden.
+          Der Pull Request wird **nicht automatisch zusammengeführt**. Änderungen an Player, Anmeldung, Innertube und Wiedergabe bleiben vollständig aus dem offiziellen Upstream erhalten.
           EOF
           )
 
