@@ -36,7 +36,7 @@ import com.metrolist.music.utils.rememberPreference
 @Composable
 fun VehicleSettingsScreen(navController: NavController) {
     val (alwaysStartPlayer, setAlwaysStartPlayer) = rememberPreference(Dudu7AlwaysStartPlayerKey, true)
-    val (paneWeight, setPaneWeight) = rememberPreference(Dudu7PlayerPaneWeightKey, 0.45f)
+    val (paneWeight, setPaneWeight) = rememberPreference(Dudu7PlayerPaneWeightKey, 0.56f)
     val (startWithLyrics, setStartWithLyrics) = rememberPreference(Dudu7StartWithLyricsKey, false)
     val (swipeToRemove, setSwipeToRemove) = rememberPreference(Dudu7SwipeToRemoveQueueKey, true)
     val (autoCenterQueue, setAutoCenterQueue) = rememberPreference(Dudu7AutoCenterQueueKey, true)

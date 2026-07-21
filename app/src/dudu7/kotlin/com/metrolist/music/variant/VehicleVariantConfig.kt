@@ -5,5 +5,5 @@ object VehicleVariantConfig {
     const val playerStartsExpanded = true
     const val keepScreenOnDefault = true
     const val queueEditLockedDefault = false
-    const val defaultPlayerPaneWeight = 0.45f
+    const val defaultPlayerPaneWeight = 0.56f
 }

@@ -28,6 +28,7 @@ fun VehicleLandscapeLayout(
     state: BottomSheetState,
     showInlineLyrics: Boolean,
     playerPaneWeight: Float,
+    onToggleLyrics: () -> Unit,
     thumbnailContent: @Composable () -> Unit,
     controlsContent: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
     queueContent: @Composable () -> Unit,

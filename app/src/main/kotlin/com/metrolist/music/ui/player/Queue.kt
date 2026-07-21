@@ -268,6 +268,7 @@ fun Queue(
     BottomSheet(
         state = state,
         modifier = modifier,
+        isExpandable = !VehicleVariantConfig.isDudu7,
         background = {
             Box(Modifier.fillMaxSize().background(Color.Unspecified))
         },

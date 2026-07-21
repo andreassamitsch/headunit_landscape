@@ -17,6 +17,7 @@ Der gemeinsame MetroList-Code enthält nur kleine, stabile Aufrufe an folgende V
 
 - `VehicleVariantDefaults`
 - `VehicleLandscapeLayout`
+- `VehiclePlayerControls`
 - `VehicleNavigation`
 - `VehicleQueueActions`
 - `rememberVehicleVoiceSearch`
@@ -27,7 +28,8 @@ Der gemeinsame MetroList-Code enthält nur kleine, stabile Aufrufe an folgende V
 - eigener Paket-Suffix `.dudu7`
 - feste Querformat-Ausrichtung
 - Player beim Start ausgeklappt
-- Player links, Warteschlange rechts
+- RVX-inspirierter Player links, permanente Warteschlange rechts
+- rechte Tabs für Warteschlange, Playlists und Bibliothek
 - Queue per Drag-and-drop sortierbar
 - konfigurierbare Pane-Breite, Wischgeste und Auto-Zentrierung
 - Android-Spracherkennung statt Musikerkennungsseite

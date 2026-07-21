@@ -9,6 +9,7 @@ HOOKS = (
     "VehicleEmptyPlayer.kt",
     "VehicleSettingsScreen.kt",
     "VehicleLandscapeLayout.kt",
+    "VehiclePlayerControls.kt",
     "VehicleNavigation.kt",
     "VehicleQueueActions.kt",
     "VehicleVoiceSearch.kt",
@@ -47,6 +48,7 @@ checks = {
     ),
     "app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt": (
         "VehicleLandscapeLayout(",
+        "VehiclePlayerControls(",
         "VehicleEmptyPlayer(navController = navController)",
         "moveTaskToBack(true)",
     ),
@@ -54,6 +56,7 @@ checks = {
         "rememberReorderableLazyListState",
         "moveMediaItem",
         "VehicleQueueActions()",
+        "isExpandable = !VehicleVariantConfig.isDudu7",
     ),
     "app/src/main/kotlin/com/metrolist/music/ui/screens/search/SearchScreen.kt": (
         "rememberVehicleVoiceSearch(",

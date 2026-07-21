@@ -175,6 +175,8 @@ import com.metrolist.music.ui.component.ResizableIconButton
 import com.metrolist.music.ui.component.SquigglySlider
 import com.metrolist.music.ui.component.WavySlider
 import com.metrolist.music.ui.component.rememberBottomSheetState
+import com.metrolist.music.ui.component.collapsedAnchor
+import com.metrolist.music.ui.component.expandedAnchor
 import com.metrolist.music.ui.menu.PlayerMenu
 import com.metrolist.music.ui.screens.settings.DarkMode
 import com.metrolist.music.ui.theme.PlayerColorExtractor
@@ -184,6 +186,7 @@ import com.metrolist.music.ui.utils.ShowOffsetDialog
 import com.metrolist.music.variant.Dudu7Layout
 import com.metrolist.music.variant.VehicleEmptyPlayer
 import com.metrolist.music.variant.VehicleLandscapeLayout
+import com.metrolist.music.variant.VehiclePlayerControls
 import com.metrolist.music.variant.VehicleVariantConfig
 import com.metrolist.music.utils.dataStore
 import com.metrolist.music.utils.makeTimeString
@@ -823,8 +826,14 @@ fun BottomSheetPlayer(
             dismissedBound = dismissedBound,
             expandedBound = state.expandedBound,
             collapsedBound = dismissedBound + 1.dp,
-            initialAnchor = 1,
+            initialAnchor = if (VehicleVariantConfig.isDudu7) expandedAnchor else collapsedAnchor,
         )
+
+    LaunchedEffect(state.isExpanded) {
+        if (VehicleVariantConfig.isDudu7 && state.isExpanded && !queueSheetState.isExpanded) {
+            queueSheetState.expandSoft()
+        }
+    }
 
     val bottomSheetBackgroundColor =
         when (playerBackground) {
@@ -1852,6 +1861,7 @@ fun BottomSheetPlayer(
                     state = state,
                     showInlineLyrics = showInlineLyrics,
                     playerPaneWeight = dudu7PlayerPaneWeight,
+                    onToggleLyrics = { showInlineLyrics = !showInlineLyrics },
                     thumbnailContent = {
                         val currentSliderPosition by rememberUpdatedState(sliderPosition)
                         val sliderPositionProvider = remember { { currentSliderPosition } }
@@ -1881,7 +1891,99 @@ fun BottomSheetPlayer(
                     controlsContent = {
                         val currentMediaMetadata = mediaMetadata
                         if (currentMediaMetadata != null) {
-                            controlsContent(currentMediaMetadata)
+                            val isEpisode = currentSong?.song?.isEpisode == true
+                            val isFavorite =
+                                if (isEpisode) {
+                                    currentSong?.song?.inLibrary != null
+                                } else {
+                                    currentSong?.song?.liked == true
+                                }
+                            VehiclePlayerControls(
+                                title = currentMediaMetadata.title,
+                                artists = currentMediaMetadata.artists.joinToString(", ") { it.name },
+                                isPlaying = effectiveIsPlaying,
+                                isEnded = playbackState == STATE_ENDED,
+                                isGuest = isListenTogetherGuest,
+                                isMuted = isMuted,
+                                canSkipPrevious = canSkipPrevious && !isListenTogetherGuest,
+                                canSkipNext = canSkipNext && !isListenTogetherGuest,
+                                sliderValue = sliderPosition ?: effectivePosition,
+                                duration = duration,
+                                canSeek = !isListenTogetherGuest,
+                                isFavorite = isFavorite,
+                                textColor = TextBackgroundColor,
+                                playButtonContainerColor = textButtonColor,
+                                playButtonContentColor = iconButtonColor,
+                                sideButtonContentColor = sideButtonContentColor,
+                                onPrevious = playerConnection::seekToPrevious,
+                                onPlayPause = {
+                                    if (isListenTogetherGuest) {
+                                        playerConnection.toggleMute()
+                                    } else if (isCasting) {
+                                        if (castIsPlaying) castHandler?.pause() else castHandler?.play()
+                                    } else if (playbackState == STATE_ENDED) {
+                                        playerConnection.player.seekTo(0, 0)
+                                        playerConnection.player.playWhenReady = true
+                                    } else {
+                                        playerConnection.togglePlayPause()
+                                    }
+                                },
+                                onNext = playerConnection::seekToNext,
+                                onSliderValueChange = {
+                                    if (!isListenTogetherGuest) sliderPosition = it
+                                },
+                                onSliderValueChangeFinished = {
+                                    if (!isListenTogetherGuest) {
+                                        sliderPosition?.let {
+                                            if (isCasting) {
+                                                castHandler?.seekTo(it)
+                                                lastManualSeekTime = System.currentTimeMillis()
+                                            } else {
+                                                playerConnection.player.seekTo(it)
+                                            }
+                                            position = it
+                                        }
+                                        sliderPosition = null
+                                    }
+                                },
+                                onStartRadio = {
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.starting_radio),
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                    playerConnection.startRadioSeamlessly()
+                                },
+                                onShare = {
+                                    val intent =
+                                        Intent().apply {
+                                            action = Intent.ACTION_SEND
+                                            type = "text/plain"
+                                            putExtra(
+                                                Intent.EXTRA_TEXT,
+                                                "https://music.youtube.com/watch?v=${currentMediaMetadata.id}",
+                                            )
+                                        }
+                                    context.startActivity(Intent.createChooser(intent, null))
+                                },
+                                onToggleLike = playerConnection::toggleLike,
+                                onTitleClick = {
+                                    val albumId = currentMediaMetadata.album?.id
+                                        ?: currentSong?.album?.id
+                                        ?: currentSong?.song?.albumId
+                                    if (albumId != null) {
+                                        navController.navigate("album/$albumId")
+                                        state.collapseSoft()
+                                    }
+                                },
+                                onArtistClick = {
+                                    currentMediaMetadata.artists.firstOrNull { !it.id.isNullOrBlank() }?.id?.let {
+                                        navController.navigate("artist/$it")
+                                        state.collapseSoft()
+                                    }
+                                },
+                                fallbackContent = { controlsContent(currentMediaMetadata) },
+                            )
                         } else {
                             VehicleEmptyPlayer(navController = navController)
                         }
