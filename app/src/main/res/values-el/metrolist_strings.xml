@@ -135,8 +135,6 @@
     <string name="proxy_username">Όνομα χρήστη διακομιστή μεσολάβησης</string>
     <string name="proxy_password">Κωδικός πρόσβασης διακομιστή μεσολάβησης</string>
     <string name="enable_authentication">Ενεργοποίηση ελέγχου ταυτότητας</string>
-    <string name="discord_use_details">Χρήση λεπτομερειών αντί πολιτείας</string>
-    <string name="discord_use_details_description">Προβολή τίτλου τραγουδιού με έμφαση αντί για ονόματα καλλιτεχνών</string>
     <string name="disable_load_more_when_repeat_all">Απενεργοποίηση φόρτωσης περισσότερων όταν επαναλαμβάνονται όλα</string>
     <string name="disable_load_more_when_repeat_all_desc">Μην φορτώνετε αυτόματα περισσότερα τραγούδια και παρόμοιο περιεχόμενο όταν είναι ενεργοποιημένη η λειτουργία επανάληψης όλων</string>
     <string name="lyrics_romanization_cyrillic">Κυριλικά</string>
@@ -229,7 +227,6 @@
     <string name="delete_desc">Μόνιμη διαγραφή αυτού του στοιχείου</string>
     <string name="advanced_desc">Αλλαγή του τέμπο και του τόνου του τραγουδιού</string>
     <string name="equalizer_desc">Ρύθμιση του ισοσταθμιστή ήχου</string>
-    <string name="enable_dynamic_icon">Ενεργοποίηση δυναμικού εικονιδίου</string>
     <string name="cache_size_warning_title">Περιμένετε!</string>
     <string name="cache_size_warning_message">Έχετε επιλέξει ένα όριο μεγέθους προσωρινής μνήμης μικρότερο από αυτό που χρησιμοποιεί επί του παρόντος η εφαρμογή (%1$s). Εάν συνεχίσετε, η εφαρμογή ενδέχεται να καταργήσει ορισμένα %2$s για να ταιριάξει με το νέο όριο. Θέλετε να συνεχίσετε;</string>
     <string name="cache_size_warning_confirm">Συνέχεια</string>

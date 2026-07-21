@@ -1,0 +1,17 @@
+
+# Compatibility adjustment for MetroList 13.6.1: the upstream controls renderer is
+# a ColumnScope composable. Preserve that receiver through the variant boundary.
+_materialize_source_sets_without_column_scope = materialize_source_sets
+
+
+def materialize_source_sets(source_ref: str) -> None:
+    _materialize_source_sets_without_column_scope(source_ref)
+    for path in (
+        "app/src/standard/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt",
+        "app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt",
+    ):
+        replace_once(
+            path,
+            "    controlsContent: @Composable () -> Unit,\n",
+            "    controlsContent: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,\n",
+        )

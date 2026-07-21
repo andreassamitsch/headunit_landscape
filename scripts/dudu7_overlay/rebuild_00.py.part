@@ -1,0 +1,403 @@
+#!/usr/bin/env python3
+"""Materialize the Dudu7 overlay on top of a pinned MetroList upstream checkout.
+
+This script is used only by the one-time migration workflow. It intentionally keeps
+upstream playback, login, cipher and Innertube code untouched and adds a small set of
+stable UI/variant hooks around it.
+"""
+from __future__ import annotations
+
+import argparse
+import base64
+import subprocess
+from pathlib import Path
+
+ROOT = Path.cwd()
+
+
+def run(*args: str) -> str:
+    return subprocess.check_output(args, cwd=ROOT, text=True)
+
+
+def read(path: str) -> str:
+    return (ROOT / path).read_text(encoding="utf-8")
+
+
+def write(path: str, content: str, *, binary: bool = False) -> None:
+    target = ROOT / path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if binary:
+        target.write_bytes(base64.b64decode(content))
+    else:
+        target.write_text(content, encoding="utf-8")
+
+
+def replace_once(path: str, old: str, new: str) -> None:
+    text = read(path)
+    count = text.count(old)
+    if count != 1:
+        raise RuntimeError(f"Expected exactly one anchor in {path}, found {count}: {old[:120]!r}")
+    write(path, text.replace(old, new, 1))
+
+
+def insert_after(path: str, anchor: str, addition: str) -> None:
+    replace_once(path, anchor, anchor + addition)
+
+
+def copy_from_ref(ref: str, path: str) -> None:
+    content = run("git", "show", f"{ref}:{path}")
+    write(path, content)
+
+
+def materialize_source_sets(source_ref: str) -> None:
+    copied = [
+        "app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleVariantConfig.kt",
+        "app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleVariantDefaults.kt",
+        "app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleEmptyPlayer.kt",
+        "app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleSettingsScreen.kt",
+        "app/src/standard/kotlin/com/metrolist/music/variant/VehicleVariantConfig.kt",
+        "app/src/standard/kotlin/com/metrolist/music/variant/VehicleVariantDefaults.kt",
+        "app/src/standard/kotlin/com/metrolist/music/variant/VehicleEmptyPlayer.kt",
+        "app/src/standard/kotlin/com/metrolist/music/variant/VehicleSettingsScreen.kt",
+        "app/src/main/kotlin/com/metrolist/music/variant/Dudu7Layout.kt",
+        "app/src/test/kotlin/com/metrolist/music/variant/Dudu7LayoutTest.kt",
+    ]
+    for path in copied:
+        copy_from_ref(source_ref, path)
+
+    settings = read("app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleSettingsScreen.kt")
+    settings = settings.replace(
+        'title = "Mit Songtext statt Warteschlange starten",\n                summary = "Die Warteschlange bleibt jederzeit über den rechten Bereich erreichbar.",',
+        'title = "Mit Songtext statt Cover starten",\n                summary = "Die Warteschlange bleibt rechts jederzeit sichtbar.",',
+    )
+    write("app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleSettingsScreen.kt", settings)
+
+    write(
+        "app/src/standard/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt",
+        '''package com.metrolist.music.variant
+
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.add
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
+import com.metrolist.music.ui.component.BottomSheetState
+import kotlin.math.max
+
+@Suppress("UNUSED_PARAMETER")
+@Composable
+fun VehicleLandscapeLayout(
+    state: BottomSheetState,
+    showInlineLyrics: Boolean,
+    playerPaneWeight: Float,
+    thumbnailContent: @Composable () -> Unit,
+    controlsContent: @Composable () -> Unit,
+    queueContent: @Composable () -> Unit,
+) {
+    val density = LocalDensity.current
+    val verticalPadding =
+        max(
+            WindowInsets.systemBars.getTop(density),
+            WindowInsets.systemBars.getBottom(density),
+        )
+    val verticalPaddingDp = with(density) { verticalPadding.toDp() }
+    val verticalWindowInsets =
+        WindowInsets(left = 0.dp, top = verticalPaddingDp, right = 0.dp, bottom = verticalPaddingDp)
+
+    Row(
+        modifier =
+            Modifier
+                .windowInsetsPadding(
+                    WindowInsets.systemBars.only(WindowInsetsSides.Horizontal).add(verticalWindowInsets),
+                ).padding(bottom = 24.dp)
+                .fillMaxSize(),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .nestedScroll(state.preUpPostDownNestedScrollConnection),
+        ) {
+            thumbnailContent()
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier =
+                Modifier
+                    .weight(if (showInlineLyrics) 0.65f else 1f, false)
+                    .animateContentSize()
+                    .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top)),
+        ) {
+            Spacer(Modifier.weight(1f))
+            controlsContent()
+            Spacer(Modifier.weight(1f))
+        }
+    }
+}
+''',
+    )
+
+    write(
+        "app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt",
+        '''package com.metrolist.music.variant
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.add
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
+import com.metrolist.music.ui.component.BottomSheetState
+import kotlin.math.max
+
+@Composable
+fun VehicleLandscapeLayout(
+    state: BottomSheetState,
+    showInlineLyrics: Boolean,
+    playerPaneWeight: Float,
+    thumbnailContent: @Composable () -> Unit,
+    controlsContent: @Composable () -> Unit,
+    queueContent: @Composable () -> Unit,
+) {
+    val density = LocalDensity.current
+    val verticalPadding =
+        max(
+            WindowInsets.systemBars.getTop(density),
+            WindowInsets.systemBars.getBottom(density),
+        )
+    val verticalPaddingDp = with(density) { verticalPadding.toDp() }
+    val verticalWindowInsets =
+        WindowInsets(left = 0.dp, top = verticalPaddingDp, right = 0.dp, bottom = verticalPaddingDp)
+    val safePlayerWeight = Dudu7Layout.sanitizePlayerPaneWeight(playerPaneWeight)
+
+    Row(
+        modifier =
+            Modifier
+                .windowInsetsPadding(
+                    WindowInsets.systemBars.only(WindowInsetsSides.Horizontal).add(verticalWindowInsets),
+                ).padding(bottom = 12.dp)
+                .fillMaxSize(),
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier =
+                Modifier
+                    .weight(safePlayerWeight)
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp, vertical = 8.dp)
+                    .nestedScroll(state.preUpPostDownNestedScrollConnection),
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            ) {
+                thumbnailContent()
+            }
+            controlsContent()
+            Spacer(Modifier.height(12.dp))
+        }
+
+        Box(
+            modifier =
+                Modifier
+                    .weight(1f - safePlayerWeight)
+                    .fillMaxSize()
+                    .padding(start = 8.dp),
+        ) {
+            queueContent()
+        }
+    }
+}
+''',
+    )
+
+    write(
+        "app/src/standard/kotlin/com/metrolist/music/variant/VehicleNavigation.kt",
+        '''package com.metrolist.music.variant
+
+import androidx.navigation.NavController
+import androidx.navigation.NavGraphBuilder
+
+@Suppress("UNUSED_PARAMETER")
+fun NavGraphBuilder.vehicleNavigation(navController: NavController) = Unit
+''',
+    )
+    write(
+        "app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleNavigation.kt",
+        '''package com.metrolist.music.variant
+
+import androidx.navigation.NavController
+import androidx.navigation.NavGraphBuilder
+import androidx.navigation.compose.composable
+
+fun NavGraphBuilder.vehicleNavigation(navController: NavController) {
+    composable("vehicle_settings") {
+        VehicleSettingsScreen(navController)
+    }
+}
+''',
+    )
+
+    write(
+        "app/src/standard/kotlin/com/metrolist/music/variant/VehicleQueueActions.kt",
+        '''package com.metrolist.music.variant
+
+import androidx.compose.runtime.Composable
+
+@Composable
+fun VehicleQueueActions() = Unit
+''',
+    )
+    write(
+        "app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleQueueActions.kt",
+        '''package com.metrolist.music.variant
+
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.painterResource
+import com.metrolist.music.LocalNavController
+import com.metrolist.music.R
+
+@Composable
+fun VehicleQueueActions() {
+    val navController = LocalNavController.current
+    IconButton(onClick = { navController.navigate("vehicle_settings") }) {
+        Icon(
+            painter = painterResource(R.drawable.settings),
+            contentDescription = "Dudu7 settings",
+        )
+    }
+}
+''',
+    )
+
+    write(
+        "app/src/standard/kotlin/com/metrolist/music/variant/VehicleVoiceSearch.kt",
+        '''package com.metrolist.music.variant
+
+import androidx.compose.runtime.Composable
+
+@Suppress("UNUSED_PARAMETER")
+@Composable
+fun rememberVehicleVoiceSearch(
+    onSearch: (String) -> Unit,
+    fallback: () -> Unit,
+): () -> Unit = fallback
+''',
+    )
+    write(
+        "app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleVoiceSearch.kt",
+        '''package com.metrolist.music.variant
+
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.speech.RecognizerIntent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.platform.LocalContext
+import java.util.Locale
+
+@Composable
+fun rememberVehicleVoiceSearch(
+    onSearch: (String) -> Unit,
+    fallback: () -> Unit,
+): () -> Unit {
+    val context = LocalContext.current
+    val currentOnSearch by rememberUpdatedState(onSearch)
+    val launcher =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                result.data
+                    ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                    ?.firstOrNull()
+                    ?.trim()
+                    ?.takeIf(String::isNotEmpty)
+                    ?.let(currentOnSearch)
+            }
+        }
+
+    return remember(context, launcher) {
+        {
+            val language = Locale.getDefault().toLanguageTag()
+            val intent =
+                Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, language)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, language)
+                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+                    putExtra(RecognizerIntent.EXTRA_PROMPT, "Musik suchen")
+                }
+            try {
+                launcher.launch(intent)
+            } catch (_: ActivityNotFoundException) {
+                Toast.makeText(
+                    context,
+                    "Keine Spracherkennung auf diesem Gerät verfügbar",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+    }
+}
+''',
+    )
+
+    write(
+        "app/src/dudu7/AndroidManifest.xml",
+        '''<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <queries>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
+    <application>
+        <activity
+            android:name=".MainActivity"
+            android:screenOrientation="landscape" />
+    </application>
+</manifest>
+''',
+    )
+

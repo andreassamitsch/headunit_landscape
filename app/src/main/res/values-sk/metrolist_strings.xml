@@ -169,8 +169,6 @@
     <string name="audio_offload_description">Na prehrávanie zvuku použite cestu pre odľahčenie zvuku. Zakázanie tejto funkcie môže zvýšiť spotrebu energie, ale môže byť užitočné, ak máte problémy s prehrávaním zvuku alebo následným spracovaním</string>
     <string name="lyrics_romanize_macedonian">Romanizovať macedónske texty</string>
     <string name="swipe_song_to_remove">Prejdením prstom odstráňte skladbu zo zoznamu skladieb</string>
-    <string name="discord_use_details">Použite podrobnosti namiesto štátu</string>
-    <string name="discord_use_details_description">Zobrazovať názov skladby výrazne namiesto mien interpretov</string>
     <string name="integrations">Integrácie</string>
     <string name="username">Používateľské meno</string>
     <string name="password">Heslo</string>
@@ -216,7 +214,6 @@
     <string name="delete_desc">Natrvalo odstrániť túto položku</string>
     <string name="advanced_desc">Zmeňte tempo a výšku tónu skladby</string>
     <string name="equalizer_desc">Úprava zvukového ekvalizéra</string>
-    <string name="enable_dynamic_icon">Povoliť dynamickú ikonu</string>
     <string name="mini_player">Mini-prehrávač</string>
     <string name="pure_black_mini_player">Čisto čierny mini prehrávač</string>
     <string name="cache_size_warning_title">Počkajte!</string>

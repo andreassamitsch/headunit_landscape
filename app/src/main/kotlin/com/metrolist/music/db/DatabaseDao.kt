@@ -78,6 +78,48 @@ import java.util.Locale
  */
 @Dao
 interface DatabaseDao {
+    @Query("SELECT * FROM song WHERE id = :songId LIMIT 1")
+    suspend fun songEntity(songId: String): SongEntity?
+
+    @Query("SELECT * FROM song WHERE liked ORDER BY title")
+    suspend fun likedSongEntitiesByNameAsc(): List<SongEntity>
+
+    @Query("SELECT * FROM song WHERE inLibrary IS NOT NULL ORDER BY title")
+    suspend fun librarySongEntitiesByNameAsc(): List<SongEntity>
+
+    @Query("SELECT * FROM song WHERE isUploaded = 1 ORDER BY title")
+    suspend fun uploadedSongEntitiesByNameAsc(): List<SongEntity>
+
+    @Query(
+        """
+        SELECT songId FROM playlist_song_map
+        WHERE playlistId = :playlistId
+        ORDER BY position
+        """,
+    )
+    suspend fun playlistSongIds(playlistId: String): List<String>
+
+    @Query("SELECT * FROM album WHERE id = :albumId LIMIT 1")
+    suspend fun albumEntity(albumId: String): AlbumEntity?
+
+    @Query("SELECT * FROM album WHERE bookmarkedAt IS NOT NULL ORDER BY title")
+    suspend fun likedAlbumEntitiesByNameAsc(): List<AlbumEntity>
+
+    @Query("SELECT * FROM album WHERE isUploaded = 1 ORDER BY title")
+    suspend fun uploadedAlbumEntitiesByNameAsc(): List<AlbumEntity>
+
+    @Query("SELECT * FROM artist WHERE id = :artistId LIMIT 1")
+    suspend fun artistEntity(artistId: String): ArtistEntity?
+
+    @Query("SELECT * FROM artist WHERE bookmarkedAt IS NOT NULL ORDER BY name")
+    suspend fun bookmarkedArtistEntitiesByNameAsc(): List<ArtistEntity>
+
+    @Query("SELECT * FROM playlist ORDER BY name")
+    suspend fun playlistEntitiesByNameAsc(): List<PlaylistEntity>
+
+    @Query("SELECT * FROM song WHERE isEpisode = 1 AND inLibrary IS NOT NULL ORDER BY inLibrary")
+    suspend fun savedEpisodeEntitiesByCreateDateAsc(): List<SongEntity>
+
     @Transaction
     @Query("SELECT * FROM song WHERE inLibrary IS NOT NULL ORDER BY rowId")
     fun songsByRowIdAsc(): Flow<List<Song>>
@@ -225,8 +267,8 @@ interface DatabaseDao {
         artistId: String,
         sortType: ArtistSongSortType,
         descending: Boolean,
-        fromTimeStamp: Long? = null,
-        toTimeStamp: Long? = null,
+        fromTimeStamp: LocalDateTime? = null,
+        toTimeStamp: LocalDateTime? = null,
         limit: Int = -1
     ): Flow<List<Song>> {
         val songsFlow = when (sortType) {
@@ -269,7 +311,7 @@ interface DatabaseDao {
         ORDER BY play_times.totalPlayTime DESC
         """
     )
-    fun mostPlayedSongsByArtist(artistId: String, fromTimeStamp: Long, toTimeStamp: Long): Flow<List<Song>>
+    fun mostPlayedSongsByArtist(artistId: String, fromTimeStamp: LocalDateTime, toTimeStamp: LocalDateTime): Flow<List<Song>>
 
     @Transaction
     @Query(
@@ -362,17 +404,16 @@ interface DatabaseDao {
                 AND timestamp <= :toTimeStamp
               GROUP BY songId
               ORDER BY SUM(playTime) DESC
-              LIMIT :limit) AS top_songs ON s.id = top_songs.songId
+              LIMIT :limit OFFSET :offset) AS top_songs ON s.id = top_songs.songId
         GROUP BY s.id
         ORDER BY timeListened DESC
-        LIMIT :limit OFFSET :offset
         """,
     )
     fun mostPlayedSongsStats(
-        fromTimeStamp: Long,
+        fromTimeStamp: LocalDateTime,
         limit: Int = 6,
         offset: Int = 0,
-        toTimeStamp: Long? = LocalDateTime.now().toInstant(ZoneOffset.UTC).toEpochMilli(),
+        toTimeStamp: LocalDateTime? = LocalDateTime.now(),
     ): Flow<List<SongWithStats>>
 
     // Time Transfer
@@ -455,17 +496,15 @@ interface DatabaseDao {
                      AND timestamp <= :toTimeStamp
                      GROUP BY songId
                      ORDER BY SUM(playTime) DESC
-                     LIMIT :limit)
+                     LIMIT :limit OFFSET :offset)
         ON song.id = songId
-        LIMIT :limit
-        OFFSET :offset
     """,
     )
     fun mostPlayedSongs(
-        fromTimeStamp: Long,
+        fromTimeStamp: LocalDateTime,
         limit: Int = 6,
         offset: Int = 0,
-        toTimeStamp: Long? = LocalDateTime.now().toInstant(ZoneOffset.UTC).toEpochMilli(),
+        toTimeStamp: LocalDateTime? = LocalDateTime.now(),
     ): Flow<List<Song>>
 
     @Transaction
@@ -500,10 +539,10 @@ interface DatabaseDao {
     """,
     )
     fun mostPlayedArtists(
-        fromTimeStamp: Long,
+        fromTimeStamp: LocalDateTime,
         limit: Int = 6,
         offset: Int = 0,
-        toTimeStamp: Long? = LocalDateTime.now().toInstant(ZoneOffset.UTC).toEpochMilli(),
+        toTimeStamp: LocalDateTime? = LocalDateTime.now(),
     ): Flow<List<Artist>>
 
     @Transaction
@@ -541,20 +580,20 @@ interface DatabaseDao {
     """
     )
     fun mostPlayedAlbums(
-        fromTimeStamp: Long,
+        fromTimeStamp: LocalDateTime,
         limit: Int = 6,
         offset: Int = 0,
-        toTimeStamp: Long? = LocalDateTime.now().toInstant(ZoneOffset.UTC).toEpochMilli(),
+        toTimeStamp: LocalDateTime? = LocalDateTime.now(),
     ): Flow<List<Album>>
 
     @Query("SELECT SUM(playTime) FROM event WHERE timestamp >= :fromTimeStamp AND timestamp <= :toTimeStamp")
-    fun getTotalPlayTimeInRange(fromTimeStamp: Long, toTimeStamp: Long): Flow<Long?>
+    fun getTotalPlayTimeInRange(fromTimeStamp: LocalDateTime, toTimeStamp: LocalDateTime): Flow<Long?>
 
     @Query("SELECT SUM(playTime) FROM event WHERE songId = :songId")
     fun getTotalPlayTimeForSong(songId: String): Long?
 
     @Query("SELECT COUNT(DISTINCT songId) FROM event WHERE timestamp >= :fromTimeStamp AND timestamp <= :toTimeStamp")
-    fun getUniqueSongCountInRange(fromTimeStamp: Long, toTimeStamp: Long): Flow<Int>
+    fun getUniqueSongCountInRange(fromTimeStamp: LocalDateTime, toTimeStamp: LocalDateTime): Flow<Int>
 
     @Query(
         """
@@ -564,7 +603,7 @@ interface DatabaseDao {
         WHERE timestamp >= :fromTimeStamp AND timestamp <= :toTimeStamp
     """
     )
-    fun getUniqueArtistCountInRange(fromTimeStamp: Long, toTimeStamp: Long): Flow<Int>
+    fun getUniqueArtistCountInRange(fromTimeStamp: LocalDateTime, toTimeStamp: LocalDateTime): Flow<Int>
 
     @Query(
         """
@@ -574,7 +613,7 @@ interface DatabaseDao {
         WHERE timestamp >= :fromTimeStamp AND timestamp <= :toTimeStamp
     """
     )
-    fun getUniqueAlbumCountInRange(fromTimeStamp: Long, toTimeStamp: Long): Flow<Int>
+    fun getUniqueAlbumCountInRange(fromTimeStamp: LocalDateTime, toTimeStamp: LocalDateTime): Flow<Int>
 
     @Transaction
     @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
@@ -707,6 +746,10 @@ interface DatabaseDao {
     @Transaction
     @Query("SELECT * FROM format WHERE id = :id")
     fun format(id: String?): Flow<FormatEntity?>
+
+    @Transaction
+    @Query("SELECT * FROM format WHERE id = :id")
+    suspend fun formatOnce(id: String?): FormatEntity?
 
     @Transaction
     @Query("SELECT * FROM lyrics WHERE id = :id")

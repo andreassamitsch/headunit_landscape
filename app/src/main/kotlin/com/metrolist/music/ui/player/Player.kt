@@ -74,6 +74,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -126,6 +127,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.Player.STATE_ENDED
 import androidx.navigation.NavController
 import androidx.palette.graphics.Palette
+import com.metrolist.music.LocalNavController
 import coil3.compose.AsyncImage
 import coil3.imageLoader
 import coil3.request.ImageRequest
@@ -135,7 +137,6 @@ import com.metrolist.music.LocalDatabase
 import com.metrolist.music.LocalDownloadUtil
 import com.metrolist.music.LocalListenTogetherManager
 import com.metrolist.music.LocalPlayerConnection
-import com.metrolist.music.BuildConfig
 import com.metrolist.music.R
 import com.metrolist.music.constants.CropAlbumArtKey
 import com.metrolist.music.constants.DarkModeKey
@@ -182,11 +183,13 @@ import com.metrolist.music.ui.utils.ShowMediaInfo
 import com.metrolist.music.ui.utils.ShowOffsetDialog
 import com.metrolist.music.variant.Dudu7Layout
 import com.metrolist.music.variant.VehicleEmptyPlayer
+import com.metrolist.music.variant.VehicleLandscapeLayout
 import com.metrolist.music.variant.VehicleVariantConfig
 import com.metrolist.music.utils.dataStore
 import com.metrolist.music.utils.makeTimeString
 import com.metrolist.music.utils.rememberEnumPreference
 import com.metrolist.music.utils.rememberPreference
+import com.metrolist.music.utils.safeDataStoreEdit
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -198,8 +201,6 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 import com.metrolist.music.ui.component.Icon as MIcon
 import com.metrolist.music.constants.SleepTimerDefaultKey
-import com.metrolist.music.utils.dataStore
-import androidx.datastore.preferences.core.edit
 import com.metrolist.music.constants.SleepTimerFadeOutKey
 import com.metrolist.music.constants.SleepTimerStopAfterCurrentSongKey
 
@@ -232,7 +233,7 @@ fun BottomSheetPlayer(
 
     val (dudu7StartWithLyrics) = rememberPreference(Dudu7StartWithLyricsKey, defaultValue = false)
     var showInlineLyrics by rememberSaveable {
-        mutableStateOf(BuildConfig.IS_DUDU7 && dudu7StartWithLyrics)
+        mutableStateOf(VehicleVariantConfig.isDudu7 && dudu7StartWithLyrics)
     }
 
     var isFullScreen by rememberSaveable {
@@ -263,7 +264,7 @@ fun BottomSheetPlayer(
             }
         }
 
-    val isPlaying by playerConnection.isPlaying.collectAsStateWithLifecycle()
+    val isPlaying by playerConnection.isPlaying.collectAsState()
     val isKeepScreenOn by rememberPreference(KeepScreenOn, VehicleVariantConfig.keepScreenOnDefault)
     val keepScreenOn = isPlaying && isKeepScreenOn
 
@@ -326,8 +327,8 @@ fun BottomSheetPlayer(
             useDarkTheme && pureBlack
         }
 
-    val playbackState by playerConnection.playbackState.collectAsStateWithLifecycle()
-    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+    val playbackState by playerConnection.playbackState.collectAsState()
+    val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
     val currentSong by playerConnection.currentSong.collectAsStateWithLifecycle(initialValue = null)
     val automix by playerConnection.service.automixItems.collectAsStateWithLifecycle()
     val repeatMode by playerConnection.repeatMode.collectAsStateWithLifecycle()
@@ -358,7 +359,7 @@ fun BottomSheetPlayer(
     val isCasting by castHandler?.isCasting?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(false) }
     val castPosition by castHandler?.castPosition?.collectAsStateWithLifecycle() ?: remember { mutableLongStateOf(0L) }
     val castDuration by castHandler?.castDuration?.collectAsStateWithLifecycle() ?: remember { mutableLongStateOf(0L) }
-    val castIsPlaying by castHandler?.castIsPlaying?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(false) }
+    val castIsPlaying by castHandler?.castIsPlaying?.collectAsState() ?: remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
 
@@ -377,9 +378,17 @@ fun BottomSheetPlayer(
     val effectiveIsPlaying = if (isCasting) castIsPlaying else isPlaying
 
     // Use State objects for position/duration to pass to MiniPlayer without causing recomposition
-    // These states persist across playback state changes to ensure continuous progress updates
-    val positionState = remember { mutableLongStateOf(0L) }
-    val durationState = remember { mutableLongStateOf(0L) }
+    // These states persist across playback state changes to ensure continuous progress updates.
+    // Seed from the player's current values so re-entering composition on resume shows the real
+    // time immediately instead of flashing 0:00 until the first poll fires. runCatching guards the
+    // player-not-ready race; the poll loop corrects duration if it isn't known yet.
+    val positionState = remember { mutableLongStateOf(runCatching { playerConnection.player.currentPosition }.getOrDefault(0L)) }
+    val durationState = remember {
+        mutableLongStateOf(
+            (mediaMetadata?.duration?.takeIf { it > 0 }?.toLong()?.times(1000L))
+                ?: runCatching { playerConnection.player.duration }.getOrDefault(0L).coerceAtLeast(0L),
+        )
+    }
 
     // Convenience accessors for local use
     var position by positionState
@@ -593,10 +602,10 @@ fun BottomSheetPlayer(
 
     val sleepTimerEnabled =
         remember(
-            playerConnection.service.sleepTimer.triggerTime,
-            playerConnection.service.sleepTimer.pauseWhenSongEnd,
+            playerConnection.service.sleepTimer?.triggerTime,
+            playerConnection.service.sleepTimer?.pauseWhenSongEnd,
         ) {
-            playerConnection.service.sleepTimer.isActive
+            playerConnection.service.sleepTimer?.isActive ?: false
         }
 
     var sleepTimerTimeLeft by remember {
@@ -607,10 +616,10 @@ fun BottomSheetPlayer(
         if (sleepTimerEnabled) {
             while (isActive) {
                 sleepTimerTimeLeft =
-                    if (playerConnection.service.sleepTimer.pauseWhenSongEnd) {
+                    if (playerConnection.service.sleepTimer?.pauseWhenSongEnd == true) {
                         playerConnection.player.duration - playerConnection.player.currentPosition
                     } else {
-                        playerConnection.service.sleepTimer.triggerTime - System.currentTimeMillis()
+                        (playerConnection.service.sleepTimer?.triggerTime ?: 0L) - System.currentTimeMillis()
                     }
                 delay(1000L)
             }
@@ -623,12 +632,11 @@ fun BottomSheetPlayer(
     }
 
     val sleepTimerDefault by rememberPreference(SleepTimerDefaultKey, 30f)
-    var sleepTimerValue by remember {
-        mutableFloatStateOf(sleepTimerDefault)
-    }
+    var sleepTimerValue by remember { mutableFloatStateOf(sleepTimerDefault) }
     val isAtDefault by remember {
         derivedStateOf { sleepTimerValue.roundToInt() == sleepTimerDefault.roundToInt() }
     }
+    LaunchedEffect(sleepTimerDefault) { sleepTimerValue = sleepTimerDefault }
     val sleepTimerStopAfterCurrentSong by rememberPreference(SleepTimerStopAfterCurrentSongKey, false)
     val sleepTimerFadeOut by rememberPreference(SleepTimerFadeOutKey, false)
 
@@ -648,7 +656,7 @@ fun BottomSheetPlayer(
                 TextButton(
                     onClick = {
                         showSleepTimerDialog = false
-                        playerConnection.service.sleepTimer.start(
+                        playerConnection.service.sleepTimer?.start(
                             minute = sleepTimerValue.roundToInt(),
                             stopAfterCurrentSong = sleepTimerStopAfterCurrentSong,
                             fadeOut = sleepTimerFadeOut,
@@ -692,7 +700,7 @@ fun BottomSheetPlayer(
                             FilledIconButton(
                                 onClick = {
                                     scope.launch {
-                                        context.dataStore.edit { settings ->
+                                        context.safeDataStoreEdit { settings ->
                                             settings[SleepTimerDefaultKey] = sleepTimerValue
                                         }
                                     }
@@ -713,7 +721,7 @@ fun BottomSheetPlayer(
                             OutlinedIconButton(
                                 onClick = {
                                     scope.launch {
-                                        context.dataStore.edit { settings ->
+                                        context.safeDataStoreEdit { settings ->
                                             settings[SleepTimerDefaultKey] = sleepTimerValue
                                         }
                                     }
@@ -731,7 +739,7 @@ fun BottomSheetPlayer(
                         OutlinedIconButton(
                             onClick = {
                                 showSleepTimerDialog = false
-                                playerConnection.service.sleepTimer.start(minute = -1)
+                                playerConnection.service.sleepTimer?.start(minute = -1)
                             },
                         ) {
                             Text(stringResource(R.string.end_of_song))
@@ -755,7 +763,8 @@ fun BottomSheetPlayer(
                 delay(100) // Update more frequently for smoother progress bar
                 if (sliderPosition == null) { // Only update if user isn't dragging
                     position = playerConnection.player.currentPosition
-                    duration = playerConnection.player.duration
+                    // Don't clobber a valid (metadata-derived) duration with 0/UNSET mid-resolve.
+                    playerConnection.player.duration.takeIf { it > 0 }?.let { duration = it }
                 }
             }
         }
@@ -765,8 +774,33 @@ fun BottomSheetPlayer(
     LaunchedEffect(playbackState, mediaMetadata?.id) {
         if (!isCasting) {
             position = playerConnection.player.currentPosition
-            duration = playerConnection.player.duration
+            // Prefer the song's known duration (from metadata, available instantly from the restored
+            // queue) so the slider range is right even when restored paused / before the stream
+            // resolves; fall back to the player's duration once it is known.
+            duration = (mediaMetadata?.duration?.takeIf { it > 0 }?.toLong()?.times(1000L))
+                ?: playerConnection.player.duration
         }
+    }
+
+    // Auto-switch from repeat one to repeat all when song ends naturally
+    var previousMediaId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(playbackState, mediaMetadata?.id) {
+        val currentId = mediaMetadata?.id
+
+        // Only switch from REPEAT_ONE to REPEAT_ALL when playback naturally ended
+        // (i.e., the player transitioned to ENDED state and then moved to next track).
+        // Do NOT switch on manual skips.
+        if (currentId != null &&
+            currentId != previousMediaId &&
+            previousMediaId != null &&
+            playbackState == Player.STATE_ENDED &&
+            repeatMode == Player.REPEAT_MODE_ONE &&
+            !isListenTogetherGuest) {
+            playerConnection.player.setRepeatMode(Player.REPEAT_MODE_ALL)
+        }
+
+        previousMediaId = currentId
     }
 
     // When casting, use Cast position/duration directly
@@ -808,13 +842,6 @@ fun BottomSheetPlayer(
         }
 
     val backgroundAlpha = state.progress.coerceIn(0f, 1f)
-    val isLandscapeOrientation = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-
-    LaunchedEffect(isLandscapeOrientation, isFullScreen) {
-        if (isLandscapeOrientation && !isFullScreen) {
-            queueSheetState.expandSoft()
-        }
-    }
 
     BottomSheet(
         state = state,
@@ -956,8 +983,7 @@ fun BottomSheetPlayer(
                                         contentDescription = null,
                                         modifier =
                                             Modifier
-                                                .size(32.dp),
-                                        tint = textButtonColor.copy(alpha = 0.7f),
+                                                .size(32.dp)
                                     )
                                 }
                             } else {
@@ -1154,13 +1180,16 @@ fun BottomSheetPlayer(
                             } else {
                                 FilledIconButton(
                                     onClick = {
-                                        Toast
-                                            .makeText(
-                                                context,
-                                                context.getString(R.string.start_radio),
-                                                Toast.LENGTH_SHORT,
-                                            ).show()
-                                        playerConnection.startRadioSeamlessly()
+                                        val intent =
+                                            Intent().apply {
+                                                action = Intent.ACTION_SEND
+                                                type = "text/plain"
+                                                putExtra(
+                                                    Intent.EXTRA_TEXT,
+                                                    "https://music.youtube.com/watch?v=${mediaMetadata.id}",
+                                                )
+                                            }
+                                        context.startActivity(Intent.createChooser(intent, null))
                                     },
                                     shape = shareShape,
                                     colors =
@@ -1171,7 +1200,7 @@ fun BottomSheetPlayer(
                                     modifier = Modifier.size(42.dp),
                                 ) {
                                     Icon(
-                                        painter = painterResource(R.drawable.radio),
+                                        painter = painterResource(R.drawable.share),
                                         contentDescription = null,
                                         modifier = Modifier.size(24.dp),
                                     )
@@ -1273,17 +1302,20 @@ fun BottomSheetPlayer(
                                         .clip(RoundedCornerShape(24.dp))
                                         .background(textButtonColor)
                                         .clickable {
-                                            Toast
-                                                .makeText(
-                                                    context,
-                                                    context.getString(R.string.start_radio),
-                                                    Toast.LENGTH_SHORT,
-                                                ).show()
-                                            playerConnection.startRadioSeamlessly()
+                                            val intent =
+                                                Intent().apply {
+                                                    action = Intent.ACTION_SEND
+                                                    type = "text/plain"
+                                                    putExtra(
+                                                        Intent.EXTRA_TEXT,
+                                                        "https://music.youtube.com/watch?v=${mediaMetadata.id}",
+                                                    )
+                                                }
+                                            context.startActivity(Intent.createChooser(intent, null))
                                         },
                             ) {
                                 Icon(
-                                    painter = painterResource(R.drawable.radio),
+                                    painter = painterResource(R.drawable.share),
                                     contentDescription = null,
                                     tint = iconButtonColor,
                                     modifier =
@@ -1337,7 +1369,6 @@ fun BottomSheetPlayer(
                         } else {
                             PlayerMoreMenuButton(
                                 mediaMetadata = mediaMetadata,
-                                navController = navController,
                                 state = state,
                                 textButtonColor = textButtonColor,
                                 iconButtonColor = iconButtonColor,
@@ -1817,93 +1848,48 @@ fun BottomSheetPlayer(
 
         when (LocalConfiguration.current.orientation) {
             Configuration.ORIENTATION_LANDSCAPE -> {
-                val density = LocalDensity.current
-                val verticalPadding =
-                    max(
-                        WindowInsets.systemBars.getTop(density),
-                        WindowInsets.systemBars.getBottom(density),
-                    )
-                val verticalPaddingDp = with(density) { verticalPadding.toDp() }
-                val verticalWindowInsets = WindowInsets(left = 0.dp, top = verticalPaddingDp, right = 0.dp, bottom = verticalPaddingDp)
-
-                Row(
-                    modifier =
-                        Modifier
-                            .windowInsetsPadding(
-                                WindowInsets.systemBars.only(WindowInsetsSides.Horizontal).add(verticalWindowInsets),
-                            )
-                            .padding(bottom = 12.dp)
-                            .fillMaxSize(),
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier =
-                            Modifier
-                                .weight(if (BuildConfig.IS_DUDU7) dudu7PlayerPaneWeight else 0.45f)
-                                .fillMaxSize()
-                                .padding(horizontal = 20.dp, vertical = 8.dp)
-                                .nestedScroll(state.preUpPostDownNestedScrollConnection),
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier =
-                                Modifier
-                                    .weight(1f)
-                                    .fillMaxWidth(),
-                        ) {
-                            val currentSliderPosition by rememberUpdatedState(sliderPosition)
-                            val sliderPositionProvider = remember { { currentSliderPosition } }
-                            val isExpandedProvider = remember(state) { { state.isExpanded } }
-
-                            AnimatedContent(
-                                targetState = showInlineLyrics,
-                                label = "Lyrics",
-                                transitionSpec = { fadeIn() togetherWith fadeOut() },
-                            ) { showLyrics ->
-                                if (showLyrics) {
-                                    InlineLyricsView(
-                                        mediaMetadata = mediaMetadata,
-                                        showLyrics = showLyrics,
-                                        positionProvider = { effectivePosition },
-                                    )
-                                } else {
-                                    Thumbnail(
-                                        sliderPositionProvider = sliderPositionProvider,
-                                        modifier = Modifier.animateContentSize(),
-                                        isPlayerExpanded = isExpandedProvider,
-                                        isLandscape = true,
-                                        isListenTogetherGuest = isListenTogetherGuest,
-                                    )
-                                }
+                VehicleLandscapeLayout(
+                    state = state,
+                    showInlineLyrics = showInlineLyrics,
+                    playerPaneWeight = dudu7PlayerPaneWeight,
+                    thumbnailContent = {
+                        val currentSliderPosition by rememberUpdatedState(sliderPosition)
+                        val sliderPositionProvider = remember { { currentSliderPosition } }
+                        val isExpandedProvider = remember(state) { { state.isExpanded } }
+                        AnimatedContent(
+                            targetState = showInlineLyrics,
+                            label = "Lyrics",
+                            transitionSpec = { fadeIn() togetherWith fadeOut() },
+                        ) { showLyrics ->
+                            if (showLyrics) {
+                                InlineLyricsView(
+                                    mediaMetadata = mediaMetadata,
+                                    showLyrics = showLyrics,
+                                    positionProvider = { effectivePosition },
+                                )
+                            } else {
+                                Thumbnail(
+                                    sliderPositionProvider = sliderPositionProvider,
+                                    modifier = Modifier.animateContentSize(),
+                                    isPlayerExpanded = isExpandedProvider,
+                                    isLandscape = true,
+                                    isListenTogetherGuest = isListenTogetherGuest,
+                                )
                             }
                         }
-
+                    },
+                    controlsContent = {
                         val currentMediaMetadata = mediaMetadata
-
                         if (currentMediaMetadata != null) {
-
                             controlsContent(currentMediaMetadata)
-
                         } else {
-
                             VehicleEmptyPlayer(navController = navController)
-
                         }
-
-                        Spacer(Modifier.height(12.dp))
-                    }
-
-                    Box(
-                        modifier =
-                            Modifier
-                                .weight(if (BuildConfig.IS_DUDU7) 1f - dudu7PlayerPaneWeight else 0.55f)
-                            .fillMaxSize()
-                                .padding(start = 8.dp),
-                    ) {
+                    },
+                    queueContent = {
                         Queue(
                             state = queueSheetState,
                             playerBottomSheetState = state,
-                            navController = navController,
                             modifier = Modifier.fillMaxSize(),
                             background =
                                 if (useBlackBackground) {
@@ -1918,12 +1904,10 @@ fun BottomSheetPlayer(
                             pureBlack = pureBlack,
                             showInlineLyrics = showInlineLyrics,
                             playerBackground = playerBackground,
-                            onToggleLyrics = {
-                                showInlineLyrics = !showInlineLyrics
-                            },
+                            onToggleLyrics = { showInlineLyrics = !showInlineLyrics },
                         )
-                    }
-                }
+                    },
+                )
             }
 
             else -> {
@@ -1979,14 +1963,13 @@ fun BottomSheetPlayer(
         }
 
         AnimatedVisibility(
-            visible = !isFullScreen && !isLandscapeOrientation,
+            visible = !isFullScreen,
             enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
             exit = shrinkVertically(shrinkTowards = Alignment.Top) + slideOutVertically(targetOffsetY = { it }) + fadeOut(),
         ) {
             Queue(
                 state = queueSheetState,
                 playerBottomSheetState = state,
-                navController = navController,
                 background =
                     if (useBlackBackground) {
                         Color.Black
@@ -2172,7 +2155,6 @@ fun MoreActionsButton(
                     menuState.show {
                         PlayerMenu(
                             mediaMetadata = mediaMetadata,
-                            navController = navController,
                             playerBottomSheetState = state,
                             onShowDetailsDialog = {
                                 mediaMetadata.id.let {
@@ -2197,11 +2179,11 @@ fun MoreActionsButton(
 @Composable
 private fun PlayerMoreMenuButton(
     mediaMetadata: MediaMetadata,
-    navController: NavController,
     state: BottomSheetState,
     textButtonColor: Color,
     iconButtonColor: Color,
 ) {
+    val navController = LocalNavController.current
     val menuState = LocalMenuState.current
     val bottomSheetPageState = LocalBottomSheetPageState.current
 
@@ -2216,7 +2198,6 @@ private fun PlayerMoreMenuButton(
                     menuState.show {
                         PlayerMenu(
                             mediaMetadata = mediaMetadata,
-                            navController = navController,
                             playerBottomSheetState = state,
                             onShowDetailsDialog = {
                                 mediaMetadata.id.let {

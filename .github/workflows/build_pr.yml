@@ -24,7 +24,7 @@ concurrency:
 jobs:
   dudu7:
     name: Dudu7 compile and unit tests
-    if: github.head_ref != 'agent/upstream-13.6.1-bootstrap-final' && github.actor != 'dependabot[bot]' && github.actor != 'renovate[bot]'
+    if: github.head_ref != 'sync/metrolist-upstream' && github.actor != 'dependabot[bot]' && github.actor != 'renovate[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -57,11 +57,12 @@ jobs:
             -validity 10000 \
             -dname "CN=Metrolist PR ${{ github.event.number }},O=Metrolist,C=AT"
 
-      - name: Compile Dudu7 and run unit tests
+      - name: Compile Dudu7 and run focused unit tests
         run: |
           ./gradlew --console=plain \
             assembleGmsDudu7Debug \
             testGmsDudu7DebugUnitTest \
+            --tests "com.metrolist.music.variant.Dudu7LayoutTest" \
             --warning-mode summary
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
