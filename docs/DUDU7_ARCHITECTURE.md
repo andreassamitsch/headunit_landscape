@@ -37,6 +37,8 @@ Der gemeinsame MetroList-Code enthält nur kleine, stabile Aufrufe an folgende V
 - Android-Spracherkennung statt Musikerkennungsseite
 - stabiler, im privaten Repository abgelegter Debug-Schlüssel für updatefähige Test-APKs
 
+Das normale MetroList-Layout der `standard`-Variante bleibt von diesen Dudu7-Darstellungsregeln unberührt.
+
 ## Upstream-Aktualisierung
 
 Der wöchentliche Workflow merged den offiziellen Upstream in einen Review-Branch, baut Standard und Dudu7 und öffnet einen Pull Request. Es findet kein automatischer Merge statt.
