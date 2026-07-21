@@ -1,16 +1,13 @@
 name: Materialization Workflow Smoke Test
 
 on:
-  push:
-    branches: ["agent/upstream-13.6.1-bootstrap"]
-  pull_request:
-    branches: ["main"]
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "workflow startup works"
+      - run: echo "Manual only"
