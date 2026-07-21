@@ -20,7 +20,14 @@ jobs:
           ref: agent/dudu7-layout-corrections
           fetch-depth: 0
       - name: Apply focused source corrections
-        run: python3 scripts/apply_dudu7_layout_corrections.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! python3 scripts/apply_dudu7_layout_corrections.py >/tmp/dudu7-patch.log 2>&1; then
+            cat /tmp/dudu7-patch.log
+            exit 1
+          fi
+          cat /tmp/dudu7-patch.log
       - name: Commit corrected source
         shell: bash
         run: |
