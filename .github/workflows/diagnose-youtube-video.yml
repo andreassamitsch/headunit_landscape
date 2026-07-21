@@ -1,0 +1,77 @@
+name: Diagnose YouTube Music Video
+
+on:
+  push:
+    branches: ["agent/diagnose-Cx7QOJLFnug"]
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install yt-dlp
+        run: python3 -m pip install --upgrade yt-dlp
+
+      - name: Inspect video with multiple YouTube clients
+        shell: bash
+        run: |
+          set +e
+          VIDEO_URL="https://www.youtube.com/watch?v=Cx7QOJLFnug"
+          : > diagnosis.txt
+          for CLIENT in default web web_music android ios tv; do
+            echo "===== CLIENT: $CLIENT =====" | tee -a diagnosis.txt
+            if [ "$CLIENT" = "default" ]; then
+              yt-dlp -v --simulate --dump-single-json "$VIDEO_URL" >> diagnosis.txt 2>&1
+            else
+              yt-dlp -v --simulate --dump-single-json --extractor-args "youtube:player_client=$CLIENT" "$VIDEO_URL" >> diagnosis.txt 2>&1
+            fi
+            echo >> diagnosis.txt
+          done
+
+          echo "===== FORMAT SUMMARY =====" | tee -a diagnosis.txt
+          yt-dlp -F "$VIDEO_URL" >> diagnosis.txt 2>&1
+
+          python3 - <<'PY' >> diagnosis.txt 2>&1
+          import json
+          import subprocess
+
+          url = "https://www.youtube.com/watch?v=Cx7QOJLFnug"
+          proc = subprocess.run(
+              ["yt-dlp", "--no-warnings", "--dump-single-json", url],
+              text=True,
+              capture_output=True,
+          )
+          print("===== PARSED SUMMARY =====")
+          print("returncode:", proc.returncode)
+          if proc.stdout.strip():
+              data = json.loads(proc.stdout)
+              formats = data.get("formats") or []
+              audio = [f for f in formats if f.get("acodec") not in (None, "none")]
+              audio_only = [f for f in audio if f.get("vcodec") == "none"]
+              print("id:", data.get("id"))
+              print("title:", data.get("title"))
+              print("uploader:", data.get("uploader"))
+              print("availability:", data.get("availability"))
+              print("age_limit:", data.get("age_limit"))
+              print("live_status:", data.get("live_status"))
+              print("duration:", data.get("duration"))
+              print("format_count:", len(formats))
+              print("audio_format_count:", len(audio))
+              print("audio_only_count:", len(audio_only))
+              print("audio_protocols:", sorted({str(f.get("protocol")) for f in audio_only}))
+              print("audio_exts:", sorted({str(f.get("ext")) for f in audio_only}))
+              print("has_drm:", any(bool(f.get("has_drm")) for f in formats))
+          if proc.stderr.strip():
+              print("stderr:", proc.stderr)
+          PY
+
+      - name: Upload diagnosis
+        uses: actions/upload-artifact@v6
+        with:
+          name: youtube-diagnosis-Cx7QOJLFnug
+          path: diagnosis.txt
+          if-no-files-found: error
