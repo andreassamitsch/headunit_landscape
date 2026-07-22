@@ -52,12 +52,15 @@ checks = {
         "VehicleEmptyPlayer(navController = navController)",
         "moveTaskToBack(true)",
         "visible = !isFullScreen && !VehicleVariantConfig.isDudu7",
-        "landscapeHorizontalPadding = 8.dp",
+        "landscapeHorizontalPadding = 2.dp",
+        "shuffleModeEnabled = shuffleModeEnabled",
+        "onToggleRepeat = playerConnection.player::toggleRepeatMode",
     ),
     "app/src/main/kotlin/com/metrolist/music/ui/player/Queue.kt": (
         "rememberReorderableLazyListState",
         "moveMediaItem",
         "VehicleQueueActions()",
+        "top = if (VehicleVariantConfig.isDudu7) 8.dp else ListItemHeight + 8.dp",
         "bottom = if (VehicleVariantConfig.isDudu7) 8.dp else ListItemHeight + 8.dp",
         "isExpandable = !VehicleVariantConfig.isDudu7",
     ),
@@ -70,6 +73,17 @@ checks = {
     ),
     "app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt": (
         "landscapeHorizontalPadding: Dp = PlayerHorizontalPadding",
+        ".padding(horizontal = if (isLandscape) landscapeHorizontalPadding else PlayerHorizontalPadding)",
+        "if (!VehicleVariantConfig.isDudu7) {",
+    ),
+    "app/src/dudu7/kotlin/com/metrolist/music/variant/VehiclePlayerControls.kt": (
+        "shuffleModeEnabled: Boolean",
+        "repeatMode: Int",
+        "R.drawable.shuffle",
+        "R.drawable.repeat",
+        "R.drawable.radio",
+        "R.drawable.favorite_border",
+        "modifier = Modifier.weight(1f)",
     ),
     "app/src/main/kotlin/com/metrolist/music/utils/cipher/PlayerConfigStore.kt": (
         "scheduleStartupRefresh",
@@ -81,5 +95,16 @@ for path, tokens in checks.items():
     for token in tokens:
         if token not in text:
             raise SystemExit(f"Fehlender Erweiterungspunkt in {path}: {token}")
+
+forbidden_dudu_controls = (
+    "R.drawable.share",
+    "onShare:",
+)
+dudu_controls = (
+    ROOT / "app/src/dudu7/kotlin/com/metrolist/music/variant/VehiclePlayerControls.kt"
+).read_text(encoding="utf-8")
+for token in forbidden_dudu_controls:
+    if token in dudu_controls:
+        raise SystemExit(f"Unerwünschtes Dudu7-Steuerelement vorhanden: {token}")
 
 print("Dudu7 architecture verification passed")
