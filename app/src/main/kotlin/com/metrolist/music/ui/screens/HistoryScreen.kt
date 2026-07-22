@@ -88,6 +88,7 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun HistoryScreen(
     navController: NavController,
+    embeddedInPlayer: Boolean = false,
     viewModel: HistoryViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -475,7 +476,7 @@ fun HistoryScreen(
                         contentDescription = null,
                     )
                 }
-            } else {
+            } else if (!embeddedInPlayer || isSearching) {
                 IconButton(
                     onClick = {
                         if (isSearching) {

@@ -1,5 +1,9 @@
 package com.metrolist.music.variant
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,43 +20,66 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.metrolist.music.BuildConfig
 import com.metrolist.music.LocalNavController
 import com.metrolist.music.LocalPlayerAwareWindowInsets
 import com.metrolist.music.R
 import com.metrolist.music.ui.component.BottomSheetState
-import com.metrolist.music.ui.screens.library.LibraryPlaylistsScreen
-import com.metrolist.music.ui.screens.library.LibraryScreen
+import com.metrolist.music.ui.screens.Screens
+import com.metrolist.music.ui.screens.navigationBuilder
 import kotlin.math.max
+
+private const val VEHICLE_QUEUE_ROUTE = "vehicle_queue"
 
 private enum class VehicleRightPaneTab(
     val title: String,
     val icon: Int,
+    val route: String,
 ) {
-    QUEUE("Warteschlange", R.drawable.queue_music),
-    PLAYLISTS("Playlists", R.drawable.playlist_play),
-    LIBRARY("Bibliothek", R.drawable.library_music_outlined),
+    QUEUE("Warteschlange", R.drawable.queue_music, VEHICLE_QUEUE_ROUTE),
+    LIBRARY("Bibliothek", R.drawable.library_music_outlined, Screens.Library.route),
+    SEARCH("Suche", R.drawable.search, Screens.Search.route),
+    HISTORY("Hörverlauf", R.drawable.history, "history"),
+    HOME("Startseite", R.drawable.home_outlined, Screens.Home.route),
 }
 
+private tailrec fun Context.findActivity(): Activity? =
+    when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VehicleLandscapeLayout(
     state: BottomSheetState,
@@ -73,24 +100,23 @@ fun VehicleLandscapeLayout(
     val verticalWindowInsets =
         WindowInsets(left = 0.dp, top = verticalPaddingDp, right = 0.dp, bottom = verticalPaddingDp)
     val safePlayerWeight = Dudu7Layout.sanitizePlayerPaneWeight(playerPaneWeight)
-    val navController = LocalNavController.current
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
-    var selectedTab by rememberSaveable { mutableStateOf(VehicleRightPaneTab.QUEUE) }
-    var routeWhenTabOpened by rememberSaveable { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(selectedTab) {
-        routeWhenTabOpened = currentRoute
+    val paneNavController = rememberNavController()
+    val paneBackStackEntry by paneNavController.currentBackStackEntryAsState()
+    val currentPaneRoute = paneBackStackEntry?.destination?.route
+    var selectedTab by rememberSaveable { mutableStateOf(VehicleRightPaneTab.QUEUE) }
+    val activity = LocalContext.current.findActivity()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+
+    LaunchedEffect(currentPaneRoute) {
+        VehicleRightPaneTab.entries
+            .firstOrNull { it.route == currentPaneRoute }
+            ?.let { selectedTab = it }
     }
-    LaunchedEffect(currentRoute) {
-        if (
-            selectedTab != VehicleRightPaneTab.QUEUE &&
-            routeWhenTabOpened != null &&
-            currentRoute != routeWhenTabOpened &&
-            state.isExpanded
-        ) {
-            state.collapseSoft()
-        }
+
+    BackHandler(enabled = paneNavController.previousBackStackEntry != null) {
+        paneNavController.popBackStack()
     }
 
     Row(
@@ -135,44 +161,76 @@ fun VehicleLandscapeLayout(
                     .padding(start = 6.dp, end = 8.dp),
         ) {
             Column(Modifier.fillMaxSize()) {
-                TabRow(
+                ScrollableTabRow(
                     selectedTabIndex = selectedTab.ordinal,
+                    edgePadding = 0.dp,
                     containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    divider = {},
                 ) {
                     VehicleRightPaneTab.entries.forEach { tab ->
                         Tab(
                             selected = selectedTab == tab,
-                            onClick = { selectedTab = tab },
+                            onClick = {
+                                if (selectedTab != tab || currentPaneRoute != tab.route) {
+                                    selectedTab = tab
+                                    paneNavController.navigate(tab.route) {
+                                        popUpTo(VEHICLE_QUEUE_ROUTE) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            },
                             icon = {
                                 Icon(
                                     painter = painterResource(tab.icon),
-                                    contentDescription = null,
+                                    contentDescription = tab.title,
                                 )
                             },
                             text = { Text(tab.title, maxLines = 1) },
+                            modifier = Modifier.height(64.dp),
                         )
                     }
                 }
 
-                Box(Modifier.weight(1f).fillMaxWidth()) {
-                    CompositionLocalProvider(
-                        LocalPlayerAwareWindowInsets provides
-                            WindowInsets(
-                                left = 0.dp,
-                                top = 0.dp,
-                                right = 0.dp,
-                                bottom = 0.dp,
-                            ),
-                    ) {
-                        when (selectedTab) {
-                            VehicleRightPaneTab.QUEUE -> queueContent()
-                            VehicleRightPaneTab.PLAYLISTS ->
-                                LibraryPlaylistsScreen(
-                                    navController = navController,
-                                    filterContent = {},
+                CompositionLocalProvider(
+                    LocalNavController provides paneNavController,
+                    LocalPlayerAwareWindowInsets provides
+                        WindowInsets(
+                            left = 0.dp,
+                            top = 0.dp,
+                            right = 0.dp,
+                            bottom = 0.dp,
+                        ),
+                ) {
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        if (activity != null) {
+                            NavHost(
+                                navController = paneNavController,
+                                startDestination = VEHICLE_QUEUE_ROUTE,
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                composable(VEHICLE_QUEUE_ROUTE) {
+                                    queueContent()
+                                }
+                                navigationBuilder(
+                                    navController = paneNavController,
+                                    scrollBehavior = scrollBehavior,
+                                    latestVersionName = BuildConfig.VERSION_NAME,
+                                    activity = activity,
+                                    snackbarHostState = snackbarHostState,
+                                    embeddedInPlayer = true,
                                 )
-                            VehicleRightPaneTab.LIBRARY -> LibraryScreen()
+                            }
+                        } else {
+                            queueContent()
                         }
+
+                        SnackbarHost(
+                            hostState = snackbarHostState,
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                        )
                     }
                 }
             }

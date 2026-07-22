@@ -67,6 +67,16 @@ checks = {
     "app/src/main/kotlin/com/metrolist/music/ui/screens/search/SearchScreen.kt": (
         "rememberVehicleVoiceSearch(",
         "onClick = vehicleVoiceSearch",
+        "embeddedInPlayer: Boolean = false",
+    ),
+    "app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt": (
+        "QUEUE(\"Warteschlange\"",
+        "LIBRARY(\"Bibliothek\"",
+        "SEARCH(\"Suche\"",
+        "HISTORY(\"Hörverlauf\"",
+        "HOME(\"Startseite\"",
+        "ScrollableTabRow(",
+        "embeddedInPlayer = true",
     ),
     "app/src/main/kotlin/com/metrolist/music/ui/component/BottomSheet.kt": (
         "if (!isExpandable || !state.isCollapsed)",

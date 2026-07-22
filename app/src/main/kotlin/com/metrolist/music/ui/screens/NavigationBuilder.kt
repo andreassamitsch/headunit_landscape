@@ -73,6 +73,7 @@ fun NavGraphBuilder.navigationBuilder(
     latestVersionName: String,
     activity: Activity,
     snackbarHostState: SnackbarHostState,
+    embeddedInPlayer: Boolean = false,
 ) {
     composable(Screens.Home.route) {
         HomeScreen(snackbarHostState = snackbarHostState)
@@ -92,7 +93,8 @@ fun NavGraphBuilder.navigationBuilder(
             }
         SearchScreen(
             pureBlack = pureBlack,
-            savedStateHandle = backStackEntry.savedStateHandle
+            savedStateHandle = backStackEntry.savedStateHandle,
+            embeddedInPlayer = embeddedInPlayer,
         )
     }
 
@@ -111,7 +113,7 @@ fun NavGraphBuilder.navigationBuilder(
     }
 
     composable("history") {
-        HistoryScreen(navController)
+        HistoryScreen(navController, embeddedInPlayer = embeddedInPlayer)
     }
 
     composable("stats") {

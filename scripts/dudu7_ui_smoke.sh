@@ -155,8 +155,10 @@ find_and_tap "repeat" \
     "=Aktuellen Titel wiederholen" && capture "repeat" || true
 find_and_tap "like" "=Gefällt mir" && capture "like" || true
 find_and_tap "radio" "=Radio starten" && capture "radio" || true
-find_and_tap "playlists tab" "=Playlists" && capture "playlists" || true
 find_and_tap "library tab" "=Bibliothek" "=Library" && capture "library" || true
+find_and_tap "search tab" "=Suche" "=Search" && capture "search" || true
+find_and_tap "history tab" "=Hörverlauf" "=History" && capture "history" || true
+find_and_tap "home tab" "=Startseite" "=Home" && sleep 8 && capture "home" || true
 find_and_tap "queue tab" "=Warteschlange" "=Queue" && capture "queue" || true
 
 tap_cover

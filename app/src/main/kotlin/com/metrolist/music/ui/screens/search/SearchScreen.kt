@@ -77,6 +77,7 @@ import kotlinx.coroutines.launch
 fun SearchScreen(
     pureBlack: Boolean,
     savedStateHandle: SavedStateHandle,
+    embeddedInPlayer: Boolean = false,
 ) {
     val navController = LocalNavController.current
     val database = LocalDatabase.current
@@ -273,12 +274,14 @@ fun SearchScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(
-                            painter = painterResource(R.drawable.arrow_back),
-                            contentDescription = stringResource(R.string.dismiss),
-                            tint = MaterialTheme.colorScheme.onSurface,
-                        )
+                    if (!embeddedInPlayer) {
+                        IconButton(onClick = { navController.navigateUp() }) {
+                            Icon(
+                                painter = painterResource(R.drawable.arrow_back),
+                                contentDescription = stringResource(R.string.dismiss),
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
                     }
                 },
                 colors =
@@ -331,7 +334,7 @@ fun SearchScreen(
                     Lifecycle.Event.ON_RESUME -> {
                         if (isHandlingScrollToTop) return@LifecycleEventObserver
                         // Always hide keyboard when resuming if player is expanded
-                        if (isPlayerExpanded) {
+                        if (isPlayerExpanded && !embeddedInPlayer) {
                             keyboardController?.hide()
                             focusManager.clearFocus()
                         }
@@ -350,7 +353,7 @@ fun SearchScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
 
         // Initial check - hide keyboard if player is expanded
-        if (isPlayerExpanded) {
+        if (isPlayerExpanded && !embeddedInPlayer) {
             keyboardController?.hide()
             focusManager.clearFocus()
         }
