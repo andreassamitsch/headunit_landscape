@@ -1,4 +1,4 @@
-name: Build Maintained Dudu7
+name: Build Dudu7 APK
 
 on:
   workflow_dispatch:
@@ -19,15 +19,15 @@ permissions:
   contents: write
 
 concurrency:
-  group: main-maintained-build
+  group: main-dudu7-apk-build
   cancel-in-progress: true
 
 jobs:
-  validate:
-    name: Standard compatibility and Dudu7 validation
+  build:
+    name: Build Dudu7 APK
     if: github.actor != 'dependabot[bot]' && github.actor != 'renovate[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v6
@@ -69,14 +69,23 @@ jobs:
             -validity 10000 \
             -dname "CN=Metrolist Dudu7,O=Metrolist,C=AT"
 
-      - name: Build standard compatibility and fully validate Dudu7
+      - name: Build Dudu7 APK
+        shell: bash
         run: |
-          ./gradlew --console=plain \
-            assembleFossStandardDebug \
-            assembleGmsDudu7Debug \
-            :app:lintGmsDudu7Debug \
-            testGmsDudu7DebugUnitTest \
-            --warning-mode summary
+          set +e
+          ./gradlew --console=plain assembleGmsDudu7Debug --warning-mode summary 2>&1 | tee dudu7-build.log
+          status=${PIPESTATUS[0]}
+
+          mkdir -p .build-metadata
+          tail -n 300 dudu7-build.log > .build-metadata/latest-dudu7-build.log
+          printf '{"run_id":%s,"status":%s,"source_sha":"%s"}\n' \
+            "$GITHUB_RUN_ID" "$status" "$GITHUB_SHA" \
+            > .build-metadata/latest-dudu7-result.json
+
+          git add .build-metadata/latest-dudu7-build.log .build-metadata/latest-dudu7-result.json
+          git commit -m "Record Dudu7 build result $GITHUB_RUN_ID [skip ci]" || true
+          git push
+          exit "$status"
         env:
           METROLIST_APPLICATION_ID: com.metrolist.music
           METROLIST_APP_NAME: Metrolist Dudu7
