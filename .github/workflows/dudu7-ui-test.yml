@@ -1,5 +1,6 @@
 name: Dudu7 UI Smoke Test
 
+# Final validation trigger; removed after the successful run.
 on:
   workflow_dispatch:
     inputs:
