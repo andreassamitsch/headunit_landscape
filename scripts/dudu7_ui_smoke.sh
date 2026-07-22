@@ -157,13 +157,13 @@ find_and_tap "like" "=Gefällt mir" && capture "like" || true
 find_and_tap "radio" "=Radio starten" && capture "radio" || true
 if find_and_tap "library tab" "=Bibliothek" "=Library"; then
     capture "library"
-    if find_and_tap "liked library entry" "=Liked" "=Gefällt mir"; then
-        sleep 4
-        capture "library-detail"
-        adb shell input keyevent KEYCODE_BACK || true
-        sleep 3
-        capture "library-return"
-    fi
+    echo "Tapping right-pane Liked library card"
+    adb shell input tap $((DUDU_WIDTH * 67 / 100)) $((DUDU_HEIGHT * 52 / 100))
+    sleep 4
+    capture "library-detail"
+    adb shell input keyevent KEYCODE_BACK || true
+    sleep 3
+    capture "library-return"
 fi
 
 if find_and_tap "search tab" "=Suche" "=Search"; then
