@@ -1,5 +1,6 @@
 name: Record recent history fix runs
 
+# Temporary diagnostics; removed after the final validation.
 on:
   push:
     branches: ["main"]
@@ -20,7 +21,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p .build-metadata
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs?per_page=15" \
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs?per_page=20" \
             --jq '{workflow_runs: [.workflow_runs[] | {id, name, status, conclusion, event, head_sha, created_at}]}' \
             > .build-metadata/recent-history-fix-runs.json
           git config user.name "github-actions[bot]"
