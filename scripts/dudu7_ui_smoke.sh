@@ -143,7 +143,7 @@ if [[ -n "$TEST_URL" ]]; then
     capture "deep-link"
 fi
 
-adb shell screenrecord --time-limit 30 /sdcard/dudu7-ui-smoke.mp4 >/dev/null 2>&1 &
+adb shell screenrecord --time-limit 60 /sdcard/dudu7-ui-smoke.mp4 >/dev/null 2>&1 &
 record_pid=$!
 sleep 2
 
@@ -155,8 +155,29 @@ find_and_tap "repeat" \
     "=Aktuellen Titel wiederholen" && capture "repeat" || true
 find_and_tap "like" "=Gefällt mir" && capture "like" || true
 find_and_tap "radio" "=Radio starten" && capture "radio" || true
-find_and_tap "library tab" "=Bibliothek" "=Library" && capture "library" || true
-find_and_tap "search tab" "=Suche" "=Search" && capture "search" || true
+if find_and_tap "library tab" "=Bibliothek" "=Library"; then
+    capture "library"
+    if find_and_tap "liked library entry" "=Liked" "=Gefällt mir"; then
+        sleep 4
+        capture "library-detail"
+        adb shell input keyevent KEYCODE_BACK || true
+        sleep 3
+        capture "library-return"
+    fi
+fi
+
+if find_and_tap "search tab" "=Suche" "=Search"; then
+    capture "search"
+    find_and_tap "search field" "Search YouTube Music" "YouTube Music durchsuchen" "Search library" "Bibliothek durchsuchen" || true
+    adb shell input text "rock"
+    adb shell input keyevent KEYCODE_ENTER
+    sleep 12
+    capture "search-results"
+    adb shell input keyevent KEYCODE_BACK || true
+    sleep 3
+    capture "search-return"
+fi
+
 find_and_tap "history tab" "=Hörverlauf" "=History" && capture "history" || true
 find_and_tap "home tab" "=Startseite" "=Home" && sleep 8 && capture "home" || true
 find_and_tap "queue tab" "=Warteschlange" "=Queue" && capture "queue" || true
