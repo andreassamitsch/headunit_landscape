@@ -7,6 +7,7 @@ package com.metrolist.music.playback
 
 import android.content.Context
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Metadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM
@@ -16,6 +17,7 @@ import androidx.media3.common.Player.REPEAT_MODE_OFF
 import androidx.media3.common.Player.STATE_ENDED
 import androidx.media3.common.Timeline
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.extractor.metadata.icy.IcyInfo
 import com.metrolist.innertube.YouTube
 import com.metrolist.innertube.models.SongItem
 import com.metrolist.music.constants.SleepTimerCustomDaysKey
@@ -53,6 +55,7 @@ import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@androidx.media3.common.util.UnstableApi
 class PlayerConnection(
     context: Context,
     binder: MusicBinder,
@@ -652,12 +655,31 @@ class PlayerConnection(
                 .orEmpty()
                 .takeUnless { it.equals(stationName, ignoreCase = true) || it.equals("WebRadio", ignoreCase = true) }
                 .orEmpty()
-
-        if (rawTitle.isBlank()) {
-            mediaMetadata.value = base
-            return
+        if (rawTitle.isNotBlank()) {
+            applyRadioStreamTitle(rawTitle)
         }
+    }
 
+    override fun onMetadata(metadata: Metadata) {
+        val streamTitle =
+            metadata.getFirstEntryOfType(IcyInfo::class.java)
+                ?.title
+                ?.trim()
+                .orEmpty()
+        if (streamTitle.isNotBlank()) {
+            applyRadioStreamTitle(streamTitle)
+        }
+    }
+
+    private fun applyRadioStreamTitle(rawTitle: String) {
+        val currentItem = getPlayerOrNull()?.currentMediaItem ?: return
+        val base = currentItem.metadata ?: return
+        if (!isRadioMediaId(base.id)) return
+
+        val stationName =
+            currentItem.mediaMetadata.extras?.getString("radio_name")
+                ?.takeIf { it.isNotBlank() }
+                ?: base.title
         val parsed = parseRadioStreamTitle(rawTitle)
         val dynamic =
             base.copy(
