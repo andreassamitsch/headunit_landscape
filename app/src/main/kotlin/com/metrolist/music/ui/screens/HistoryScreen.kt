@@ -290,6 +290,7 @@ fun HistoryScreen(
                                     .combinedClickable(
                                         onClick = {
                                             if (song.id == mediaMetadata?.id) {
+                                                playerConnection.notifyUserSongSelection()
                                                 playerConnection.togglePlayPause()
                                             } else {
                                                 playerConnection.playQueue(
@@ -375,6 +376,7 @@ fun HistoryScreen(
                                             if (inSelectMode) {
                                                 onCheckedChange(event.event.id !in selection)
                                             } else if (event.song.id == mediaMetadata?.id) {
+                                                playerConnection.notifyUserSongSelection()
                                                 playerConnection.togglePlayPause()
                                             } else {
                                                 playerConnection.playQueue(

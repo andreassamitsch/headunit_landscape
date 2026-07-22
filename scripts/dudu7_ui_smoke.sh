@@ -98,6 +98,49 @@ PY_SELECTED
     return "$status"
 }
 
+find_and_tap_right() {
+    local label="$1"
+    shift
+    timeout 15s adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || return 1
+    adb pull /sdcard/window.xml "$RESULTS_DIR/current-window.xml" >/dev/null 2>&1 || return 1
+
+    local coords
+    coords=$(python3 - "$RESULTS_DIR/current-window.xml" "$DUDU_WIDTH" "$@" <<'PY_RIGHT'
+import re
+import sys
+import xml.etree.ElementTree as ET
+xml_path, width, *raw_needles = sys.argv[1:]
+minimum_left = int(width) // 2
+exact = [value[1:].casefold() for value in raw_needles if value.startswith("=")]
+partial = [value.casefold() for value in raw_needles if not value.startswith("=")]
+root = ET.parse(xml_path).getroot()
+for node in root.iter("node"):
+    values = [
+        node.attrib.get("text", "").strip().casefold(),
+        node.attrib.get("content-desc", "").strip().casefold(),
+    ]
+    haystack = " ".join(filter(None, values))
+    if not any(value == needle for value in values for needle in exact) and not (
+        haystack and any(needle in haystack for needle in partial)
+    ):
+        continue
+    match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds", ""))
+    if not match:
+        continue
+    left, top, right, bottom = map(int, match.groups())
+    if left < minimum_left or right <= left or bottom <= top:
+        continue
+    print(f"{(left + right) // 2} {(top + bottom) // 2}")
+    raise SystemExit(0)
+raise SystemExit(1)
+PY_RIGHT
+) || return 1
+
+    echo "Tapping $label in right pane at $coords"
+    adb shell input tap $coords
+    sleep 2
+}
+
 try_common_dialogs() {
     local attempt
     for attempt in 1 2 3 4 5; do
@@ -182,7 +225,7 @@ if ! find_and_tap "history tab live" "=Hörverlauf" "=History"; then
 fi
 sleep 3
 capture "history-live"
-if ! find_and_tap "history current title" "=Never Gonna Give You Up"; then
+if ! find_and_tap_right "history current title" "=Never Gonna Give You Up"; then
     echo "Current title did not appear in live listening history" >&2
     exit 1
 fi

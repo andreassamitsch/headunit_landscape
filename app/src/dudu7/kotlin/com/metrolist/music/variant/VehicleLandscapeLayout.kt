@@ -32,7 +32,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,8 +45,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -124,32 +121,22 @@ fun VehicleLandscapeLayout(
         paneNavController.popBackStack()
     }
 
-    // A deliberate song choice from Library, Search, History or Home replaces
-    // the playlist. Return to Queue for that reason only; automatic next-track
-    // transitions must not interrupt browsing.
-    DisposableEffect(playerConnection, paneNavController) {
-        val activePlayer = playerConnection?.player
-        val listener =
-            object : Player.Listener {
-                override fun onMediaItemTransition(
-                    mediaItem: MediaItem?,
-                    reason: Int,
-                ) {
-                    if (mediaItem == null || reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) return
-                    if (paneNavController.currentDestination?.route == VEHICLE_QUEUE_ROUTE) return
-
-                    selectedTab = VehicleRightPaneTab.QUEUE
-                    paneNavController.navigate(VEHICLE_QUEUE_ROUTE) {
-                        popUpTo(VEHICLE_QUEUE_ROUTE) {
-                            inclusive = false
-                            saveState = true
-                        }
-                        launchSingleTop = true
+    // React only to an explicit title/playlist selection made by the user.
+    // Automatic next-track transitions do not emit this signal and therefore
+    // never interrupt browsing in the other tabs.
+    LaunchedEffect(playerConnection, paneNavController) {
+        playerConnection?.userSongSelections?.collect {
+            if (paneNavController.currentDestination?.route != VEHICLE_QUEUE_ROUTE) {
+                selectedTab = VehicleRightPaneTab.QUEUE
+                paneNavController.navigate(VEHICLE_QUEUE_ROUTE) {
+                    popUpTo(VEHICLE_QUEUE_ROUTE) {
+                        inclusive = false
+                        saveState = true
                     }
+                    launchSingleTop = true
                 }
             }
-        activePlayer?.addListener(listener)
-        onDispose { activePlayer?.removeListener(listener) }
+        }
     }
 
     Row(

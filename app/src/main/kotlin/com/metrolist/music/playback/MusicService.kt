@@ -2488,8 +2488,16 @@ class MusicService :
                         ((dataStore[HistoryDuration]?.times(1000f)) ?: 30000f).toLong()
                     val elapsedMs = activeHistoryElapsedMs()
                     if (elapsedMs >= historyDurationMs && !dataStore.get(PauseListenHistoryKey, false)) {
+                        val metadata = player.currentMetadata
+                        if (metadata == null || metadata.id != mediaId) {
+                            delay(500)
+                            continue
+                        }
                         try {
-                            database.query {
+                            database.withTransaction {
+                                // The event table has a foreign key to song. Persist metadata in
+                                // the same transaction so a freshly started stream cannot race it.
+                                insert(metadata)
                                 insert(
                                     Event(
                                         songId = mediaId,
@@ -2501,8 +2509,7 @@ class MusicService :
                             activeHistoryRecorded = true
                             Timber.tag(TAG).d("Recorded active history item for $mediaId after ${elapsedMs}ms")
                             return@launch
-                        } catch (e: SQLException) {
-                            // Metadata may still be entering Room during the first seconds.
+                        } catch (e: Exception) {
                             Timber.tag(TAG).w(e, "History insert not ready for $mediaId; retrying")
                         }
                     }

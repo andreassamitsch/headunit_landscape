@@ -77,7 +77,7 @@ checks = {
         "HOME(\"Startseite\"",
         "ScrollableTabRow(",
         "embeddedInPlayer = true",
-        "MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED",
+        "userSongSelections?.collect",
         "selectedTab = VehicleRightPaneTab.QUEUE",
     ),
     "app/src/main/kotlin/com/metrolist/music/ui/component/BottomSheet.kt": (
@@ -100,6 +100,7 @@ checks = {
     "app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt": (
         "activeHistoryMonitorJob",
         "Recorded active history item",
+        "database.withTransaction",
         "incrementTotalPlayTime(mediaItem.mediaId, playbackStats.totalPlayTimeMs)",
     ),
     "app/src/main/kotlin/com/metrolist/music/utils/cipher/PlayerConfigStore.kt": (
