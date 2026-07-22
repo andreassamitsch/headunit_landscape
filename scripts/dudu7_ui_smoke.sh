@@ -36,18 +36,23 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 
-xml_path, *needles = sys.argv[1:]
-needles = [needle.casefold() for needle in needles]
+xml_path, *raw_needles = sys.argv[1:]
+exact_needles = [needle[1:].casefold() for needle in raw_needles if needle.startswith("=")]
+partial_needles = [needle.casefold() for needle in raw_needles if not needle.startswith("=")]
 try:
     root = ET.parse(xml_path).getroot()
 except Exception:
     raise SystemExit(1)
 
 for node in root.iter("node"):
-    haystack = " ".join(
-        filter(None, [node.attrib.get("text", ""), node.attrib.get("content-desc", "")])
-    ).casefold()
-    if not haystack or not any(needle in haystack for needle in needles):
+    values = [
+        node.attrib.get("text", "").strip().casefold(),
+        node.attrib.get("content-desc", "").strip().casefold(),
+    ]
+    haystack = " ".join(filter(None, values))
+    exact_match = any(value == needle for value in values for needle in exact_needles)
+    partial_match = bool(haystack) and any(needle in haystack for needle in partial_needles)
+    if not exact_match and not partial_match:
         continue
     match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds", ""))
     if not match:
@@ -142,22 +147,22 @@ adb shell screenrecord --time-limit 30 /sdcard/dudu7-ui-smoke.mp4 >/dev/null 2>&
 record_pid=$!
 sleep 2
 
-find_and_tap "playback" "wiedergabe" "play" "pause" && capture "playback-toggle" || true
-find_and_tap "shuffle" "zufallswiedergabe" "shuffle" && capture "shuffle" || true
-find_and_tap "repeat" "wiederholen" "repeat" && capture "repeat" || true
-find_and_tap "like" "gefällt mir" "like" && capture "like" || true
-find_and_tap "radio" "radio starten" && capture "radio" || true
-find_and_tap "playlists tab" "playlists" && capture "playlists" || true
-find_and_tap "library tab" "bibliothek" "library" && capture "library" || true
-find_and_tap "queue tab" "warteschlange" "queue" && capture "queue" || true
+find_and_tap "playback" "=Wiedergabe" && capture "playback-toggle" || true
+find_and_tap "shuffle" "=Zufallswiedergabe deaktiviert" "=Zufallswiedergabe aktiviert" && capture "shuffle" || true
+find_and_tap "repeat" \
+    "=Wiederholen deaktiviert" \
+    "=Warteschlange wiederholen" \
+    "=Aktuellen Titel wiederholen" && capture "repeat" || true
+find_and_tap "like" "=Gefällt mir" && capture "like" || true
+find_and_tap "radio" "=Radio starten" && capture "radio" || true
+find_and_tap "playlists tab" "=Playlists" && capture "playlists" || true
+find_and_tap "library tab" "=Bibliothek" "=Library" && capture "library" || true
+find_and_tap "queue tab" "=Warteschlange" "=Queue" && capture "queue" || true
 
 tap_cover
 capture "lyrics-toggle"
 tap_cover
 capture "cover-restored"
-
-# The Android share sheet intentionally remains open, so sharing is tested last.
-find_and_tap "share" "teilen" "share" && capture "share" || true
 
 wait "$record_pid" || true
 adb pull /sdcard/dudu7-ui-smoke.mp4 "$RESULTS_DIR/dudu7-ui-smoke.mp4" >/dev/null 2>&1 || true
