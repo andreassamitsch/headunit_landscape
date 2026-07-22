@@ -99,6 +99,9 @@ jobs:
       - name: Run deterministic radio and history test
         run: |
           mkdir -p "$RESULTS_DIR" radio-test-data
+          printf 'test started\n' > "$RESULTS_DIR/test-marker.txt"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
           ffmpeg -hide_banner -loglevel error -f lavfi -i 'sine=frequency=440:duration=4' -c:a libmp3lame -b:a 96k radio-test-data/station1.mp3
           ffmpeg -hide_banner -loglevel error -f lavfi -i 'sine=frequency=660:duration=4' -c:a libmp3lame -b:a 96k radio-test-data/station2.mp3
           python3 scripts/icy_test_server.py \
