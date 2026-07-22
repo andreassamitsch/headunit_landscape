@@ -20,14 +20,14 @@ capture() {
     local prefix
     prefix=$(printf '%02d-%s' "$step" "$label")
     adb exec-out screencap -p > "$RESULTS_DIR/${prefix}.png" || true
-    adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
+    timeout 15s adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
     adb pull /sdcard/window.xml "$RESULTS_DIR/${prefix}.xml" >/dev/null 2>&1 || true
 }
 
 find_and_tap() {
     local label="$1"
     shift
-    adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || return 1
+    timeout 15s adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || return 1
     adb pull /sdcard/window.xml "$RESULTS_DIR/current-window.xml" >/dev/null 2>&1 || return 1
 
     local coords
