@@ -107,13 +107,13 @@ jobs:
           set -euxo pipefail
           git add \
             app/build.gradle.kts \
-            app/persistent-debug.keystore \
             app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt \
             app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt \
             app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt \
             app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt \
             app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt \
             app/src/dudu7/kotlin/com/metrolist/music/variant/VehiclePlayerControls.kt
+          git add -f app/persistent-debug.keystore
           git rm -f \
             .assistant/webradio-existing.patch.xz.b64 \
             .assistant/persistent-debug.keystore.b64 \
