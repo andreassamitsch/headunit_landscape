@@ -23,10 +23,6 @@ on:
         description: YouTube Music URL opened during the smoke test
         required: false
         default: "https://music.youtube.com/watch?v=dQw4w9WgXcQ"
-  push:
-    branches: ["main"]
-    paths:
-      - ".github/workflows/dudu7-ui-test.yml"
 
 permissions:
   contents: write
@@ -38,9 +34,6 @@ concurrency:
 jobs:
   ui-test:
     name: Emulate and inspect Dudu7 UI
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      contains(github.event.head_commit.message, 'Run Dudu7 five-tab UI test')
     runs-on: ubuntu-22.04
     timeout-minutes: 45
 
