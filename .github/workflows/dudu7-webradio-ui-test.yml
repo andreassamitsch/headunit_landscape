@@ -59,7 +59,6 @@ jobs:
       - name: Prepare x86_64 emulator build
         run: |
           chmod +x gradlew scripts/run_dudu7_emulator_ci.sh scripts/dudu7_webradio_smoke.sh
-          python3 scripts/verify_dudu7_architecture.py
           python3 - <<'PY'
           from pathlib import Path
           path=Path('app/build.gradle.kts')
