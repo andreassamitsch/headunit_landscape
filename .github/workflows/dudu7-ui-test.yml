@@ -47,6 +47,7 @@ jobs:
     env:
       API_LEVEL: ${{ inputs.api_level || '34' }}
       SYSTEM_TARGET: google_atd
+      DATA_PARTITION_SIZE: 1536M
       DUDU_WIDTH: ${{ inputs.width || '1280' }}
       DUDU_HEIGHT: ${{ inputs.height || '720' }}
       DUDU_DENSITY: ${{ inputs.density || '200' }}
@@ -129,6 +130,15 @@ jobs:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+
+      - name: Free disk space for Android
+        shell: bash
+        run: |
+          ./gradlew --stop || true
+          find . -type d -name build -prune -exec rm -rf {} +
+          rm -rf "$HOME/.gradle/caches/transforms-"* || true
+          df -h
+          test -f "$APK_PATH"
 
       - name: Enable KVM access
         shell: bash
