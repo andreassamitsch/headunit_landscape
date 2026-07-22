@@ -16,7 +16,7 @@ on:
         required: true
         default: "200"
       api_level:
-        description: Android emulator API level (34 is the stable CI default)
+        description: Android emulator API level
         required: true
         default: "34"
       test_url:
@@ -41,16 +41,20 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.head_commit.message, 'Run initial Dudu7 UI smoke test')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 45
 
     env:
+      API_LEVEL: ${{ inputs.api_level || '34' }}
+      SYSTEM_TARGET: google_atd
       DUDU_WIDTH: ${{ inputs.width || '1280' }}
       DUDU_HEIGHT: ${{ inputs.height || '720' }}
       DUDU_DENSITY: ${{ inputs.density || '200' }}
       TEST_URL: ${{ inputs.test_url || 'https://music.youtube.com/watch?v=dQw4w9WgXcQ' }}
       PACKAGE_NAME: com.metrolist.music.dudu7
       ACTIVITY_NAME: com.metrolist.music.MainActivity
+      RESULTS_DIR: ui-test-results
+      APK_PATH: dist/Metrolist-Dudu7-emulator.apk
 
     steps:
       - uses: actions/checkout@v6
@@ -82,7 +86,7 @@ jobs:
       - name: Prepare x86_64 emulator build
         shell: bash
         run: |
-          chmod +x gradlew scripts/dudu7_ui_smoke.sh
+          chmod +x gradlew scripts/dudu7_ui_smoke.sh scripts/run_dudu7_emulator_ci.sh
           python3 scripts/verify_dudu7_architecture.py
           keytool -genkeypair -v \
             -keystore app/nightly-debug.keystore \
@@ -94,8 +98,8 @@ jobs:
             -validity 10000 \
             -dname "CN=Metrolist Dudu7 UI Test,O=Metrolist,C=AT"
 
-          # The production Dudu7 APK remains ARM-only. For this runner-local build only,
-          # package x86_64 native libraries so the hardware-accelerated emulator can run it.
+          # The production Dudu7 APK remains ARM-only. Only this temporary
+          # emulator build receives x86_64 native libraries.
           python3 - <<'PY'
           from pathlib import Path
 
@@ -115,8 +119,8 @@ jobs:
           mkdir -p dist
           APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
           test -n "$APK"
-          cp "$APK" dist/Metrolist-Dudu7-emulator.apk
-          unzip -l dist/Metrolist-Dudu7-emulator.apk | grep 'lib/x86_64/'
+          cp "$APK" "$APK_PATH"
+          unzip -l "$APK_PATH" | grep 'lib/x86_64/'
         env:
           METROLIST_APPLICATION_ID: com.metrolist.music
           METROLIST_APP_NAME: Metrolist Dudu7 UI Test
@@ -134,29 +138,9 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run Dudu7 emulator smoke test
-        uses: ReactiveCircus/android-emulator-runner@v2
-        with:
-          api-level: ${{ inputs.api_level || '34' }}
-          target: google_apis
-          arch: x86_64
-          cores: 2
-          ram-size: 2048M
-          emulator-boot-timeout: 900
-          disable-animations: true
-          emulator-options: >-
-            -no-window -gpu swiftshader_indirect -no-snapshot-save -noaudio
-            -no-boot-anim -camera-back none -camera-front none
-          script: |
-            export APK_PATH="dist/Metrolist-Dudu7-emulator.apk"
-            export RESULTS_DIR="ui-test-results"
-            export DUDU_WIDTH="$DUDU_WIDTH"
-            export DUDU_HEIGHT="$DUDU_HEIGHT"
-            export DUDU_DENSITY="$DUDU_DENSITY"
-            export TEST_URL="$TEST_URL"
-            export PACKAGE_NAME="$PACKAGE_NAME"
-            export ACTIVITY_NAME="$ACTIVITY_NAME"
-            scripts/dudu7_ui_smoke.sh
+      - name: Start Android and run Dudu7 smoke test
+        shell: bash
+        run: scripts/run_dudu7_emulator_ci.sh
 
       - name: Publish test summary
         if: always()
@@ -165,7 +149,12 @@ jobs:
           if [[ -f ui-test-results/summary.md ]]; then
             cat ui-test-results/summary.md >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "Dudu7 UI test did not produce a summary." >> "$GITHUB_STEP_SUMMARY"
+            echo "Dudu7 UI test did not produce an app summary." >> "$GITHUB_STEP_SUMMARY"
+            if [[ -f ui-test-results/emulator.log ]]; then
+              echo '```text' >> "$GITHUB_STEP_SUMMARY"
+              tail -n 80 ui-test-results/emulator.log >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+            fi
           fi
 
       - name: Upload screenshots, video and diagnostics
