@@ -143,6 +143,8 @@ record_pid=$!
 sleep 2
 
 find_and_tap "playback" "wiedergabe" "play" "pause" && capture "playback-toggle" || true
+find_and_tap "shuffle" "zufallswiedergabe" "shuffle" && capture "shuffle" || true
+find_and_tap "repeat" "wiederholen" "repeat" && capture "repeat" || true
 find_and_tap "like" "gefällt mir" "like" && capture "like" || true
 find_and_tap "radio" "radio starten" && capture "radio" || true
 find_and_tap "playlists tab" "playlists" && capture "playlists" || true

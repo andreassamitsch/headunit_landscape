@@ -335,6 +335,7 @@ fun BottomSheetPlayer(
     val currentSong by playerConnection.currentSong.collectAsStateWithLifecycle(initialValue = null)
     val automix by playerConnection.service.automixItems.collectAsStateWithLifecycle()
     val repeatMode by playerConnection.repeatMode.collectAsStateWithLifecycle()
+    val shuffleModeEnabled by playerConnection.shuffleModeEnabled.collectAsStateWithLifecycle()
     val canSkipPrevious by playerConnection.canSkipPrevious.collectAsStateWithLifecycle()
     val canSkipNext by playerConnection.canSkipNext.collectAsStateWithLifecycle()
     val isMuted by playerConnection.isMuted.collectAsStateWithLifecycle()
@@ -1883,7 +1884,7 @@ fun BottomSheetPlayer(
                                     modifier = Modifier.animateContentSize(),
                                     isPlayerExpanded = isExpandedProvider,
                                     isLandscape = true,
-                                    landscapeHorizontalPadding = 8.dp,
+                                    landscapeHorizontalPadding = 2.dp,
                                     isListenTogetherGuest = isListenTogetherGuest,
                                 )
                             }
@@ -1912,6 +1913,8 @@ fun BottomSheetPlayer(
                                 duration = duration,
                                 canSeek = !isListenTogetherGuest,
                                 isFavorite = isFavorite,
+                                shuffleModeEnabled = shuffleModeEnabled,
+                                repeatMode = repeatMode,
                                 textColor = TextBackgroundColor,
                                 playButtonContainerColor = textButtonColor,
                                 playButtonContentColor = iconButtonColor,
@@ -1930,6 +1933,11 @@ fun BottomSheetPlayer(
                                     }
                                 },
                                 onNext = playerConnection::seekToNext,
+                                onToggleShuffle = {
+                                    playerConnection.player.shuffleModeEnabled =
+                                        !playerConnection.player.shuffleModeEnabled
+                                },
+                                onToggleRepeat = playerConnection.player::toggleRepeatMode,
                                 onSliderValueChange = {
                                     if (!isListenTogetherGuest) sliderPosition = it
                                 },
@@ -1954,18 +1962,6 @@ fun BottomSheetPlayer(
                                         Toast.LENGTH_SHORT,
                                     ).show()
                                     playerConnection.startRadioSeamlessly()
-                                },
-                                onShare = {
-                                    val intent =
-                                        Intent().apply {
-                                            action = Intent.ACTION_SEND
-                                            type = "text/plain"
-                                            putExtra(
-                                                Intent.EXTRA_TEXT,
-                                                "https://music.youtube.com/watch?v=${currentMediaMetadata.id}",
-                                            )
-                                        }
-                                    context.startActivity(Intent.createChooser(intent, null))
                                 },
                                 onToggleLike = playerConnection::toggleLike,
                                 onTitleClick = {
