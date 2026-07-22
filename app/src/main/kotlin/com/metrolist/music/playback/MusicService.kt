@@ -32,6 +32,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.datastore.preferences.core.Preferences
@@ -459,6 +460,14 @@ class MusicService :
     private var latestMediaNotification: Notification? = null
 
     private var scrobbleManager: ScrobbleManager? = null
+
+    // PlaybackStatsListener only finalizes a listening session after the item ends.
+    // Track active listening as well so History updates while the current song plays.
+    private var activeHistoryMediaId: String? = null
+    private var activeHistoryAccumulatedMs = 0L
+    private var activeHistoryStartedAtMs: Long? = null
+    private var activeHistoryRecorded = false
+    private var activeHistoryMonitorJob: Job? = null
 
     val automixItems = MutableStateFlow<List<MediaItem>>(emptyList())
 
@@ -2424,6 +2433,84 @@ class MusicService :
         }
     }
 
+    private fun activeHistoryElapsedMs(): Long =
+        activeHistoryAccumulatedMs +
+            (activeHistoryStartedAtMs?.let { startedAt ->
+                (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(0L)
+            } ?: 0L)
+
+    private fun stopActiveHistoryClock() {
+        activeHistoryStartedAtMs?.let { startedAt ->
+            activeHistoryAccumulatedMs +=
+                (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(0L)
+        }
+        activeHistoryStartedAtMs = null
+        activeHistoryMonitorJob?.cancel()
+        activeHistoryMonitorJob = null
+    }
+
+    private fun resetActiveHistoryTracking(mediaId: String?) {
+        stopActiveHistoryClock()
+        activeHistoryMediaId = mediaId
+        activeHistoryAccumulatedMs = 0L
+        activeHistoryRecorded = false
+        if (mediaId != null && player.isPlaying) {
+            activeHistoryStartedAtMs = SystemClock.elapsedRealtime()
+            startActiveHistoryMonitor()
+        }
+    }
+
+    private fun updateActiveHistoryTracking(isPlaying: Boolean) {
+        val mediaId = player.currentMediaItem?.mediaId
+        if (mediaId != activeHistoryMediaId) {
+            resetActiveHistoryTracking(mediaId)
+        }
+        if (isPlaying && mediaId != null && !activeHistoryRecorded) {
+            if (activeHistoryStartedAtMs == null) {
+                activeHistoryStartedAtMs = SystemClock.elapsedRealtime()
+            }
+            startActiveHistoryMonitor()
+        } else if (!isPlaying) {
+            stopActiveHistoryClock()
+        }
+    }
+
+    private fun startActiveHistoryMonitor() {
+        val mediaId = activeHistoryMediaId ?: return
+        if (activeHistoryRecorded || activeHistoryMonitorJob?.isActive == true) return
+
+        activeHistoryMonitorJob =
+            scope.launch {
+                while (isActive && activeHistoryMediaId == mediaId && !activeHistoryRecorded) {
+                    if (!player.isPlaying || player.currentMediaItem?.mediaId != mediaId) return@launch
+
+                    val historyDurationMs =
+                        ((dataStore[HistoryDuration]?.times(1000f)) ?: 30000f).toLong()
+                    val elapsedMs = activeHistoryElapsedMs()
+                    if (elapsedMs >= historyDurationMs && !dataStore.get(PauseListenHistoryKey, false)) {
+                        try {
+                            database.query {
+                                insert(
+                                    Event(
+                                        songId = mediaId,
+                                        timestamp = LocalDateTime.now(),
+                                        playTime = elapsedMs,
+                                    ),
+                                )
+                            }
+                            activeHistoryRecorded = true
+                            Timber.tag(TAG).d("Recorded active history item for $mediaId after ${elapsedMs}ms")
+                            return@launch
+                        } catch (e: SQLException) {
+                            // Metadata may still be entering Room during the first seconds.
+                            Timber.tag(TAG).w(e, "History insert not ready for $mediaId; retrying")
+                        }
+                    }
+                    delay(500)
+                }
+            }
+    }
+
     private var previousMediaItemIndex = C.INDEX_UNSET
     private var previousEpisodeId: String? = null
 
@@ -2480,6 +2567,7 @@ class MusicService :
             }
         }
         lastTransitionedMediaId = mediaItem?.mediaId
+        resetActiveHistoryTracking(mediaItem?.mediaId)
 
         previousEpisodeId?.let { episodeId ->
             if (previousEpisodePosition > 0) {
@@ -2679,6 +2767,7 @@ class MusicService :
         }
 
         if (events.containsAny(Player.EVENT_IS_PLAYING_CHANGED)) {
+            updateActiveHistoryTracking(player.isPlaying)
             updateWidgetUI(player.isPlaying)
             if (player.isPlaying) {
                 discordIntentionalDisconnect = false
@@ -3865,18 +3954,10 @@ class MusicService :
         if (playbackStats.totalPlayTimeMs >= historyDurationMs &&
             !dataStore.get(PauseListenHistoryKey, false)
         ) {
+            // The active monitor writes the Event when the threshold is reached.
+            // PlaybackStats remains responsible for aggregate play time.
             database.query {
                 incrementTotalPlayTime(mediaItem.mediaId, playbackStats.totalPlayTimeMs)
-                try {
-                    insert(
-                        Event(
-                            songId = mediaItem.mediaId,
-                            timestamp = LocalDateTime.now(),
-                            playTime = playbackStats.totalPlayTimeMs,
-                        ),
-                    )
-                } catch (_: SQLException) {
-                }
             }
         }
 
@@ -4114,6 +4195,7 @@ class MusicService :
         playerSilenceProcessors.remove(player)
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerFuture = null
+        activeHistoryMonitorJob?.cancel()
         player.release()
         scope.cancel()
         super.onDestroy()

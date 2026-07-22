@@ -71,6 +71,33 @@ PY
     sleep 2
 }
 
+assert_selected_tab() {
+    local label="$1"
+    shift
+    timeout 15s adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || return 1
+    adb pull /sdcard/window.xml "$RESULTS_DIR/selected-tab.xml" >/dev/null 2>&1 || return 1
+    python3 - "$RESULTS_DIR/selected-tab.xml" "$@" <<'PY_SELECTED'
+import sys
+import xml.etree.ElementTree as ET
+xml_path, *labels = sys.argv[1:]
+labels = {label.casefold() for label in labels}
+root = ET.parse(xml_path).getroot()
+for node in root.iter("node"):
+    values = {
+        node.attrib.get("text", "").strip().casefold(),
+        node.attrib.get("content-desc", "").strip().casefold(),
+    }
+    if values & labels and node.attrib.get("selected") == "true":
+        raise SystemExit(0)
+raise SystemExit(1)
+PY_SELECTED
+    local status=$?
+    if [[ "$status" -ne 0 ]]; then
+        echo "$label is not selected" >&2
+    fi
+    return "$status"
+}
+
 try_common_dialogs() {
     local attempt
     for attempt in 1 2 3 4 5; do
@@ -147,6 +174,24 @@ adb shell screenrecord --time-limit 60 /sdcard/dudu7-ui-smoke.mp4 >/dev/null 2>&
 record_pid=$!
 sleep 2
 
+# Keep the first song playing beyond the default 30-second history threshold.
+sleep 12
+if ! find_and_tap "history tab live" "=Hörverlauf" "=History"; then
+    echo "History tab could not be opened" >&2
+    exit 1
+fi
+sleep 3
+capture "history-live"
+if ! find_and_tap "history current title" "=Never Gonna Give You Up"; then
+    echo "Current title did not appear in live listening history" >&2
+    exit 1
+fi
+sleep 5
+capture "history-selection-return"
+if ! assert_selected_tab "Queue tab" "Warteschlange" "Queue"; then
+    exit 1
+fi
+
 find_and_tap "playback" "=Wiedergabe" && capture "playback-toggle" || true
 find_and_tap "shuffle" "=Zufallswiedergabe deaktiviert" "=Zufallswiedergabe aktiviert" && capture "shuffle" || true
 find_and_tap "repeat" \
@@ -173,12 +218,17 @@ if find_and_tap "search tab" "=Suche" "=Search"; then
     adb shell input keyevent KEYCODE_ENTER
     sleep 12
     capture "search-results"
-    adb shell input keyevent KEYCODE_BACK || true
-    sleep 3
-    capture "search-return"
+    if ! find_and_tap "search song selection" "=Back In Black"; then
+        echo "Could not select a song from search results" >&2
+        exit 1
+    fi
+    sleep 5
+    capture "search-selection-return"
+    if ! assert_selected_tab "Queue tab after search selection" "Warteschlange" "Queue"; then
+        exit 1
+    fi
 fi
 
-find_and_tap "history tab" "=Hörverlauf" "=History" && capture "history" || true
 find_and_tap "home tab" "=Startseite" "=Home" && sleep 8 && capture "home" || true
 find_and_tap "queue tab" "=Warteschlange" "=Queue" && capture "queue" || true
 
