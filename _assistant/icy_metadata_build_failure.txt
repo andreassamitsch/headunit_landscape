@@ -1,0 +1,300 @@
+2026-07-22T20:59:45.0398262Z > Task :betterlyrics:preDebugBuild UP-TO-DATE
+2026-07-22T20:59:45.1376762Z > Task :betterlyrics:extractDebugSupportedLocales
+2026-07-22T20:59:45.1389240Z > Task :app:generateGmsDudu7DebugResValues
+2026-07-22T20:59:45.1390151Z > Task :app:generateGmsDudu7DebugBuildConfig
+2026-07-22T20:59:45.1391162Z > Task :innertube:preDebugBuild UP-TO-DATE
+2026-07-22T20:59:45.1396256Z > Task :innertube:extractDebugSupportedLocales
+2026-07-22T20:59:45.1396903Z > Task :kugou:preBuild UP-TO-DATE
+2026-07-22T20:59:45.1397678Z > Task :kugou:preDebugBuild UP-TO-DATE
+2026-07-22T20:59:45.1398509Z > Task :kugou:extractDebugSupportedLocales
+2026-07-22T20:59:45.1399120Z > Task :lastfm:preBuild UP-TO-DATE
+2026-07-22T20:59:45.1399656Z > Task :lastfm:preDebugBuild UP-TO-DATE
+2026-07-22T20:59:45.1400257Z > Task :lastfm:extractDebugSupportedLocales
+2026-07-22T20:59:45.1400852Z > Task :lrclib:preBuild UP-TO-DATE
+2026-07-22T20:59:45.2423414Z > Task :lrclib:preDebugBuild UP-TO-DATE
+2026-07-22T20:59:45.2438552Z > Task :lrclib:extractDebugSupportedLocales
+2026-07-22T20:59:45.2439701Z > Task :paxsenix:preBuild UP-TO-DATE
+2026-07-22T20:59:45.2440719Z > Task :paxsenix:preDebugBuild UP-TO-DATE
+2026-07-22T20:59:45.2441689Z > Task :paxsenix:extractDebugSupportedLocales
+2026-07-22T20:59:45.2442554Z > Task :shazamkit:preBuild UP-TO-DATE
+2026-07-22T20:59:45.2443295Z > Task :shazamkit:preDebugBuild UP-TO-DATE
+2026-07-22T20:59:45.2444117Z > Task :shazamkit:extractDebugSupportedLocales
+2026-07-22T20:59:45.3368641Z > Task :app:mapGmsDudu7DebugSourceSetPaths
+2026-07-22T20:59:45.3369773Z > Task :app:generateGmsDudu7DebugResources
+2026-07-22T20:59:45.3370874Z > Task :betterlyrics:processDebugNavigationResources
+2026-07-22T20:59:45.3373306Z > Task :innertube:processDebugNavigationResources
+2026-07-22T20:59:45.3375915Z > Task :lastfm:processDebugNavigationResources
+2026-07-22T20:59:45.3398798Z > Task :kugou:processDebugNavigationResources
+2026-07-22T20:59:45.3405502Z > Task :app:extractGmsDudu7DebugSupportedLocales
+2026-07-22T20:59:45.3406582Z > Task :lrclib:processDebugNavigationResources
+2026-07-22T20:59:45.3407795Z > Task :paxsenix:processDebugNavigationResources
+2026-07-22T20:59:45.3408406Z > Task :shazamkit:processDebugNavigationResources
+2026-07-22T20:59:45.3408936Z > Task :betterlyrics:generateDebugResources
+2026-07-22T20:59:45.3409434Z > Task :betterlyrics:packageDebugResources
+2026-07-22T20:59:46.2366067Z 
+2026-07-22T20:59:46.2375531Z > Task :app:generateProto
+2026-07-22T20:59:46.2377121Z Downloading protoc protoc-4.35.1-linux-x86_64.exe from https://repo1.maven.org/maven2/com/google/protobuf/protoc/4.35.1/protoc-4.35.1-linux-x86_64.exe
+2026-07-22T20:59:46.2379298Z Generating protobuf files in /home/runner/work/headunit_landscape/headunit_landscape/app/src/main/java
+2026-07-22T20:59:46.2380923Z Protobuf files generated successfully
+2026-07-22T20:59:46.2381340Z 
+2026-07-22T20:59:46.2381573Z > Task :innertube:generateDebugResources
+2026-07-22T20:59:46.2382173Z > Task :innertube:packageDebugResources
+2026-07-22T20:59:47.6383191Z > Task :app:generateGmsDudu7DebugLocaleConfig
+2026-07-22T20:59:48.3377056Z > Task :betterlyrics:parseDebugLocalResources
+2026-07-22T20:59:48.4368437Z > Task :innertube:parseDebugLocalResources
+2026-07-22T20:59:48.5388451Z > Task :innertube:generateDebugRFile
+2026-07-22T20:59:48.5413981Z > Task :betterlyrics:generateDebugRFile
+2026-07-22T20:59:48.5438216Z > Task :kugou:generateDebugResources
+2026-07-22T20:59:48.5470472Z > Task :lastfm:generateDebugResources
+2026-07-22T20:59:48.5471193Z > Task :kugou:packageDebugResources
+2026-07-22T20:59:48.5471816Z > Task :lastfm:packageDebugResources
+2026-07-22T20:59:48.6398535Z > Task :lastfm:parseDebugLocalResources
+2026-07-22T20:59:48.6399351Z > Task :kugou:parseDebugLocalResources
+2026-07-22T20:59:48.6399944Z > Task :lastfm:generateDebugRFile
+2026-07-22T20:59:48.6400512Z > Task :kugou:generateDebugRFile
+2026-07-22T20:59:48.6401087Z > Task :lrclib:generateDebugResources
+2026-07-22T20:59:48.6401752Z > Task :paxsenix:generateDebugResources
+2026-07-22T20:59:48.6402363Z > Task :lrclib:packageDebugResources
+2026-07-22T20:59:48.7418038Z > Task :paxsenix:packageDebugResources
+2026-07-22T20:59:48.7418920Z > Task :lrclib:parseDebugLocalResources
+2026-07-22T20:59:48.7439453Z > Task :paxsenix:parseDebugLocalResources
+2026-07-22T20:59:48.7479481Z > Task :lrclib:generateDebugRFile
+2026-07-22T20:59:48.7508492Z > Task :shazamkit:generateDebugResources
+2026-07-22T20:59:48.7526429Z > Task :paxsenix:generateDebugRFile
+2026-07-22T20:59:48.8400501Z > Task :shazamkit:packageDebugResources
+2026-07-22T20:59:48.8485479Z > Task :shazamkit:parseDebugLocalResources
+2026-07-22T20:59:48.8523910Z > Task :shazamkit:generateDebugRFile
+2026-07-22T20:59:48.9389438Z > Task :betterlyrics:javaPreCompileDebug
+2026-07-22T20:59:49.0367841Z > Task :app:processGmsDudu7DebugNavigationResources
+2026-07-22T20:59:49.0388468Z > Task :innertube:javaPreCompileDebug
+2026-07-22T20:59:50.0366295Z > Task :app:packageGmsDudu7DebugResources
+2026-07-22T20:59:50.2368655Z > Task :app:parseGmsDudu7DebugLocalResources
+2026-07-22T20:59:50.5373377Z > Task :app:generateGmsDudu7DebugRFile
+2026-07-22T20:59:50.5408405Z > Task :kugou:javaPreCompileDebug
+2026-07-22T21:00:02.9408731Z > Task :lastfm:compileDebugKotlin
+2026-07-22T21:00:02.9458872Z > Task :betterlyrics:compileDebugKotlin
+2026-07-22T21:00:02.9478675Z > Task :betterlyrics:compileDebugJavaWithJavac NO-SOURCE
+2026-07-22T21:00:02.9488224Z > Task :kugou:compileDebugKotlin
+2026-07-22T21:00:02.9518208Z > Task :lastfm:javaPreCompileDebug
+2026-07-22T21:00:02.9568311Z > Task :kugou:compileDebugJavaWithJavac NO-SOURCE
+2026-07-22T21:00:02.9598165Z > Task :lastfm:compileDebugJavaWithJavac NO-SOURCE
+2026-07-22T21:00:03.0374493Z > Task :kugou:bundleLibCompileToJarDebug
+2026-07-22T21:00:03.0398670Z > Task :betterlyrics:bundleLibCompileToJarDebug
+2026-07-22T21:00:03.0428709Z > Task :lastfm:bundleLibCompileToJarDebug
+2026-07-22T21:00:03.0458134Z > Task :lrclib:javaPreCompileDebug
+2026-07-22T21:00:03.1371113Z > Task :paxsenix:javaPreCompileDebug
+2026-07-22T21:00:07.4421842Z > Task :lrclib:compileDebugKotlin
+2026-07-22T21:00:07.4458325Z > Task :lrclib:compileDebugJavaWithJavac NO-SOURCE
+2026-07-22T21:00:07.5378718Z > Task :lrclib:bundleLibCompileToJarDebug
+2026-07-22T21:00:07.5418512Z > Task :shazamkit:javaPreCompileDebug
+2026-07-22T21:00:07.5459093Z > Task :app:javaPreCompileGmsDudu7Debug
+2026-07-22T21:00:07.5518524Z > Task :app:generateGmsDudu7DebugAssets UP-TO-DATE
+2026-07-22T21:00:07.5596335Z > Task :betterlyrics:generateDebugAssets UP-TO-DATE
+2026-07-22T21:00:07.6376085Z > Task :betterlyrics:mergeDebugAssets
+2026-07-22T21:00:07.6429616Z > Task :innertube:generateDebugAssets UP-TO-DATE
+2026-07-22T21:00:07.6488759Z > Task :innertube:mergeDebugAssets
+2026-07-22T21:00:07.6528268Z > Task :kugou:generateDebugAssets UP-TO-DATE
+2026-07-22T21:00:07.6548135Z > Task :kugou:mergeDebugAssets
+2026-07-22T21:00:07.6608274Z > Task :lastfm:generateDebugAssets UP-TO-DATE
+2026-07-22T21:00:07.6637996Z > Task :lastfm:mergeDebugAssets
+2026-07-22T21:00:07.6638626Z > Task :lrclib:generateDebugAssets UP-TO-DATE
+2026-07-22T21:00:07.6698110Z > Task :lrclib:mergeDebugAssets
+2026-07-22T21:00:07.6738305Z > Task :paxsenix:generateDebugAssets UP-TO-DATE
+2026-07-22T21:00:07.7431747Z > Task :paxsenix:mergeDebugAssets
+2026-07-22T21:00:07.7486849Z > Task :shazamkit:generateDebugAssets UP-TO-DATE
+2026-07-22T21:00:07.7527922Z > Task :shazamkit:mergeDebugAssets
+2026-07-22T21:00:08.0384381Z > Task :app:mergeGmsDudu7DebugAssets
+2026-07-22T21:00:08.1378447Z > Task :app:compressGmsDudu7DebugAssets
+2026-07-22T21:00:10.8366374Z > Task :paxsenix:compileDebugKotlin
+2026-07-22T21:00:10.8399186Z > Task :paxsenix:compileDebugJavaWithJavac NO-SOURCE
+2026-07-22T21:00:10.9391420Z > Task :paxsenix:bundleLibCompileToJarDebug
+2026-07-22T21:00:11.9389474Z > Task :shazamkit:compileDebugKotlin
+2026-07-22T21:00:11.9419143Z > Task :shazamkit:compileDebugJavaWithJavac NO-SOURCE
+2026-07-22T21:00:11.9436706Z > Task :shazamkit:bundleLibCompileToJarDebug
+2026-07-22T21:00:14.2368092Z > Task :app:checkGmsDudu7DebugDuplicateClasses
+2026-07-22T21:00:14.5366010Z > Task :app:generateGmsDudu7DebugGlobalSynthetics
+2026-07-22T21:00:14.6418755Z > Task :betterlyrics:processDebugJavaRes
+2026-07-22T21:00:14.7398819Z > Task :kugou:processDebugJavaRes
+2026-07-22T21:00:14.7438261Z > Task :lastfm:processDebugJavaRes
+2026-07-22T21:00:14.7518496Z > Task :lrclib:processDebugJavaRes
+2026-07-22T21:00:14.8409046Z > Task :paxsenix:processDebugJavaRes
+2026-07-22T21:00:14.8478586Z > Task :shazamkit:processDebugJavaRes
+2026-07-22T21:00:14.9365211Z > Task :kugou:bundleLibRuntimeToDirDebug
+2026-07-22T21:00:16.1398780Z > Task :app:desugarGmsDudu7DebugFileDependencies
+2026-07-22T21:00:18.4468789Z > Task :lrclib:bundleLibRuntimeToDirDebug
+2026-07-22T21:00:18.8468628Z > Task :innertube:compileDebugKotlin
+2026-07-22T21:00:19.4378550Z > Task :app:l8DexDesugarLibGmsDudu7Debug
+2026-07-22T21:00:19.5380101Z > Task :lastfm:bundleLibRuntimeToDirDebug
+2026-07-22T21:00:19.8388610Z > Task :paxsenix:bundleLibRuntimeToDirDebug
+2026-07-22T21:00:20.7458881Z > Task :betterlyrics:bundleLibRuntimeToDirDebug
+2026-07-22T21:00:23.3428778Z > Task :shazamkit:bundleLibRuntimeToDirDebug
+2026-07-22T21:00:23.7365953Z > Task :kugou:bundleLibRuntimeToJarDebug
+2026-07-22T21:00:23.8386866Z > Task :lrclib:bundleLibRuntimeToJarDebug
+2026-07-22T21:00:23.8418534Z > Task :lastfm:bundleLibRuntimeToJarDebug
+2026-07-22T21:00:26.3428889Z > Task :paxsenix:bundleLibRuntimeToJarDebug
+2026-07-22T21:00:26.3468440Z > Task :betterlyrics:bundleLibRuntimeToJarDebug
+2026-07-22T21:00:26.4402539Z > Task :shazamkit:bundleLibRuntimeToJarDebug
+2026-07-22T21:00:26.4458531Z > Task :betterlyrics:writeDebugAarMetadata
+2026-07-22T21:00:26.4459230Z > Task :innertube:writeDebugAarMetadata
+2026-07-22T21:00:26.5405217Z > Task :kugou:writeDebugAarMetadata
+2026-07-22T21:00:26.5470340Z > Task :lastfm:writeDebugAarMetadata
+2026-07-22T21:00:26.5518939Z > Task :lrclib:writeDebugAarMetadata
+2026-07-22T21:00:26.5598431Z > Task :paxsenix:writeDebugAarMetadata
+2026-07-22T21:00:26.5639857Z > Task :shazamkit:writeDebugAarMetadata
+2026-07-22T21:00:26.8371146Z > Task :app:checkGmsDudu7DebugAarMetadata
+2026-07-22T21:00:26.9408638Z > Task :app:compileGmsDudu7DebugNavigationResources
+2026-07-22T21:00:29.2398743Z > Task :app:createGmsDudu7DebugCompatibleScreenManifests
+2026-07-22T21:00:29.2458245Z > Task :app:extractDeepLinksGmsDudu7Debug
+2026-07-22T21:00:29.2478071Z > Task :betterlyrics:extractDeepLinksDebug
+2026-07-22T21:00:29.4368853Z > Task :betterlyrics:processDebugManifest
+2026-07-22T21:00:29.5378536Z > Task :innertube:extractDeepLinksDebug
+2026-07-22T21:00:29.5408173Z > Task :innertube:processDebugManifest
+2026-07-22T21:00:29.5498313Z > Task :kugou:extractDeepLinksDebug
+2026-07-22T21:00:29.5558310Z > Task :kugou:processDebugManifest
+2026-07-22T21:00:29.6378980Z > Task :lastfm:extractDeepLinksDebug
+2026-07-22T21:00:29.6428341Z > Task :lastfm:processDebugManifest
+2026-07-22T21:00:29.6488354Z > Task :lrclib:extractDeepLinksDebug
+2026-07-22T21:00:29.6511156Z > Task :lrclib:processDebugManifest
+2026-07-22T21:00:29.6542806Z > Task :paxsenix:extractDeepLinksDebug
+2026-07-22T21:00:29.6576975Z > Task :paxsenix:processDebugManifest
+2026-07-22T21:00:29.6599581Z > Task :shazamkit:extractDeepLinksDebug
+2026-07-22T21:00:29.6638227Z > Task :shazamkit:processDebugManifest
+2026-07-22T21:00:30.4398538Z > Task :app:processGmsDudu7DebugMainManifest
+2026-07-22T21:00:30.6419281Z > Task :app:processGmsDudu7DebugManifest
+2026-07-22T21:00:30.6458613Z > Task :app:processGmsDudu7DebugManifestForPackage
+2026-07-22T21:00:30.6544918Z > Task :betterlyrics:mapDebugSourceSetPaths
+2026-07-22T21:00:30.7410420Z > Task :betterlyrics:compileDebugLibraryResources
+2026-07-22T21:00:30.7460185Z > Task :innertube:mapDebugSourceSetPaths
+2026-07-22T21:00:30.7518467Z > Task :innertube:compileDebugLibraryResources
+2026-07-22T21:00:30.7566460Z > Task :kugou:mapDebugSourceSetPaths
+2026-07-22T21:00:30.7616394Z > Task :kugou:compileDebugLibraryResources
+2026-07-22T21:00:30.7650835Z > Task :lastfm:mapDebugSourceSetPaths
+2026-07-22T21:00:30.7715746Z > Task :lastfm:compileDebugLibraryResources
+2026-07-22T21:00:30.7786240Z > Task :lrclib:mapDebugSourceSetPaths
+2026-07-22T21:00:30.8382196Z > Task :lrclib:compileDebugLibraryResources
+2026-07-22T21:00:30.8438379Z > Task :paxsenix:mapDebugSourceSetPaths
+2026-07-22T21:00:30.8439095Z > Task :paxsenix:compileDebugLibraryResources
+2026-07-22T21:00:30.8439751Z > Task :shazamkit:mapDebugSourceSetPaths
+2026-07-22T21:00:30.8440451Z > Task :shazamkit:compileDebugLibraryResources
+2026-07-22T21:00:30.8498625Z > Task :app:mergeGmsDudu7DebugJniLibFolders
+2026-07-22T21:00:30.8588874Z > Task :betterlyrics:mergeDebugJniLibFolders
+2026-07-22T21:00:30.9438721Z > Task :betterlyrics:mergeDebugNativeLibs NO-SOURCE
+2026-07-22T21:00:30.9498360Z > Task :betterlyrics:copyDebugJniLibsProjectOnly
+2026-07-22T21:00:30.9499173Z > Task :innertube:mergeDebugJniLibFolders
+2026-07-22T21:00:30.9499844Z > Task :innertube:mergeDebugNativeLibs NO-SOURCE
+2026-07-22T21:00:30.9500510Z > Task :innertube:copyDebugJniLibsProjectOnly
+2026-07-22T21:00:30.9501183Z > Task :kugou:mergeDebugJniLibFolders
+2026-07-22T21:00:30.9501803Z > Task :kugou:mergeDebugNativeLibs NO-SOURCE
+2026-07-22T21:00:31.0398521Z > Task :kugou:copyDebugJniLibsProjectOnly
+2026-07-22T21:00:31.0458330Z > Task :lastfm:mergeDebugJniLibFolders
+2026-07-22T21:00:31.0548566Z > Task :lastfm:mergeDebugNativeLibs NO-SOURCE
+2026-07-22T21:00:31.0568357Z > Task :lastfm:copyDebugJniLibsProjectOnly
+2026-07-22T21:00:31.0612908Z > Task :lrclib:mergeDebugJniLibFolders
+2026-07-22T21:00:31.0638152Z > Task :lrclib:mergeDebugNativeLibs NO-SOURCE
+2026-07-22T21:00:31.0698390Z > Task :lrclib:copyDebugJniLibsProjectOnly
+2026-07-22T21:00:31.1388703Z > Task :paxsenix:mergeDebugJniLibFolders
+2026-07-22T21:00:31.1418457Z > Task :paxsenix:mergeDebugNativeLibs NO-SOURCE
+2026-07-22T21:00:31.1458124Z > Task :paxsenix:copyDebugJniLibsProjectOnly
+2026-07-22T21:00:31.1508558Z > Task :shazamkit:mergeDebugJniLibFolders
+2026-07-22T21:00:31.1532785Z > Task :shazamkit:mergeDebugNativeLibs NO-SOURCE
+2026-07-22T21:00:31.1588155Z > Task :shazamkit:copyDebugJniLibsProjectOnly
+2026-07-22T21:00:31.6368559Z > Task :app:mergeGmsDudu7DebugNativeLibs
+2026-07-22T21:00:31.6428466Z > Task :app:stripGmsDudu7DebugDebugSymbols
+2026-07-22T21:00:31.6508345Z > Task :app:validateSigningGmsDudu7Debug
+2026-07-22T21:00:31.7438453Z > Task :app:writeGmsDudu7DebugAppMetadata
+2026-07-22T21:00:31.7498303Z > Task :app:writeGmsDudu7DebugSigningConfigVersions
+2026-07-22T21:00:38.0408821Z > Task :app:mergeGmsDudu7DebugResources
+2026-07-22T21:00:39.6378480Z > Task :app:mergeExtDexGmsDudu7Debug
+2026-07-22T21:00:40.1383327Z warn: removing resource com.metrolist.music.dudu7.debug:string/discord_information without required default value.
+2026-07-22T21:00:40.1407673Z 
+2026-07-22T21:00:40.3378551Z > Task :app:processGmsDudu7DebugResources
+2026-07-22T21:00:45.3375004Z 
+2026-07-22T21:00:45.3398713Z > Task :innertube:compileDebugKotlin
+2026-07-22T21:00:45.3401069Z w: file:///home/runner/work/headunit_landscape/headunit_landscape/innertube/src/main/kotlin/com/metrolist/innertube/YouTube.kt:2551:103 Unnecessary safe call on a non-null receiver of type 'List<MusicCarouselShelfRenderer.Content>'.
+2026-07-22T21:00:45.3429277Z w: file:///home/runner/work/headunit_landscape/headunit_landscape/innertube/src/main/kotlin/com/metrolist/innertube/YouTube.kt:2578:109 Unnecessary safe call on a non-null receiver of type 'List<MusicShelfRenderer.Content>'.
+2026-07-22T21:00:45.3432419Z w: file:///home/runner/work/headunit_landscape/headunit_landscape/innertube/src/main/kotlin/com/metrolist/innertube/YouTube.kt:2600:131 Unnecessary safe call on a non-null receiver of type 'List<MusicCarouselShelfRenderer.Content>'.
+2026-07-22T21:00:45.3435546Z w: file:///home/runner/work/headunit_landscape/headunit_landscape/innertube/src/main/kotlin/com/metrolist/innertube/YouTube.kt:2679:38 Unnecessary safe call on a non-null receiver of type 'List<MusicCarouselShelfRenderer.Content>'.
+2026-07-22T21:00:45.3438865Z w: file:///home/runner/work/headunit_landscape/headunit_landscape/innertube/src/main/kotlin/com/metrolist/innertube/pages/ArtistItemsPage.kt:118:63 Unnecessary safe call on a non-null receiver of type 'Runs'.
+2026-07-22T21:00:45.9428122Z 
+2026-07-22T21:00:45.9428938Z > Task :innertube:compileDebugJavaWithJavac NO-SOURCE
+2026-07-22T21:00:45.9458158Z > Task :innertube:processDebugJavaRes
+2026-07-22T21:00:46.1366360Z > Task :innertube:bundleLibRuntimeToJarDebug
+2026-07-22T21:00:46.1370516Z > Task :innertube:bundleLibCompileToJarDebug
+2026-07-22T21:00:46.3388975Z > Task :innertube:bundleLibRuntimeToDirDebug
+2026-07-22T21:00:57.2365953Z > Task :app:mergeLibDexGmsDudu7Debug
+2026-07-22T21:01:16.1366296Z > Task :app:kspGmsDudu7DebugKotlin
+2026-07-22T21:01:55.1388598Z > Task :app:compileGmsDudu7DebugKotlin
+2026-07-22T21:02:07.5397307Z 
+2026-07-22T21:02:07.5439437Z e: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt:240:41 Unresolved reference 'removeMetadataOutput'.
+2026-07-22T21:02:07.5441257Z > Task :app:compileGmsDudu7DebugKotlin FAILED
+2026-07-22T21:02:07.5469058Z e: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt:243:36 Unresolved reference 'addMetadataOutput'.
+2026-07-22T21:02:07.5498904Z e: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt:799:45 Unresolved reference 'removeMetadataOutput'.
+2026-07-22T21:02:07.7377308Z gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1784753964116.json
+2026-07-22T21:02:07.7417702Z 
+2026-07-22T21:02:07.7417716Z 
+2026-07-22T21:02:07.7418235Z FAILURE: Build failed with an exception.
+2026-07-22T21:02:07.7448589Z [Incubating] Problems report is available at: file:///home/runner/work/headunit_landscape/headunit_landscape/build/reports/problems/problems-report.html
+2026-07-22T21:02:07.7450655Z 
+2026-07-22T21:02:07.7476989Z * What went wrong:
+2026-07-22T21:02:07.7477468Z 177 actionable tasks: 177 executed
+2026-07-22T21:02:07.7508392Z Execution failed for task ':app:compileGmsDudu7DebugKotlin' (registered by plugin 'com.android.internal.application').
+2026-07-22T21:02:07.7510302Z > A failure occurred while executing org.jetbrains.kotlin.compilerRunner.btapi.BuildToolsApiCompilationWork
+2026-07-22T21:02:07.7538095Z    > Compilation error. See log for more details
+2026-07-22T21:02:07.7567751Z 
+2026-07-22T21:02:07.7568169Z * Try:
+2026-07-22T21:02:07.7568856Z > Run with --stacktrace option to get the stack trace.
+2026-07-22T21:02:07.7569756Z > Run with --info or --debug option to get more log output.
+2026-07-22T21:02:07.7570790Z > Run with --scan to get full insights from a Build Scan (powered by Develocity).
+2026-07-22T21:02:07.7571782Z > Get more help at https://help.gradle.org.
+2026-07-22T21:02:07.7572347Z 
+2026-07-22T21:02:07.7572635Z BUILD FAILED in 2m 53s
+2026-07-22T21:02:07.8388680Z Configuration cache entry stored.
+2026-07-22T21:02:08.2801616Z ##[error]Process completed with exit code 1.
+2026-07-22T21:02:08.3007686Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-07-22T21:02:08.3009015Z Post job cleanup.
+2026-07-22T21:02:08.5519378Z In post-action step
+2026-07-22T21:02:08.5533684Z ##[group]Stopping Gradle daemons
+2026-07-22T21:02:08.5535101Z Stopping Gradle daemons for /home/runner/.gradle/wrapper/dists/gradle-9.6.1-bin/4ticwg1pgcbps2hj28r8so764/gradle-9.6.1
+2026-07-22T21:02:08.5553185Z [command]/home/runner/.gradle/wrapper/dists/gradle-9.6.1-bin/4ticwg1pgcbps2hj28r8so764/gradle-9.6.1/bin/gradle --stop
+2026-07-22T21:02:09.3173870Z Stopping Daemon(s)
+2026-07-22T21:02:09.3174524Z 1 Daemon stopped
+2026-07-22T21:02:09.3512529Z ##[endgroup]
+2026-07-22T21:02:09.3518057Z Not performing cache-cleanup due to build failure
+2026-07-22T21:02:09.3519052Z ##[group]Caching Gradle state
+2026-07-22T21:02:09.3615026Z Not saving configuration-cache state, as no encryption key was provided
+2026-07-22T21:02:09.8566672Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/headunit_landscape/headunit_landscape --files-from manifest.txt --use-compress-program zstdmt
+2026-07-22T21:02:10.7451876Z Sent 201772 of 201772 (100.0%), 0.4 MBs/sec
+2026-07-22T21:02:12.3668754Z Saved cache entry with key gradle-kotlin-dsl-v1-7df2081b2be1a0f9926046f3d69bf6e4 from /home/runner/.gradle/caches/*/kotlin-dsl/accessors/*/,/home/runner/.gradle/caches/*/kotlin-dsl/scripts/*/ in 2574ms
+2026-07-22T21:02:12.4217836Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/headunit_landscape/headunit_landscape --files-from manifest.txt --use-compress-program zstdmt
+2026-07-22T21:02:13.8956554Z Sent 7914778 of 7914778 (100.0%), 7.5 MBs/sec
+2026-07-22T21:02:14.1719865Z Saved cache entry with key gradle-home-v1|Linux-X64|fix[acfdc4e60ea98634ae977ad67264af5c]-da4c89a9b7b07649c91c844a439036124a4e5c1b from /home/runner/.gradle/caches,/home/runner/.gradle/notifications,/home/runner/.gradle/.setup-gradle in 1761ms
+2026-07-22T21:02:14.1722970Z ##[endgroup]
+2026-07-22T21:02:14.1729658Z Generating Job Summary
+2026-07-22T21:02:14.1743171Z Completed post-action step
+2026-07-22T21:02:14.1963347Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-07-22T21:02:14.1964682Z Post job cleanup.
+2026-07-22T21:02:14.3339907Z (node:2938) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-07-22T21:02:14.3341449Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-07-22T21:02:14.3558846Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-07-22T21:02:14.3560207Z Post job cleanup.
+2026-07-22T21:02:14.4549550Z [command]/usr/bin/git version
+2026-07-22T21:02:14.4599636Z git version 2.54.0
+2026-07-22T21:02:14.4646434Z Temporarily overriding HOME='/home/runner/work/_temp/b016c5df-8d77-4c75-bf73-68e4345a74e5' before making global git config changes
+2026-07-22T21:02:14.4648337Z Adding repository directory to the temporary git global config as a safe directory
+2026-07-22T21:02:14.4653758Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/headunit_landscape/headunit_landscape
+2026-07-22T21:02:14.4701070Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-07-22T21:02:14.4740888Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-07-22T21:02:14.5008044Z Entering 'metroproto'
+2026-07-22T21:02:14.5076637Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-07-22T21:02:14.5109778Z http.https://github.com/.extraheader
+2026-07-22T21:02:14.5121124Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-07-22T21:02:14.5159901Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-07-22T21:02:14.5433912Z Entering 'metroproto'
+2026-07-22T21:02:14.5465735Z http.https://github.com/.extraheader
+2026-07-22T21:02:14.5526869Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-07-22T21:02:14.5575296Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-07-22T21:02:14.5844166Z Entering 'metroproto'
+2026-07-22T21:02:14.5864780Z file:/home/runner/work/headunit_landscape/headunit_landscape/.git/modules/metroproto/config	remote.origin.url
+2026-07-22T21:02:14.5902069Z [command]/usr/bin/git config --file /home/runner/work/headunit_landscape/headunit_landscape/.git/modules/metroproto/config --name-only --get-regexp ^includeIf\.gitdir:
+2026-07-22T21:02:14.6085888Z Cleaning up orphan processes
+2026-07-22T21:02:14.6332542Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-java@v4, gradle/actions/setup-gradle@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
