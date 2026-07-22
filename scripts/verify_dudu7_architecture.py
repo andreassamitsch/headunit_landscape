@@ -2,8 +2,8 @@
 """Fast structural checks for the maintainable Dudu7 overlay."""
 from pathlib import Path
 
-# Keep live history, buffered title-selection delivery and queue return
-# protected by the lightweight Dudu7 architecture check.
+# Keep live history and the direct title-selection queue callback protected by
+# the lightweight Dudu7 architecture check.
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = (
     "VehicleVariantConfig.kt",
@@ -80,6 +80,7 @@ checks = {
         "ScrollableTabRow(",
         "embeddedInPlayer = true",
         "onUserSongSelection = returnToQueue",
+        "popBackStack(VEHICLE_QUEUE_ROUTE, inclusive = false)",
         "selectedTab = VehicleRightPaneTab.QUEUE",
     ),
     "app/src/main/kotlin/com/metrolist/music/ui/component/BottomSheet.kt": (
