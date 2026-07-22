@@ -79,7 +79,7 @@ checks = {
         "HOME(\"Startseite\"",
         "ScrollableTabRow(",
         "embeddedInPlayer = true",
-        "userSongSelections?.collect",
+        "onUserSongSelection = returnToQueue",
         "selectedTab = VehicleRightPaneTab.QUEUE",
     ),
     "app/src/main/kotlin/com/metrolist/music/ui/component/BottomSheet.kt": (
@@ -106,9 +106,8 @@ checks = {
         "incrementTotalPlayTime(mediaItem.mediaId, playbackStats.totalPlayTimeMs)",
     ),
     "app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt": (
-        "Channel.BUFFERED",
-        "userSongSelectionChannel.receiveAsFlow()",
-        "userSongSelectionChannel.trySend(Unit)",
+        "var onUserSongSelection: (() -> Unit)? = null",
+        "onUserSongSelection?.invoke()",
     ),
     "app/src/main/kotlin/com/metrolist/music/utils/cipher/PlayerConfigStore.kt": (
         "scheduleStartupRefresh",
