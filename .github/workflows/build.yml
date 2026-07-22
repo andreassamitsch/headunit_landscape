@@ -77,12 +77,13 @@ jobs:
           status=${PIPESTATUS[0]}
 
           mkdir -p .build-metadata
-          tail -n 300 dudu7-build.log > .build-metadata/latest-dudu7-build.log
+          tail -n 300 dudu7-build.log > .build-metadata/latest-dudu7-build.txt
           printf '{"run_id":%s,"status":%s,"source_sha":"%s"}\n' \
             "$GITHUB_RUN_ID" "$status" "$GITHUB_SHA" \
             > .build-metadata/latest-dudu7-result.json
 
-          git add .build-metadata/latest-dudu7-build.log .build-metadata/latest-dudu7-result.json
+          git pull --rebase
+          git add .build-metadata/latest-dudu7-build.txt .build-metadata/latest-dudu7-result.json
           git commit -m "Record Dudu7 build result $GITHUB_RUN_ID [skip ci]" || true
           git push
           exit "$status"
