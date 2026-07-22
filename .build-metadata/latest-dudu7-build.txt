@@ -1,14 +1,14 @@
 Starting a Gradle Daemon (subsequent builds will be faster)
 Calculating task graph as no cached configuration is available for tasks: assembleGmsDudu7Debug
+> Task :innertube:preBuild UP-TO-DATE
 > Task :betterlyrics:preBuild UP-TO-DATE
 > Task :app:preBuild UP-TO-DATE
-> Task :app:preGmsDudu7DebugBuild UP-TO-DATE
-> Task :innertube:preBuild UP-TO-DATE
-> Task :app:mergeGmsDudu7DebugNativeDebugMetadata NO-SOURCE
 > Task :betterlyrics:preDebugBuild UP-TO-DATE
+> Task :app:preGmsDudu7DebugBuild UP-TO-DATE
+> Task :app:mergeGmsDudu7DebugNativeDebugMetadata NO-SOURCE
 > Task :app:generateGmsDudu7DebugResValues
-> Task :betterlyrics:extractDebugSupportedLocales
 > Task :app:generateGmsDudu7DebugBuildConfig
+> Task :betterlyrics:extractDebugSupportedLocales
 > Task :innertube:preDebugBuild UP-TO-DATE
 > Task :innertube:extractDebugSupportedLocales
 > Task :kugou:preBuild UP-TO-DATE
@@ -28,15 +28,15 @@ Calculating task graph as no cached configuration is available for tasks: assemb
 > Task :shazamkit:extractDebugSupportedLocales
 > Task :app:generateGmsDudu7DebugResources
 > Task :app:mapGmsDudu7DebugSourceSetPaths
-> Task :app:extractGmsDudu7DebugSupportedLocales
-> Task :innertube:processDebugNavigationResources
 > Task :betterlyrics:processDebugNavigationResources
+> Task :innertube:processDebugNavigationResources
 > Task :kugou:processDebugNavigationResources
+> Task :app:extractGmsDudu7DebugSupportedLocales
 > Task :lastfm:processDebugNavigationResources
 > Task :lrclib:processDebugNavigationResources
 > Task :paxsenix:processDebugNavigationResources
-> Task :shazamkit:processDebugNavigationResources
 > Task :betterlyrics:generateDebugResources
+> Task :shazamkit:processDebugNavigationResources
 > Task :betterlyrics:packageDebugResources
 
 > Task :app:generateProto
@@ -47,26 +47,26 @@ Protobuf files generated successfully
 > Task :innertube:generateDebugResources
 > Task :innertube:packageDebugResources
 > Task :app:generateGmsDudu7DebugLocaleConfig
-> Task :betterlyrics:parseDebugLocalResources
 > Task :innertube:parseDebugLocalResources
+> Task :betterlyrics:parseDebugLocalResources
 > Task :betterlyrics:generateDebugRFile
-> Task :kugou:generateDebugResources
-> Task :kugou:packageDebugResources
 > Task :innertube:generateDebugRFile
-> Task :app:processGmsDudu7DebugNavigationResources
+> Task :kugou:generateDebugResources
 > Task :lastfm:generateDebugResources
-> Task :lrclib:generateDebugResources
-> Task :lrclib:packageDebugResources
+> Task :kugou:packageDebugResources
 > Task :lastfm:packageDebugResources
+> Task :app:processGmsDudu7DebugNavigationResources
+> Task :lrclib:generateDebugResources
 > Task :kugou:parseDebugLocalResources
 > Task :lastfm:parseDebugLocalResources
+> Task :lrclib:packageDebugResources
 > Task :kugou:generateDebugRFile
 > Task :lrclib:parseDebugLocalResources
-> Task :paxsenix:generateDebugResources
-> Task :paxsenix:packageDebugResources
 > Task :lastfm:generateDebugRFile
-> Task :lrclib:generateDebugRFile
+> Task :paxsenix:generateDebugResources
 > Task :shazamkit:generateDebugResources
+> Task :lrclib:generateDebugRFile
+> Task :paxsenix:packageDebugResources
 > Task :shazamkit:packageDebugResources
 > Task :paxsenix:parseDebugLocalResources
 > Task :shazamkit:parseDebugLocalResources
@@ -78,16 +78,16 @@ Protobuf files generated successfully
 > Task :app:parseGmsDudu7DebugLocalResources
 > Task :app:generateGmsDudu7DebugRFile
 > Task :kugou:javaPreCompileDebug
-> Task :betterlyrics:compileDebugKotlin
 > Task :lastfm:compileDebugKotlin
-> Task :kugou:compileDebugKotlin
-> Task :betterlyrics:compileDebugJavaWithJavac NO-SOURCE
-> Task :kugou:compileDebugJavaWithJavac NO-SOURCE
+> Task :betterlyrics:compileDebugKotlin
 > Task :lastfm:javaPreCompileDebug
+> Task :betterlyrics:compileDebugJavaWithJavac NO-SOURCE
+> Task :kugou:compileDebugKotlin
+> Task :kugou:compileDebugJavaWithJavac NO-SOURCE
 > Task :lastfm:compileDebugJavaWithJavac NO-SOURCE
-> Task :lastfm:bundleLibCompileToJarDebug
 > Task :kugou:bundleLibCompileToJarDebug
 > Task :betterlyrics:bundleLibCompileToJarDebug
+> Task :lastfm:bundleLibCompileToJarDebug
 > Task :lrclib:javaPreCompileDebug
 > Task :paxsenix:javaPreCompileDebug
 > Task :lrclib:compileDebugKotlin
@@ -129,11 +129,11 @@ Protobuf files generated successfully
 > Task :kugou:bundleLibRuntimeToDirDebug
 > Task :app:desugarGmsDudu7DebugFileDependencies
 > Task :lrclib:bundleLibRuntimeToDirDebug
+> Task :innertube:compileDebugKotlin
 > Task :app:l8DexDesugarLibGmsDudu7Debug
 > Task :lastfm:bundleLibRuntimeToDirDebug
 > Task :paxsenix:bundleLibRuntimeToDirDebug
 > Task :betterlyrics:bundleLibRuntimeToDirDebug
-> Task :innertube:compileDebugKotlin
 > Task :shazamkit:bundleLibRuntimeToDirDebug
 > Task :kugou:bundleLibRuntimeToJarDebug
 > Task :lrclib:bundleLibRuntimeToJarDebug
@@ -225,13 +225,13 @@ w: file:///home/runner/work/headunit_landscape/headunit_landscape/innertube/src/
 
 > Task :innertube:compileDebugJavaWithJavac NO-SOURCE
 > Task :innertube:processDebugJavaRes
-> Task :innertube:bundleLibRuntimeToJarDebug
 > Task :innertube:bundleLibCompileToJarDebug
+> Task :innertube:bundleLibRuntimeToJarDebug
 > Task :innertube:bundleLibRuntimeToDirDebug
 > Task :app:mergeLibDexGmsDudu7Debug
 > Task :app:kspGmsDudu7DebugKotlin
 > Task :app:compileGmsDudu7DebugKotlin
-w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt:138:17 'fun TabRow(selectedTabIndex: Int, modifier: Modifier = ..., containerColor: Color = ..., contentColor: Color = ..., indicator: ComposableFunction1<List<TabPosition>, Unit> = ..., divider: ComposableFunction0<Unit> = ..., tabs: ComposableFunction0<Unit>): Unit' is deprecated. Replaced with PrimaryTabRow and SecondaryTabRow.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt:164:17 'fun ScrollableTabRow(selectedTabIndex: Int, modifier: Modifier = ..., containerColor: Color = ..., contentColor: Color = ..., edgePadding: Dp = ..., indicator: ComposableFunction1<List<TabPosition>, Unit> = ..., divider: ComposableFunction0<Unit> = ..., tabs: ComposableFunction0<Unit>): Unit' is deprecated. Replaced with PrimaryScrollableTabRow and SecondaryScrollableTabRow tab variants.
 w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleSettingsScreen.kt:141:5 'fun ListItem(headlineContent: ComposableFunction0<Unit>, modifier: Modifier = ..., overlineContent: ComposableFunction0<Unit>? = ..., supportingContent: ComposableFunction0<Unit>? = ..., leadingContent: ComposableFunction0<Unit>? = ..., trailingContent: ComposableFunction0<Unit>? = ..., colors: ListItemColors = ..., tonalElevation: Dp = ..., shadowElevation: Dp = ...): Unit' is deprecated. Use the overload where `headlineContent` is now a trailing `content` lambda.
 w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/db/MusicDatabase.kt:204:19 'fun fallbackToDestructiveMigration(): RoomDatabase.Builder<InternalDatabase>' is deprecated. Replace by overloaded version with parameter to indicate if all tables should be dropped or not.
 w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt:3450:15 Elvis operator (?:) always returns the left operand of non-nullable type 'Pair<String?, Boolean>'.
@@ -264,9 +264,9 @@ w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/k
 w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/utils/cipher/CipherWebView.kt:641:47 Unnecessary safe call on a non-null receiver of type 'FunctionNameExtractor.NFunctionInfo'.
 
 > Task :app:processGmsDudu7DebugJavaRes
+> Task :app:mergeGmsDudu7DebugJavaResource
 > Task :app:compileGmsDudu7DebugJavaWithJavac
 > Task :app:hiltCollectClassesGmsDudu7Debug
-> Task :app:mergeGmsDudu7DebugJavaResource
 > Task :app:hiltAggregateDepsGmsDudu7Debug
 > Task :app:hiltJavaCompileGmsDudu7Debug
 > Task :app:transformGmsDudu7DebugClassesWithAsm
@@ -275,10 +275,10 @@ w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/k
 > Task :app:packageGmsDudu7Debug
 > Task :app:assembleGmsDudu7Debug
 > Task :app:createGmsDudu7DebugApkListingFileRedirect
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_3-1784720610062.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_3-1784726614587.json
 
 [Incubating] Problems report is available at: file:///home/runner/work/headunit_landscape/headunit_landscape/build/reports/problems/problems-report.html
 
-BUILD SUCCESSFUL in 4m 15s
+BUILD SUCCESSFUL in 4m 19s
 187 actionable tasks: 187 executed
 Configuration cache entry stored.
