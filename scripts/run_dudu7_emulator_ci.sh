@@ -8,6 +8,7 @@ AVD_NAME="${AVD_NAME:-dudu7-ci}"
 EMULATOR_PORT="${EMULATOR_PORT:-5554}"
 BOOT_TIMEOUT_SECONDS="${BOOT_TIMEOUT_SECONDS:-600}"
 RESULTS_DIR="${RESULTS_DIR:-ui-test-results}"
+DATA_PARTITION_SIZE="${DATA_PARTITION_SIZE:-1536M}"
 
 SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
 if [[ -z "$SDK_ROOT" ]]; then
@@ -26,6 +27,7 @@ AVD_LOG="$RESULTS_DIR/avd-create.log"
 
 SYSTEM_IMAGE="system-images;android-${API_LEVEL};${SYSTEM_TARGET};${SYSTEM_ARCH}"
 
+df -h > "$RESULTS_DIR/disk-before-sdk.txt" 2>&1 || true
 echo "Installing Android system image: $SYSTEM_IMAGE"
 set +o pipefail
 yes | sdkmanager --licenses >/dev/null 2>&1 || true
@@ -37,6 +39,7 @@ if [[ "$sdk_status" -ne 0 ]]; then
     exit "$sdk_status"
 fi
 
+df -h > "$RESULTS_DIR/disk-after-sdk.txt" 2>&1 || true
 rm -rf "$HOME/.android/avd/${AVD_NAME}.avd" "$HOME/.android/avd/${AVD_NAME}.ini"
 mkdir -p "$HOME/.android/avd"
 
@@ -47,13 +50,30 @@ echo no | avdmanager create avd \
     --package "$SYSTEM_IMAGE" \
     2>&1 | tee "$AVD_LOG"
 
-{
-    echo "hw.keyboard=yes"
-    echo "hw.gpu.enabled=yes"
-    echo "hw.gpu.mode=swiftshader_indirect"
-    echo "disk.dataPartition.size=4G"
-    echo "showDeviceFrame=no"
-} >> "$HOME/.android/avd/${AVD_NAME}.avd/config.ini"
+CONFIG_PATH="$HOME/.android/avd/${AVD_NAME}.avd/config.ini"
+python3 - "$CONFIG_PATH" "$DATA_PARTITION_SIZE" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+partition_size = sys.argv[2]
+keys = {
+    "hw.keyboard": "yes",
+    "hw.gpu.enabled": "yes",
+    "hw.gpu.mode": "swiftshader_indirect",
+    "disk.dataPartition.size": partition_size,
+    "showDeviceFrame": "no",
+    "hw.ramSize": "2048",
+    "hw.cpu.ncore": "2",
+}
+lines = path.read_text(encoding="utf-8").splitlines()
+filtered = [line for line in lines if line.partition("=")[0] not in keys]
+filtered.extend(f"{key}={value}" for key, value in keys.items())
+path.write_text("\n".join(filtered) + "\n", encoding="utf-8")
+PY
+cp "$CONFIG_PATH" "$RESULTS_DIR/avd-config.ini"
+
+df -h > "$RESULTS_DIR/disk-before-emulator.txt" 2>&1 || true
 
 cleanup() {
     set +e
@@ -65,7 +85,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "Starting emulator on port $EMULATOR_PORT"
+echo "Starting emulator on port $EMULATOR_PORT with ${DATA_PARTITION_SIZE} data partition"
 "$SDK_ROOT/emulator/emulator" \
     -avd "$AVD_NAME" \
     -port "$EMULATOR_PORT" \
@@ -107,6 +127,7 @@ done
 
 adb devices -l > "$RESULTS_DIR/adb-devices.txt" 2>&1 || true
 ps -ef > "$RESULTS_DIR/processes.txt" 2>&1 || true
+df -h > "$RESULTS_DIR/disk-after-emulator.txt" 2>&1 || true
 
 if [[ "$booted" != true ]]; then
     echo "Android emulator did not boot within ${BOOT_TIMEOUT_SECONDS}s" >&2
