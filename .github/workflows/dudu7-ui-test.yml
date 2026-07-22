@@ -1,0 +1,196 @@
+name: Dudu7 UI Smoke Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      width:
+        description: Emulated Dudu7 display width
+        required: true
+        default: "1280"
+      height:
+        description: Emulated Dudu7 display height
+        required: true
+        default: "720"
+      density:
+        description: Emulated display density (dpi)
+        required: true
+        default: "200"
+      api_level:
+        description: Android API level (Dudu7 uses Android 13 / API 33)
+        required: true
+        default: "33"
+      test_url:
+        description: YouTube Music URL opened during the smoke test
+        required: false
+        default: "https://music.youtube.com/watch?v=dQw4w9WgXcQ"
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/dudu7-ui-test.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dudu7-ui-smoke-test
+  cancel-in-progress: true
+
+jobs:
+  ui-test:
+    name: Emulate and inspect Dudu7 UI
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, 'Run initial Dudu7 UI smoke test')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      DUDU_WIDTH: ${{ inputs.width || '1280' }}
+      DUDU_HEIGHT: ${{ inputs.height || '720' }}
+      DUDU_DENSITY: ${{ inputs.density || '200' }}
+      TEST_URL: ${{ inputs.test_url || 'https://music.youtube.com/watch?v=dQw4w9WgXcQ' }}
+      PACKAGE_NAME: com.metrolist.music.dudu7
+      ACTIVITY_NAME: com.metrolist.music.MainActivity
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Record UI test run
+        shell: bash
+        run: |
+          mkdir -p .build-metadata
+          printf '{"run_id":%s,"run_attempt":%s,"source_sha":"%s"}\n' \
+            "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_SHA" \
+            > .build-metadata/latest-dudu7-ui-run.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .build-metadata/latest-dudu7-ui-run.json
+          git commit -m "Record Dudu7 UI run $GITHUB_RUN_ID [skip ci]" || true
+          git push || true
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: "21"
+          distribution: temurin
+
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-cleanup: on-success
+
+      - name: Prepare x86_64 emulator build
+        shell: bash
+        run: |
+          chmod +x gradlew scripts/dudu7_ui_smoke.sh
+          python3 scripts/verify_dudu7_architecture.py
+          keytool -genkeypair -v \
+            -keystore app/nightly-debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Metrolist Dudu7 UI Test,O=Metrolist,C=AT"
+
+          # The production Dudu7 APK remains ARM-only. For this runner-local build only,
+          # package x86_64 native libraries so the hardware-accelerated emulator can run it.
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("app/build.gradle.kts")
+          text = path.read_text(encoding="utf-8")
+          original = 'abiFilters += listOf("arm64-v8a", "armeabi-v7a")'
+          replacement = 'abiFilters += listOf("x86_64")'
+          if original not in text:
+              raise SystemExit("Expected ARM abiFilters declaration was not found")
+          path.write_text(text.replace(original, replacement, 1), encoding="utf-8")
+          PY
+
+      - name: Build emulator APK
+        shell: bash
+        run: |
+          ./gradlew --console=plain assembleGmsDudu7Debug --warning-mode summary
+          mkdir -p dist
+          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
+          test -n "$APK"
+          cp "$APK" dist/Metrolist-Dudu7-emulator.apk
+          unzip -l dist/Metrolist-Dudu7-emulator.apk | grep 'lib/x86_64/'
+        env:
+          METROLIST_APPLICATION_ID: com.metrolist.music
+          METROLIST_APP_NAME: Metrolist Dudu7 UI Test
+          METROLIST_DEBUG_KEYSTORE_PATH: nightly-debug.keystore
+          PULL_REQUEST: "false"
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+
+      - name: Enable KVM access
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run Dudu7 emulator smoke test
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ inputs.api_level || '33' }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          cores: 2
+          ram-size: 4096M
+          heap-size: 512M
+          disk-size: 6G
+          disable-animations: true
+          emulator-options: >-
+            -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+            -camera-back none -camera-front none -netdelay none -netspeed full
+          script: >-
+            APK_PATH=dist/Metrolist-Dudu7-emulator.apk
+            RESULTS_DIR=ui-test-results
+            DUDU_WIDTH="$DUDU_WIDTH"
+            DUDU_HEIGHT="$DUDU_HEIGHT"
+            DUDU_DENSITY="$DUDU_DENSITY"
+            TEST_URL="$TEST_URL"
+            PACKAGE_NAME="$PACKAGE_NAME"
+            ACTIVITY_NAME="$ACTIVITY_NAME"
+            scripts/dudu7_ui_smoke.sh
+
+      - name: Publish test summary
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f ui-test-results/summary.md ]]; then
+            cat ui-test-results/summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Dudu7 UI test did not produce a summary." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload screenshots, video and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: dudu7-ui-test-${{ github.run_id }}
+          path: |
+            ui-test-results/
+            dist/Metrolist-Dudu7-emulator.apk
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Record UI test result
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p .build-metadata
+          printf '{"run_id":%s,"job_status":"%s","source_sha":"%s"}\n' \
+            "$GITHUB_RUN_ID" "${{ job.status }}" "$GITHUB_SHA" \
+            > .build-metadata/latest-dudu7-ui-result.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .build-metadata/latest-dudu7-ui-result.json
+          git commit -m "Record Dudu7 UI result $GITHUB_RUN_ID [skip ci]" || true
+          git push || true
