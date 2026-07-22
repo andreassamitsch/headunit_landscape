@@ -10,11 +10,14 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -54,6 +57,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.util.fastForEachReversed
+import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.metrolist.innertube.utils.parseCookieString
@@ -223,6 +227,39 @@ fun HistoryScreen(
                     ),
                 ),
         ) {
+            if (embeddedInPlayer) {
+                item(key = "embedded_history_actions") {
+                    Row(
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                    ) {
+                        if (isSearching) {
+                            TextField(
+                                value = query,
+                                onValueChange = { query = it },
+                                placeholder = { Text(stringResource(R.string.search)) },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                modifier = Modifier.weight(1f).focusRequester(focusRequester),
+                            )
+                            IconButton(
+                                onClick = {
+                                    isSearching = false
+                                    query = TextFieldValue()
+                                },
+                            ) {
+                                Icon(painterResource(R.drawable.close), contentDescription = null)
+                            }
+                        } else {
+                            Spacer(Modifier.weight(1f))
+                            IconButton(onClick = { isSearching = true }) {
+                                Icon(painterResource(R.drawable.search), contentDescription = null)
+                            }
+                        }
+                    }
+                }
+            }
+
             item(key = "chips_row") {
                 ChipsRow(
                     chips =
@@ -436,119 +473,122 @@ fun HistoryScreen(
         )
     }
 
+    if (!embeddedInPlayer) {
     TopAppBar(
-        title = {
-            if (inSelectMode) {
-                Text(pluralStringResource(R.plurals.n_selected, selection.size, selection.size))
-            } else if (isSearching) {
-                TextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    placeholder = {
-                        Text(
-                            text = stringResource(R.string.search),
-                            style = MaterialTheme.typography.titleLarge,
-                        )
-                    },
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.titleLarge,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    colors =
-                        TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            disabledIndicatorColor = Color.Transparent,
-                        ),
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .focusRequester(focusRequester),
-                )
-            } else {
-                Text(stringResource(R.string.history))
-            }
-        },
-        navigationIcon = {
-            if (inSelectMode) {
-                IconButton(onClick = onExitSelectionMode) {
-                    Icon(
-                        painter = painterResource(R.drawable.close),
-                        contentDescription = null,
-                    )
-                }
-            } else if (!embeddedInPlayer || isSearching) {
-                IconButton(
-                    onClick = {
-                        if (isSearching) {
-                            isSearching = false
-                            query = TextFieldValue()
-                        } else {
-                            navController.navigateUp()
-                        }
-                    },
-                    onLongClick = {
-                        if (!isSearching) {
-                            navController.backToMain()
-                        }
-                    },
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.arrow_back),
-                        contentDescription = null,
-                    )
-                }
-            }
-        },
-        actions = {
-            if (inSelectMode) {
-                Checkbox(
-                    checked = selection.size == allEvents.size && selection.isNotEmpty(),
-                    onCheckedChange = {
-                        if (selection.size == allEvents.size) {
-                            selection.clear()
-                        } else {
-                            selection.clear()
-                            selection.addAll(allEvents.map { it.event.id })
-                        }
-                    },
-                )
-                IconButton(
-                    enabled = selection.isNotEmpty(),
-                    onClick = {
-                        menuState.show {
-                            SelectionMediaMetadataMenu(
-                                songSelection =
-                                    selection.mapNotNull { eventId ->
-                                        allEvents
-                                            .find { it.event.id == eventId }
-                                            ?.song
-                                            ?.toMediaItem()
-                                            ?.metadata
-                                    },
-                                onDismiss = menuState::dismiss,
-                                clearAction = onExitSelectionMode,
-                                currentItems = emptyList(),
+            title = {
+                if (inSelectMode) {
+                    Text(pluralStringResource(R.plurals.n_selected, selection.size, selection.size))
+                } else if (isSearching) {
+                    TextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        placeholder = {
+                            Text(
+                                text = stringResource(R.string.search),
+                                style = MaterialTheme.typography.titleLarge,
                             )
-                        }
-                    },
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.more_vert),
-                        contentDescription = null,
+                        },
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.titleLarge,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        colors =
+                            TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent,
+                            ),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .focusRequester(focusRequester),
                     )
+                } else {
+                    Text(stringResource(R.string.history))
                 }
-            } else if (!isSearching) {
-                IconButton(
-                    onClick = { isSearching = true },
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.search),
-                        contentDescription = null,
+            },
+            navigationIcon = {
+                if (inSelectMode) {
+                    IconButton(onClick = onExitSelectionMode) {
+                        Icon(
+                            painter = painterResource(R.drawable.close),
+                            contentDescription = null,
+                        )
+                    }
+                } else if (!embeddedInPlayer || isSearching) {
+                    IconButton(
+                        onClick = {
+                            if (isSearching) {
+                                isSearching = false
+                                query = TextFieldValue()
+                            } else {
+                                navController.navigateUp()
+                            }
+                        },
+                        onLongClick = {
+                            if (!isSearching) {
+                                navController.backToMain()
+                            }
+                        },
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.arrow_back),
+                            contentDescription = null,
+                        )
+                    }
+                }
+            },
+            actions = {
+                if (inSelectMode) {
+                    Checkbox(
+                        checked = selection.size == allEvents.size && selection.isNotEmpty(),
+                        onCheckedChange = {
+                            if (selection.size == allEvents.size) {
+                                selection.clear()
+                            } else {
+                                selection.clear()
+                                selection.addAll(allEvents.map { it.event.id })
+                            }
+                        },
                     )
+                    IconButton(
+                        enabled = selection.isNotEmpty(),
+                        onClick = {
+                            menuState.show {
+                                SelectionMediaMetadataMenu(
+                                    songSelection =
+                                        selection.mapNotNull { eventId ->
+                                            allEvents
+                                                .find { it.event.id == eventId }
+                                                ?.song
+                                                ?.toMediaItem()
+                                                ?.metadata
+                                        },
+                                    onDismiss = menuState::dismiss,
+                                    clearAction = onExitSelectionMode,
+                                    currentItems = emptyList(),
+                                )
+                            }
+                        },
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.more_vert),
+                            contentDescription = null,
+                        )
+                    }
+                } else if (!isSearching) {
+                    IconButton(
+                        onClick = { isSearching = true },
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.search),
+                            contentDescription = null,
+                        )
+                    }
                 }
-            }
-        },
-    )
+            },
+        )
+    
+    }
 }

@@ -16,6 +16,8 @@ import androidx.media3.common.Player.REPEAT_MODE_OFF
 import androidx.media3.common.Player.STATE_ENDED
 import androidx.media3.common.Timeline
 import androidx.media3.exoplayer.ExoPlayer
+import com.metrolist.innertube.YouTube
+import com.metrolist.innertube.models.SongItem
 import com.metrolist.music.constants.SleepTimerCustomDaysKey
 import com.metrolist.music.constants.SleepTimerDayTimesKey
 import com.metrolist.music.constants.SleepTimerDefaultKey
@@ -31,11 +33,13 @@ import com.metrolist.music.extensions.metadata
 import com.metrolist.music.extensions.togglePlayPause
 import com.metrolist.music.playback.MusicService.MusicBinder
 import com.metrolist.music.playback.queues.Queue
+import com.metrolist.music.radio.isRadioMediaId
 import com.metrolist.music.utils.dataStore
 import com.metrolist.music.utils.get
 import com.metrolist.music.utils.reportException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -53,7 +57,7 @@ class PlayerConnection(
     context: Context,
     binder: MusicBinder,
     val database: MusicDatabase,
-    scope: CoroutineScope,
+    private val scope: CoroutineScope,
 ) : Player.Listener {
     private companion object {
         private const val TAG = "PlayerConnection"
@@ -157,6 +161,8 @@ class PlayerConnection(
         )
 
     val mediaMetadata = MutableStateFlow(getPlayerOrNull()?.currentMetadata)
+    private var radioCoverLookupJob: Job? = null
+    private val radioCoverCache = mutableMapOf<String, String?>()
     // stateIn so the latest DB result is cached and shared: on resume / re-subscription the value
     // is available immediately instead of re-running the Room query (which delayed now-playing
     // details, format and like-state on every foreground). Lazily keeps it hot across lifecycle
@@ -437,6 +443,18 @@ class PlayerConnection(
                 return
             }
 
+            // A live radio stream has no meaningful "restart current item" position.
+            // Previous must always select the previous saved station.
+            if (isRadioMediaId(player.currentMediaItem?.mediaId) && player.hasPreviousMediaItem()) {
+                player.seekToPreviousMediaItem()
+                if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) {
+                    player.prepare()
+                }
+                player.playWhenReady = true
+                onSkipPrevious?.invoke()
+                return
+            }
+
             // Logic to mimic standard seekToPrevious behavior but with explicit callbacks
             // If we are more than 3 seconds in, just restart the song
             if (player.currentPosition > 3000 || !player.hasPreviousMediaItem()) {
@@ -608,10 +626,100 @@ class PlayerConnection(
         mediaItem: MediaItem?,
         reason: Int,
     ) {
+        radioCoverLookupJob?.cancel()
         mediaMetadata.value = mediaItem?.metadata
         currentMediaItemIndex.value = player.currentMediaItemIndex
         currentWindowIndex.value = player.getCurrentQueueIndex()
         updateCanSkipPreviousAndNext()
+    }
+
+    override fun onMediaMetadataChanged(newMetadata: androidx.media3.common.MediaMetadata) {
+        val currentItem = getPlayerOrNull()?.currentMediaItem ?: return
+        val base = currentItem.metadata ?: return
+        if (!isRadioMediaId(base.id)) {
+            mediaMetadata.value = base
+            return
+        }
+
+        val stationName =
+            currentItem.mediaMetadata.extras?.getString("radio_name")
+                ?.takeIf { it.isNotBlank() }
+                ?: base.title
+        val rawTitle =
+            (newMetadata.title ?: newMetadata.displayTitle)
+                ?.toString()
+                ?.trim()
+                .orEmpty()
+                .takeUnless { it.equals(stationName, ignoreCase = true) || it.equals("WebRadio", ignoreCase = true) }
+                .orEmpty()
+
+        if (rawTitle.isBlank()) {
+            mediaMetadata.value = base
+            return
+        }
+
+        val parsed = parseRadioStreamTitle(rawTitle)
+        val dynamic =
+            base.copy(
+                title = parsed.second,
+                artists =
+                    listOf(
+                        com.metrolist.music.models.MediaMetadata.Artist(
+                            id = null,
+                            name = parsed.first ?: stationName,
+                        ),
+                    ),
+            )
+        mediaMetadata.value = dynamic
+
+        parsed.first?.takeIf { it.isNotBlank() }?.let { artist ->
+            lookupRadioCover(base, artist, parsed.second)
+        }
+    }
+
+    private fun parseRadioStreamTitle(raw: String): Pair<String?, String> {
+        val cleaned = raw.substringBefore(" [").trim()
+        val separator = listOf(" - ", " – ", " — ", " | ").firstOrNull { it in cleaned }
+        if (separator == null) return null to cleaned
+        val artist = cleaned.substringBefore(separator).trim().takeIf { it.isNotBlank() }
+        val title = cleaned.substringAfter(separator).trim().ifBlank { cleaned }
+        return artist to title
+    }
+
+    private fun lookupRadioCover(
+        base: com.metrolist.music.models.MediaMetadata,
+        artist: String,
+        title: String,
+    ) {
+        val key = "$artist|$title".lowercase()
+        if (radioCoverCache.containsKey(key)) {
+            radioCoverCache[key]?.let { url ->
+                val current = mediaMetadata.value
+                if (current?.id == base.id && current.title == title) {
+                    mediaMetadata.value = current.copy(thumbnailUrl = url)
+                }
+            }
+            return
+        }
+
+        radioCoverLookupJob?.cancel()
+        radioCoverLookupJob =
+            scope.launch {
+                val cover =
+                    runCatching {
+                        YouTube.search("$artist $title", YouTube.SearchFilter.FILTER_SONG)
+                            .getOrNull()
+                            ?.items
+                            ?.filterIsInstance<SongItem>()
+                            ?.firstOrNull()
+                            ?.thumbnail
+                    }.getOrNull()
+                radioCoverCache[key] = cover
+                val current = mediaMetadata.value
+                if (!cover.isNullOrBlank() && current?.id == base.id && current.title == title) {
+                    mediaMetadata.value = current.copy(thumbnailUrl = cover)
+                }
+            }
     }
 
     override fun onTimelineChanged(

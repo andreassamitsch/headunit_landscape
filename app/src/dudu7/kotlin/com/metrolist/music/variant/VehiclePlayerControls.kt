@@ -3,6 +3,7 @@ package com.metrolist.music.variant
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -42,6 +43,7 @@ fun ColumnScope.VehiclePlayerControls(
     isEnded: Boolean,
     isGuest: Boolean,
     isMuted: Boolean,
+    isWebRadio: Boolean,
     canSkipPrevious: Boolean,
     canSkipNext: Boolean,
     sliderValue: Long,
@@ -199,38 +201,53 @@ fun ColumnScope.VehiclePlayerControls(
         ) {
             VehicleAction(
                 icon = R.drawable.radio,
-                description = "Radio starten",
-                color = textColor,
+                description = if (isWebRadio) "WebRadio läuft" else "Radio starten",
+                color = if (isWebRadio) activeControlColor else textColor,
                 onClick = onStartRadio,
                 buttonSize = 46.dp,
                 iconSize = 27.dp,
+                enabled = !isWebRadio,
             )
 
-            Column(
-                modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
-            ) {
-                Slider(
-                    value = safeSliderValue.toFloat(),
-                    valueRange = 0f..safeDuration.coerceAtLeast(1L).toFloat(),
-                    onValueChange = { onSliderValueChange(it.toLong()) },
-                    onValueChangeFinished = onSliderValueChangeFinished,
-                    enabled = canSeek && safeDuration > 0,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Row(
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+            if (isWebRadio) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                 ) {
                     Text(
-                        text = makeTimeString(safeSliderValue),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = textColor,
+                        text = "●  LIVE",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = activeControlColor,
                     )
-                    Text(
-                        text = if (safeDuration > 0) makeTimeString(safeDuration) else "",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = textColor,
+                }
+            } else {
+                Column(
+                    modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
+                ) {
+                    Slider(
+                        value = safeSliderValue.toFloat(),
+                        valueRange = 0f..safeDuration.coerceAtLeast(1L).toFloat(),
+                        onValueChange = { onSliderValueChange(it.toLong()) },
+                        onValueChangeFinished = onSliderValueChangeFinished,
+                        enabled = canSeek && safeDuration > 0,
+                        modifier = Modifier.fillMaxWidth(),
                     )
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                    ) {
+                        Text(
+                            text = makeTimeString(safeSliderValue),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = textColor,
+                        )
+                        Text(
+                            text = if (safeDuration > 0) makeTimeString(safeDuration) else "",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = textColor,
+                        )
+                    }
                 }
             }
 

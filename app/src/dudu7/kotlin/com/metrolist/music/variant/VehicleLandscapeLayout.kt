@@ -58,9 +58,11 @@ import com.metrolist.music.R
 import com.metrolist.music.ui.component.BottomSheetState
 import com.metrolist.music.ui.screens.Screens
 import com.metrolist.music.ui.screens.navigationBuilder
+import com.metrolist.music.ui.screens.radio.WebRadioScreen
 import kotlin.math.max
 
 private const val VEHICLE_QUEUE_ROUTE = "vehicle_queue"
+private const val VEHICLE_WEBRADIO_ROUTE = "vehicle_webradio"
 
 private enum class VehicleRightPaneTab(
     val title: String,
@@ -71,6 +73,7 @@ private enum class VehicleRightPaneTab(
     LIBRARY("Bibliothek", R.drawable.library_music_outlined, Screens.Library.route),
     SEARCH("Suche", R.drawable.search, Screens.Search.route),
     HISTORY("Hörverlauf", R.drawable.history, "history"),
+    WEBRADIO("WebRadio", R.drawable.radio, VEHICLE_WEBRADIO_ROUTE),
     HOME("Startseite", R.drawable.home_outlined, Screens.Home.route),
 }
 
@@ -240,6 +243,9 @@ fun VehicleLandscapeLayout(
                             ) {
                                 composable(VEHICLE_QUEUE_ROUTE) {
                                     queueContent()
+                                }
+                                composable(VEHICLE_WEBRADIO_ROUTE) {
+                                    WebRadioScreen()
                                 }
                                 navigationBuilder(
                                     navController = paneNavController,

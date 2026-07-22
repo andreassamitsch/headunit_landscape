@@ -165,6 +165,9 @@ import com.metrolist.music.extensions.togglePlayPause
 import com.metrolist.music.extensions.toggleRepeatMode
 import com.metrolist.music.listentogether.RoomRole
 import com.metrolist.music.models.MediaMetadata
+import com.metrolist.music.radio.RadioStationStore
+import com.metrolist.music.radio.isRadioMediaId
+import com.metrolist.music.radio.toRadioStationOrNull
 import com.metrolist.music.ui.component.BottomSheet
 import com.metrolist.music.ui.component.BottomSheetState
 import com.metrolist.music.ui.component.LocalBottomSheetPageState
@@ -332,6 +335,13 @@ fun BottomSheetPlayer(
 
     val playbackState by playerConnection.playbackState.collectAsState()
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
+    val radioStationStore = remember(context) { RadioStationStore.get(context) }
+    val savedRadioStations by radioStationStore.stations.collectAsStateWithLifecycle()
+    val isWebRadio = isRadioMediaId(mediaMetadata?.id)
+    val currentRadioStation =
+        remember(mediaMetadata?.id, savedRadioStations) {
+            runCatching { playerConnection.player.currentMediaItem?.toRadioStationOrNull() }.getOrNull()
+        }
     val currentSong by playerConnection.currentSong.collectAsStateWithLifecycle(initialValue = null)
     val automix by playerConnection.service.automixItems.collectAsStateWithLifecycle()
     val repeatMode by playerConnection.repeatMode.collectAsStateWithLifecycle()
@@ -1895,7 +1905,11 @@ fun BottomSheetPlayer(
                         if (currentMediaMetadata != null) {
                             val isEpisode = currentSong?.song?.isEpisode == true
                             val isFavorite =
-                                if (isEpisode) {
+                                if (isWebRadio) {
+                                    currentRadioStation?.let { station ->
+                                        savedRadioStations.any { it.uuid == station.uuid }
+                                    } == true
+                                } else if (isEpisode) {
                                     currentSong?.song?.inLibrary != null
                                 } else {
                                     currentSong?.song?.liked == true
@@ -1907,11 +1921,12 @@ fun BottomSheetPlayer(
                                 isEnded = playbackState == STATE_ENDED,
                                 isGuest = isListenTogetherGuest,
                                 isMuted = isMuted,
+                                isWebRadio = isWebRadio,
                                 canSkipPrevious = canSkipPrevious && !isListenTogetherGuest,
                                 canSkipNext = canSkipNext && !isListenTogetherGuest,
                                 sliderValue = sliderPosition ?: effectivePosition,
-                                duration = duration,
-                                canSeek = !isListenTogetherGuest,
+                                duration = if (isWebRadio) 0L else duration,
+                                canSeek = !isListenTogetherGuest && !isWebRadio,
                                 isFavorite = isFavorite,
                                 shuffleModeEnabled = shuffleModeEnabled,
                                 repeatMode = repeatMode,
@@ -1956,15 +1971,30 @@ fun BottomSheetPlayer(
                                     }
                                 },
                                 onStartRadio = {
-                                    Toast.makeText(
-                                        context,
-                                        context.getString(R.string.starting_radio),
-                                        Toast.LENGTH_SHORT,
-                                    ).show()
-                                    playerConnection.startRadioSeamlessly()
+                                    if (!isWebRadio) {
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.starting_radio),
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                        playerConnection.startRadioSeamlessly()
+                                    }
                                 },
-                                onToggleLike = playerConnection::toggleLike,
+                                onToggleLike = {
+                                    if (isWebRadio) {
+                                        currentRadioStation?.let { station ->
+                                            if (savedRadioStations.any { it.uuid == station.uuid }) {
+                                                radioStationStore.remove(station.uuid)
+                                            } else {
+                                                radioStationStore.addOrUpdate(station)
+                                            }
+                                        }
+                                    } else {
+                                        playerConnection.toggleLike()
+                                    }
+                                },
                                 onTitleClick = {
+                                    if (isWebRadio) return@VehiclePlayerControls
                                     val albumId = currentMediaMetadata.album?.id
                                         ?: currentSong?.album?.id
                                         ?: currentSong?.song?.albumId
@@ -1974,6 +2004,7 @@ fun BottomSheetPlayer(
                                     }
                                 },
                                 onArtistClick = {
+                                    if (isWebRadio) return@VehiclePlayerControls
                                     currentMediaMetadata.artists.firstOrNull { !it.id.isNullOrBlank() }?.id?.let {
                                         navController.navigate("artist/$it")
                                         state.collapseSoft()

@@ -25,6 +25,7 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.audiofx.AudioEffect
 import com.metrolist.music.playback.audio.VolumeNormalizationAudioProcessor
+import com.metrolist.music.radio.isRadioMediaId
 import com.metrolist.music.utils.safeDataStoreEdit
 import android.net.ConnectivityManager
 import android.os.Binder
@@ -32,7 +33,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.datastore.preferences.core.Preferences
@@ -78,6 +78,7 @@ import androidx.media3.exoplayer.audio.SilenceSkippingAudioProcessor
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
+import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.ExtractorsFactory
 import androidx.media3.extractor.mkv.MatroskaExtractor
 import androidx.media3.extractor.mp4.FragmentedMp4Extractor
@@ -461,13 +462,6 @@ class MusicService :
 
     private var scrobbleManager: ScrobbleManager? = null
 
-    // PlaybackStatsListener only finalizes a listening session after the item ends.
-    // Track active listening as well so History updates while the current song plays.
-    private var activeHistoryMediaId: String? = null
-    private var activeHistoryAccumulatedMs = 0L
-    private var activeHistoryStartedAtMs: Long? = null
-    private var activeHistoryRecorded = false
-    private var activeHistoryMonitorJob: Job? = null
 
     val automixItems = MutableStateFlow<List<MediaItem>>(emptyList())
 
@@ -2433,91 +2427,6 @@ class MusicService :
         }
     }
 
-    private fun activeHistoryElapsedMs(): Long =
-        activeHistoryAccumulatedMs +
-            (activeHistoryStartedAtMs?.let { startedAt ->
-                (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(0L)
-            } ?: 0L)
-
-    private fun stopActiveHistoryClock() {
-        activeHistoryStartedAtMs?.let { startedAt ->
-            activeHistoryAccumulatedMs +=
-                (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(0L)
-        }
-        activeHistoryStartedAtMs = null
-        activeHistoryMonitorJob?.cancel()
-        activeHistoryMonitorJob = null
-    }
-
-    private fun resetActiveHistoryTracking(mediaId: String?) {
-        stopActiveHistoryClock()
-        activeHistoryMediaId = mediaId
-        activeHistoryAccumulatedMs = 0L
-        activeHistoryRecorded = false
-        if (mediaId != null && player.isPlaying) {
-            activeHistoryStartedAtMs = SystemClock.elapsedRealtime()
-            startActiveHistoryMonitor()
-        }
-    }
-
-    private fun updateActiveHistoryTracking(isPlaying: Boolean) {
-        val mediaId = player.currentMediaItem?.mediaId
-        if (mediaId != activeHistoryMediaId) {
-            resetActiveHistoryTracking(mediaId)
-        }
-        if (isPlaying && mediaId != null && !activeHistoryRecorded) {
-            if (activeHistoryStartedAtMs == null) {
-                activeHistoryStartedAtMs = SystemClock.elapsedRealtime()
-            }
-            startActiveHistoryMonitor()
-        } else if (!isPlaying) {
-            stopActiveHistoryClock()
-        }
-    }
-
-    private fun startActiveHistoryMonitor() {
-        val mediaId = activeHistoryMediaId ?: return
-        if (activeHistoryRecorded || activeHistoryMonitorJob?.isActive == true) return
-
-        activeHistoryMonitorJob =
-            scope.launch {
-                while (isActive && activeHistoryMediaId == mediaId && !activeHistoryRecorded) {
-                    if (!player.isPlaying || player.currentMediaItem?.mediaId != mediaId) return@launch
-
-                    val historyDurationMs =
-                        ((dataStore[HistoryDuration]?.times(1000f)) ?: 30000f).toLong()
-                    val elapsedMs = activeHistoryElapsedMs()
-                    if (elapsedMs >= historyDurationMs && !dataStore.get(PauseListenHistoryKey, false)) {
-                        val metadata = player.currentMetadata
-                        if (metadata == null || metadata.id != mediaId) {
-                            delay(500)
-                            continue
-                        }
-                        try {
-                            database.withTransaction {
-                                // The event table has a foreign key to song. Persist metadata in
-                                // the same transaction so a freshly started stream cannot race it.
-                                insert(metadata)
-                                insert(
-                                    Event(
-                                        songId = mediaId,
-                                        timestamp = LocalDateTime.now(),
-                                        playTime = elapsedMs,
-                                    ),
-                                )
-                            }
-                            activeHistoryRecorded = true
-                            Timber.tag(TAG).d("Recorded active history item for $mediaId after ${elapsedMs}ms")
-                            return@launch
-                        } catch (e: Exception) {
-                            Timber.tag(TAG).w(e, "History insert not ready for $mediaId; retrying")
-                        }
-                    }
-                    delay(500)
-                }
-            }
-    }
-
     private var previousMediaItemIndex = C.INDEX_UNSET
     private var previousEpisodeId: String? = null
 
@@ -2574,7 +2483,6 @@ class MusicService :
             }
         }
         lastTransitionedMediaId = mediaItem?.mediaId
-        resetActiveHistoryTracking(mediaItem?.mediaId)
 
         previousEpisodeId?.let { episodeId ->
             if (previousEpisodePosition > 0) {
@@ -2774,7 +2682,6 @@ class MusicService :
         }
 
         if (events.containsAny(Player.EVENT_IS_PLAYING_CHANGED)) {
-            updateActiveHistoryTracking(player.isPlaying)
             updateWidgetUI(player.isPlaying)
             if (player.isPlaying) {
                 discordIntentionalDisconnect = false
@@ -3740,6 +3647,16 @@ class MusicService :
         return ResolvingDataSource.Factory(createCacheDataSource()) { dataSpec ->
             val mediaId = dataSpec.key ?: error("No media id")
 
+            if (isRadioMediaId(mediaId)) {
+                return@Factory dataSpec.withRequestHeaders(
+                    dataSpec.httpRequestHeaders +
+                        mapOf(
+                            "Icy-MetaData" to "1",
+                            "User-Agent" to "MetrolistHU/13.6.2",
+                        ),
+                )
+            }
+
             val shouldBypassCache = bypassCacheForQualityChange.contains(mediaId)
 
             if (!shouldBypassCache) {
@@ -3875,9 +3792,7 @@ class MusicService :
     private fun createMediaSourceFactory() =
         DefaultMediaSourceFactory(
             createDataSourceFactory(),
-            ExtractorsFactory {
-                arrayOf(MatroskaExtractor(), FragmentedMp4Extractor(), Mp4Extractor())
-            },
+            DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true),
         )
 
     private fun createRenderersFactory(
@@ -3956,15 +3871,28 @@ class MusicService :
         playbackStats: PlaybackStats,
     ) {
         val mediaItem = eventTime.timeline.getWindow(eventTime.windowIndex, Timeline.Window()).mediaItem
-        val historyDurationMs = dataStore[HistoryDuration]?.times(1000f) ?: 30000f
+        if (isRadioMediaId(mediaItem.mediaId)) return
 
+        val historyDurationMs = dataStore[HistoryDuration]?.times(1000f) ?: 30000f
         if (playbackStats.totalPlayTimeMs >= historyDurationMs &&
             !dataStore.get(PauseListenHistoryKey, false)
         ) {
-            // The active monitor writes the Event when the threshold is reached.
-            // PlaybackStats remains responsible for aggregate play time.
-            database.query {
-                incrementTotalPlayTime(mediaItem.mediaId, playbackStats.totalPlayTimeMs)
+            scope.launch(Dispatchers.IO) {
+                runCatching {
+                    database.withTransaction {
+                        mediaItem.metadata?.let { insert(it) }
+                        incrementTotalPlayTime(mediaItem.mediaId, playbackStats.totalPlayTimeMs)
+                        insert(
+                            Event(
+                                songId = mediaItem.mediaId,
+                                timestamp = LocalDateTime.now(),
+                                playTime = playbackStats.totalPlayTimeMs,
+                            ),
+                        )
+                    }
+                }.onFailure { error ->
+                    Timber.tag(TAG).w(error, "Could not record playback history for ${mediaItem.mediaId}")
+                }
             }
         }
 
@@ -3979,19 +3907,21 @@ class MusicService :
                             ?.videostatsPlaybackUrl
                             ?.baseUrl
                 if (playbackUrl == null) {
-                    Timber.tag(TAG).w("No playback tracking URL available for $mediaItem.mediaId, skipping YouTube history registration")
+                    Timber.tag(TAG).w("No playback tracking URL available for ${mediaItem.mediaId}, skipping YouTube history registration")
                     return@launch
                 }
                 YouTube
                     .registerPlayback(null, playbackUrl)
-                    .onFailure {
-                        reportException(it)
-                    }
+                    .onFailure { reportException(it) }
             }
         }
     }
 
     private fun saveQueueToDisk() {
+        if (isRadioMediaId(player.currentMediaItem?.mediaId)) {
+            Timber.tag(TAG).d("Skipping persistent queue save for live radio")
+            return
+        }
         if (player.mediaItemCount == 0) {
             Timber.tag(TAG).d("Skipping queue save - no media items")
             return
@@ -4202,7 +4132,6 @@ class MusicService :
         playerSilenceProcessors.remove(player)
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerFuture = null
-        activeHistoryMonitorJob?.cancel()
         player.release()
         scope.cancel()
         super.onDestroy()
