@@ -72,10 +72,19 @@ try_common_dialogs() {
         find_and_tap "permission/continue" \
             "allow" "while using" "only this time" \
             "zulassen" "bei verwendung" "nur dieses mal" \
-            "continue" "weiter" "start" "los geht" \
+            "continue" "weiter" "los geht" \
             "skip" "überspringen" "not now" "später" \
             "got it" "verstanden" || break
     done
+}
+
+tap_cover() {
+    local x y
+    x=$((DUDU_WIDTH * 28 / 100))
+    y=$((DUDU_HEIGHT * 28 / 100))
+    echo "Tapping cover/lyrics area at $x $y"
+    adb shell input tap "$x" "$y"
+    sleep 3
 }
 
 echo "Waiting for emulator"
@@ -129,17 +138,25 @@ if [[ -n "$TEST_URL" ]]; then
     capture "deep-link"
 fi
 
-adb shell screenrecord --time-limit 15 /sdcard/dudu7-ui-smoke.mp4 >/dev/null 2>&1 &
+adb shell screenrecord --time-limit 30 /sdcard/dudu7-ui-smoke.mp4 >/dev/null 2>&1 &
 record_pid=$!
 sleep 2
-adb shell input keyevent KEYCODE_MEDIA_PLAY_PAUSE || true
-sleep 3
-capture "media-toggle"
-find_and_tap "queue" "queue" "warteschlange" && capture "queue" || true
-find_and_tap "lyrics" "lyrics" "songtext" && capture "lyrics" || true
-find_and_tap "radio" "radio" && capture "radio" || true
-find_and_tap "share" "share" "teilen" && capture "share" || true
-find_and_tap "like" "like" "gefällt mir" && capture "like" || true
+
+find_and_tap "playback" "wiedergabe" "play" "pause" && capture "playback-toggle" || true
+find_and_tap "like" "gefällt mir" "like" && capture "like" || true
+find_and_tap "radio" "radio starten" && capture "radio" || true
+find_and_tap "playlists tab" "playlists" && capture "playlists" || true
+find_and_tap "library tab" "bibliothek" "library" && capture "library" || true
+find_and_tap "queue tab" "warteschlange" "queue" && capture "queue" || true
+
+tap_cover
+capture "lyrics-toggle"
+tap_cover
+capture "cover-restored"
+
+# The Android share sheet intentionally remains open, so sharing is tested last.
+find_and_tap "share" "teilen" "share" && capture "share" || true
+
 wait "$record_pid" || true
 adb pull /sdcard/dudu7-ui-smoke.mp4 "$RESULTS_DIR/dudu7-ui-smoke.mp4" >/dev/null 2>&1 || true
 
