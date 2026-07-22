@@ -40,6 +40,7 @@ jobs:
         run: |
           base64 -d .assistant/webradio-existing.patch.xz.b64 | xz -d > /tmp/webradio.patch
           patch --batch --forward -p1 < /tmp/webradio.patch
+          sed -i '/import androidx.compose.foundation.layout.weight/d' app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt
           base64 -d .assistant/persistent-debug.keystore.b64 > app/persistent-debug.keystore
           chmod 600 app/persistent-debug.keystore
 
