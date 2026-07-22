@@ -1,0 +1,48 @@
+name: Fix Dudu7 Library Test Target
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/fix-dudu7-library-test-target.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - name: Target the right-pane library card
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/dudu7_ui_smoke.sh')
+          text = path.read_text(encoding='utf-8')
+          old = '''    if find_and_tap "liked library entry" "=Liked" "=Gefällt mir"; then
+                  sleep 4
+                  capture "library-detail"
+                  adb shell input keyevent KEYCODE_BACK || true
+                  sleep 3
+                  capture "library-return"
+              fi'''
+          new = '''    echo "Tapping right-pane Liked library card"
+              adb shell input tap $((DUDU_WIDTH * 67 / 100)) $((DUDU_HEIGHT * 52 / 100))
+              sleep 4
+              capture "library-detail"
+              adb shell input keyevent KEYCODE_BACK || true
+              sleep 3
+              capture "library-return"'''
+          if old not in text:
+              raise SystemExit('Expected library detail test block was not found')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          rm .github/workflows/fix-dudu7-library-test-target.yml
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Target Dudu7 library detail in right pane [skip ci]"
+          git push
