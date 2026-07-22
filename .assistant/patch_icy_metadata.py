@@ -1,7 +1,7 @@
 from pathlib import Path
 
-path = Path('app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt')
-text = path.read_text(encoding='utf-8')
+player_path = Path('app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt')
+text = player_path.read_text(encoding='utf-8')
 
 text = text.replace(
     'import androidx.media3.common.MediaItem\n',
@@ -10,22 +10,12 @@ text = text.replace(
 )
 text = text.replace(
     'import androidx.media3.exoplayer.ExoPlayer\n',
-    'import androidx.media3.exoplayer.ExoPlayer\nimport androidx.media3.exoplayer.metadata.MetadataOutput\nimport androidx.media3.extractor.metadata.icy.IcyInfo\n',
+    'import androidx.media3.exoplayer.ExoPlayer\nimport androidx.media3.extractor.metadata.icy.IcyInfo\n',
     1,
 )
 text = text.replace(
     'class PlayerConnection(\n',
     '@androidx.media3.common.util.UnstableApi\nclass PlayerConnection(\n',
-    1,
-)
-text = text.replace(
-    ') : Player.Listener {\n',
-    ') : Player.Listener, MetadataOutput {\n',
-    1,
-)
-text = text.replace(
-    '        attachedPlayer?.removeListener(this)\n        attachedPlayer = newPlayer\n        newPlayer.addListener(this)\n',
-    '        attachedPlayer?.removeListener(this)\n        (attachedPlayer as? ExoPlayer)?.removeMetadataOutput(this)\n        attachedPlayer = newPlayer\n        newPlayer.addListener(this)\n        (newPlayer as? ExoPlayer)?.addMetadataOutput(this)\n',
     1,
 )
 
@@ -141,20 +131,25 @@ new = '''    override fun onMediaMetadataChanged(newMetadata: androidx.media3.co
 if old not in text:
     raise SystemExit('Expected radio metadata method was not found')
 text = text.replace(old, new, 1)
-text = text.replace(
-    '            attachedPlayer?.removeListener(this)\n            attachedPlayer = null\n',
-    '            attachedPlayer?.removeListener(this)\n            (attachedPlayer as? ExoPlayer)?.removeMetadataOutput(this)\n            attachedPlayer = null\n',
-    1,
-)
 
 required = [
-    'MetadataOutput',
-    'addMetadataOutput(this)',
     'override fun onMetadata(metadata: Metadata)',
     'getFirstEntryOfType(IcyInfo::class.java)',
+    'private fun applyRadioStreamTitle(rawTitle: String)',
 ]
 for needle in required:
     if needle not in text:
         raise SystemExit(f'Missing expected patch result: {needle}')
+for forbidden in ['MetadataOutput', 'addMetadataOutput', 'removeMetadataOutput']:
+    if forbidden in text:
+        raise SystemExit(f'Unsupported metadata callback API remained: {forbidden}')
 
-path.write_text(text, encoding='utf-8')
+player_path.write_text(text, encoding='utf-8')
+
+build_path = Path('app/build.gradle.kts')
+build = build_path.read_text(encoding='utf-8')
+if 'versionCode = 151' not in build or 'versionName = "13.6.2"' not in build:
+    raise SystemExit('Expected current version was not found')
+build = build.replace('versionCode = 151', 'versionCode = 152', 1)
+build = build.replace('versionName = "13.6.2"', 'versionName = "13.6.3"', 1)
+build_path.write_text(build, encoding='utf-8')
