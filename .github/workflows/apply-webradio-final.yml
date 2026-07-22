@@ -24,6 +24,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: recursive
 
       - name: Record workflow run
         run: |
@@ -45,6 +46,7 @@ jobs:
       - name: Verify intended architecture
         run: |
           set -euxo pipefail
+          test -s metroproto/listentogether.proto
           grep -q 'WEBRADIO("WebRadio"' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'WebRadioScreen()' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'isRadioMediaId(mediaItem.mediaId)) return' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
