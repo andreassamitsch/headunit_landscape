@@ -1,0 +1,284 @@
+Starting a Gradle Daemon (subsequent builds will be faster)
+Calculating task graph as no cached configuration is available for tasks: assembleGmsDudu7Debug
+> Task :betterlyrics:preBuild UP-TO-DATE
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preGmsDudu7DebugBuild UP-TO-DATE
+> Task :innertube:preBuild UP-TO-DATE
+> Task :app:mergeGmsDudu7DebugNativeDebugMetadata NO-SOURCE
+> Task :betterlyrics:preDebugBuild UP-TO-DATE
+> Task :app:generateGmsDudu7DebugResValues
+> Task :betterlyrics:extractDebugSupportedLocales
+> Task :app:generateGmsDudu7DebugBuildConfig
+> Task :innertube:preDebugBuild UP-TO-DATE
+> Task :innertube:extractDebugSupportedLocales
+> Task :kugou:preBuild UP-TO-DATE
+> Task :kugou:preDebugBuild UP-TO-DATE
+> Task :kugou:extractDebugSupportedLocales
+> Task :lastfm:preBuild UP-TO-DATE
+> Task :lastfm:preDebugBuild UP-TO-DATE
+> Task :lastfm:extractDebugSupportedLocales
+> Task :lrclib:preBuild UP-TO-DATE
+> Task :lrclib:preDebugBuild UP-TO-DATE
+> Task :lrclib:extractDebugSupportedLocales
+> Task :paxsenix:preBuild UP-TO-DATE
+> Task :paxsenix:preDebugBuild UP-TO-DATE
+> Task :paxsenix:extractDebugSupportedLocales
+> Task :shazamkit:preBuild UP-TO-DATE
+> Task :shazamkit:preDebugBuild UP-TO-DATE
+> Task :shazamkit:extractDebugSupportedLocales
+> Task :app:generateGmsDudu7DebugResources
+> Task :app:mapGmsDudu7DebugSourceSetPaths
+> Task :app:extractGmsDudu7DebugSupportedLocales
+> Task :innertube:processDebugNavigationResources
+> Task :betterlyrics:processDebugNavigationResources
+> Task :kugou:processDebugNavigationResources
+> Task :lastfm:processDebugNavigationResources
+> Task :lrclib:processDebugNavigationResources
+> Task :paxsenix:processDebugNavigationResources
+> Task :shazamkit:processDebugNavigationResources
+> Task :betterlyrics:generateDebugResources
+> Task :betterlyrics:packageDebugResources
+
+> Task :app:generateProto
+Downloading protoc protoc-4.35.1-linux-x86_64.exe from https://repo1.maven.org/maven2/com/google/protobuf/protoc/4.35.1/protoc-4.35.1-linux-x86_64.exe
+Generating protobuf files in /home/runner/work/headunit_landscape/headunit_landscape/app/src/main/java
+Protobuf files generated successfully
+
+> Task :innertube:generateDebugResources
+> Task :innertube:packageDebugResources
+> Task :app:generateGmsDudu7DebugLocaleConfig
+> Task :betterlyrics:parseDebugLocalResources
+> Task :innertube:parseDebugLocalResources
+> Task :betterlyrics:generateDebugRFile
+> Task :kugou:generateDebugResources
+> Task :kugou:packageDebugResources
+> Task :innertube:generateDebugRFile
+> Task :app:processGmsDudu7DebugNavigationResources
+> Task :lastfm:generateDebugResources
+> Task :lrclib:generateDebugResources
+> Task :lrclib:packageDebugResources
+> Task :lastfm:packageDebugResources
+> Task :kugou:parseDebugLocalResources
+> Task :lastfm:parseDebugLocalResources
+> Task :kugou:generateDebugRFile
+> Task :lrclib:parseDebugLocalResources
+> Task :paxsenix:generateDebugResources
+> Task :paxsenix:packageDebugResources
+> Task :lastfm:generateDebugRFile
+> Task :lrclib:generateDebugRFile
+> Task :shazamkit:generateDebugResources
+> Task :shazamkit:packageDebugResources
+> Task :paxsenix:parseDebugLocalResources
+> Task :shazamkit:parseDebugLocalResources
+> Task :paxsenix:generateDebugRFile
+> Task :shazamkit:generateDebugRFile
+> Task :betterlyrics:javaPreCompileDebug
+> Task :innertube:javaPreCompileDebug
+> Task :app:packageGmsDudu7DebugResources
+> Task :app:parseGmsDudu7DebugLocalResources
+> Task :app:generateGmsDudu7DebugRFile
+> Task :kugou:javaPreCompileDebug
+> Task :betterlyrics:compileDebugKotlin
+> Task :lastfm:compileDebugKotlin
+> Task :kugou:compileDebugKotlin
+> Task :betterlyrics:compileDebugJavaWithJavac NO-SOURCE
+> Task :kugou:compileDebugJavaWithJavac NO-SOURCE
+> Task :lastfm:javaPreCompileDebug
+> Task :lastfm:compileDebugJavaWithJavac NO-SOURCE
+> Task :lastfm:bundleLibCompileToJarDebug
+> Task :kugou:bundleLibCompileToJarDebug
+> Task :betterlyrics:bundleLibCompileToJarDebug
+> Task :lrclib:javaPreCompileDebug
+> Task :paxsenix:javaPreCompileDebug
+> Task :lrclib:compileDebugKotlin
+> Task :lrclib:compileDebugJavaWithJavac NO-SOURCE
+> Task :lrclib:bundleLibCompileToJarDebug
+> Task :shazamkit:javaPreCompileDebug
+> Task :app:javaPreCompileGmsDudu7Debug
+> Task :app:generateGmsDudu7DebugAssets UP-TO-DATE
+> Task :betterlyrics:generateDebugAssets UP-TO-DATE
+> Task :betterlyrics:mergeDebugAssets
+> Task :innertube:generateDebugAssets UP-TO-DATE
+> Task :innertube:mergeDebugAssets
+> Task :kugou:generateDebugAssets UP-TO-DATE
+> Task :kugou:mergeDebugAssets
+> Task :lastfm:generateDebugAssets UP-TO-DATE
+> Task :lastfm:mergeDebugAssets
+> Task :lrclib:generateDebugAssets UP-TO-DATE
+> Task :lrclib:mergeDebugAssets
+> Task :paxsenix:generateDebugAssets UP-TO-DATE
+> Task :paxsenix:mergeDebugAssets
+> Task :shazamkit:generateDebugAssets UP-TO-DATE
+> Task :shazamkit:mergeDebugAssets
+> Task :app:mergeGmsDudu7DebugAssets
+> Task :app:compressGmsDudu7DebugAssets
+> Task :paxsenix:compileDebugKotlin
+> Task :paxsenix:compileDebugJavaWithJavac NO-SOURCE
+> Task :paxsenix:bundleLibCompileToJarDebug
+> Task :shazamkit:compileDebugKotlin
+> Task :shazamkit:compileDebugJavaWithJavac NO-SOURCE
+> Task :shazamkit:bundleLibCompileToJarDebug
+> Task :app:checkGmsDudu7DebugDuplicateClasses
+> Task :app:generateGmsDudu7DebugGlobalSynthetics
+> Task :betterlyrics:processDebugJavaRes
+> Task :kugou:processDebugJavaRes
+> Task :lastfm:processDebugJavaRes
+> Task :lrclib:processDebugJavaRes
+> Task :paxsenix:processDebugJavaRes
+> Task :shazamkit:processDebugJavaRes
+> Task :kugou:bundleLibRuntimeToDirDebug
+> Task :app:desugarGmsDudu7DebugFileDependencies
+> Task :lrclib:bundleLibRuntimeToDirDebug
+> Task :app:l8DexDesugarLibGmsDudu7Debug
+> Task :lastfm:bundleLibRuntimeToDirDebug
+> Task :paxsenix:bundleLibRuntimeToDirDebug
+> Task :betterlyrics:bundleLibRuntimeToDirDebug
+> Task :innertube:compileDebugKotlin
+> Task :shazamkit:bundleLibRuntimeToDirDebug
+> Task :kugou:bundleLibRuntimeToJarDebug
+> Task :lrclib:bundleLibRuntimeToJarDebug
+> Task :lastfm:bundleLibRuntimeToJarDebug
+> Task :paxsenix:bundleLibRuntimeToJarDebug
+> Task :betterlyrics:bundleLibRuntimeToJarDebug
+> Task :shazamkit:bundleLibRuntimeToJarDebug
+> Task :betterlyrics:writeDebugAarMetadata
+> Task :innertube:writeDebugAarMetadata
+> Task :kugou:writeDebugAarMetadata
+> Task :lastfm:writeDebugAarMetadata
+> Task :lrclib:writeDebugAarMetadata
+> Task :paxsenix:writeDebugAarMetadata
+> Task :shazamkit:writeDebugAarMetadata
+> Task :app:checkGmsDudu7DebugAarMetadata
+> Task :app:compileGmsDudu7DebugNavigationResources
+> Task :app:createGmsDudu7DebugCompatibleScreenManifests
+> Task :app:extractDeepLinksGmsDudu7Debug
+> Task :betterlyrics:extractDeepLinksDebug
+> Task :betterlyrics:processDebugManifest
+> Task :innertube:extractDeepLinksDebug
+> Task :innertube:processDebugManifest
+> Task :kugou:extractDeepLinksDebug
+> Task :kugou:processDebugManifest
+> Task :lastfm:extractDeepLinksDebug
+> Task :lastfm:processDebugManifest
+> Task :lrclib:extractDeepLinksDebug
+> Task :lrclib:processDebugManifest
+> Task :paxsenix:extractDeepLinksDebug
+> Task :paxsenix:processDebugManifest
+> Task :shazamkit:extractDeepLinksDebug
+> Task :shazamkit:processDebugManifest
+> Task :app:processGmsDudu7DebugMainManifest
+> Task :app:processGmsDudu7DebugManifest
+> Task :app:processGmsDudu7DebugManifestForPackage
+> Task :betterlyrics:mapDebugSourceSetPaths
+> Task :betterlyrics:compileDebugLibraryResources
+> Task :innertube:mapDebugSourceSetPaths
+> Task :innertube:compileDebugLibraryResources
+> Task :kugou:mapDebugSourceSetPaths
+> Task :kugou:compileDebugLibraryResources
+> Task :lastfm:mapDebugSourceSetPaths
+> Task :lastfm:compileDebugLibraryResources
+> Task :lrclib:mapDebugSourceSetPaths
+> Task :lrclib:compileDebugLibraryResources
+> Task :paxsenix:mapDebugSourceSetPaths
+> Task :paxsenix:compileDebugLibraryResources
+> Task :shazamkit:mapDebugSourceSetPaths
+> Task :shazamkit:compileDebugLibraryResources
+> Task :app:mergeGmsDudu7DebugJniLibFolders
+> Task :betterlyrics:mergeDebugJniLibFolders
+> Task :betterlyrics:mergeDebugNativeLibs NO-SOURCE
+> Task :betterlyrics:copyDebugJniLibsProjectOnly
+> Task :innertube:mergeDebugJniLibFolders
+> Task :innertube:mergeDebugNativeLibs NO-SOURCE
+> Task :innertube:copyDebugJniLibsProjectOnly
+> Task :kugou:mergeDebugJniLibFolders
+> Task :kugou:mergeDebugNativeLibs NO-SOURCE
+> Task :kugou:copyDebugJniLibsProjectOnly
+> Task :lastfm:mergeDebugJniLibFolders
+> Task :lastfm:mergeDebugNativeLibs NO-SOURCE
+> Task :lastfm:copyDebugJniLibsProjectOnly
+> Task :lrclib:mergeDebugJniLibFolders
+> Task :lrclib:mergeDebugNativeLibs NO-SOURCE
+> Task :lrclib:copyDebugJniLibsProjectOnly
+> Task :paxsenix:mergeDebugJniLibFolders
+> Task :paxsenix:mergeDebugNativeLibs NO-SOURCE
+> Task :paxsenix:copyDebugJniLibsProjectOnly
+> Task :shazamkit:mergeDebugJniLibFolders
+> Task :shazamkit:mergeDebugNativeLibs NO-SOURCE
+> Task :shazamkit:copyDebugJniLibsProjectOnly
+> Task :app:mergeGmsDudu7DebugNativeLibs
+> Task :app:stripGmsDudu7DebugDebugSymbols
+> Task :app:validateSigningGmsDudu7Debug
+> Task :app:writeGmsDudu7DebugAppMetadata
+> Task :app:writeGmsDudu7DebugSigningConfigVersions
+> Task :app:mergeGmsDudu7DebugResources
+warn: removing resource com.metrolist.music.dudu7:string/discord_information without required default value.
+
+> Task :app:processGmsDudu7DebugResources
+> Task :app:mergeExtDexGmsDudu7Debug
+
+> Task :innertube:compileDebugKotlin
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/innertube/src/main/kotlin/com/metrolist/innertube/YouTube.kt:2551:103 Unnecessary safe call on a non-null receiver of type 'List<MusicCarouselShelfRenderer.Content>'.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/innertube/src/main/kotlin/com/metrolist/innertube/YouTube.kt:2578:109 Unnecessary safe call on a non-null receiver of type 'List<MusicShelfRenderer.Content>'.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/innertube/src/main/kotlin/com/metrolist/innertube/YouTube.kt:2600:131 Unnecessary safe call on a non-null receiver of type 'List<MusicCarouselShelfRenderer.Content>'.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/innertube/src/main/kotlin/com/metrolist/innertube/YouTube.kt:2679:38 Unnecessary safe call on a non-null receiver of type 'List<MusicCarouselShelfRenderer.Content>'.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/innertube/src/main/kotlin/com/metrolist/innertube/pages/ArtistItemsPage.kt:118:63 Unnecessary safe call on a non-null receiver of type 'Runs'.
+
+> Task :innertube:compileDebugJavaWithJavac NO-SOURCE
+> Task :innertube:processDebugJavaRes
+> Task :innertube:bundleLibRuntimeToJarDebug
+> Task :innertube:bundleLibCompileToJarDebug
+> Task :innertube:bundleLibRuntimeToDirDebug
+> Task :app:mergeLibDexGmsDudu7Debug
+> Task :app:kspGmsDudu7DebugKotlin
+> Task :app:compileGmsDudu7DebugKotlin
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt:138:17 'fun TabRow(selectedTabIndex: Int, modifier: Modifier = ..., containerColor: Color = ..., contentColor: Color = ..., indicator: ComposableFunction1<List<TabPosition>, Unit> = ..., divider: ComposableFunction0<Unit> = ..., tabs: ComposableFunction0<Unit>): Unit' is deprecated. Replaced with PrimaryTabRow and SecondaryTabRow.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleSettingsScreen.kt:141:5 'fun ListItem(headlineContent: ComposableFunction0<Unit>, modifier: Modifier = ..., overlineContent: ComposableFunction0<Unit>? = ..., supportingContent: ComposableFunction0<Unit>? = ..., leadingContent: ComposableFunction0<Unit>? = ..., trailingContent: ComposableFunction0<Unit>? = ..., colors: ListItemColors = ..., tonalElevation: Dp = ..., shadowElevation: Dp = ...): Unit' is deprecated. Use the overload where `headlineContent` is now a trailing `content` lambda.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/db/MusicDatabase.kt:204:19 'fun fallbackToDestructiveMigration(): RoomDatabase.Builder<InternalDatabase>' is deprecated. Replace by overloaded version with parameter to indicate if all tables should be dropped or not.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt:3450:15 Elvis operator (?:) always returns the left operand of non-nullable type 'Pair<String?, Boolean>'.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/component/BottomSheetMenu.kt:69:30 'fun rememberModalBottomSheetState(skipPartiallyExpanded: Boolean = ..., confirmValueChange: (SheetValue) -> Boolean = ...): SheetState' is deprecated. Use rememberBottomSheetState with Hidden initial value.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/component/BottomSheetMenu.kt:126:22 'fun rememberModalBottomSheetState(skipPartiallyExpanded: Boolean = ..., confirmValueChange: (SheetValue) -> Boolean = ...): SheetState' is deprecated. Use rememberBottomSheetState with Hidden initial value.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/component/BottomSheetPage.kt:62:22 'fun rememberModalBottomSheetState(skipPartiallyExpanded: Boolean = ..., confirmValueChange: (SheetValue) -> Boolean = ...): SheetState' is deprecated. Use rememberBottomSheetState with Hidden initial value.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/component/NewMenuComponents.kt:128:32 'fun ListItem(headlineContent: ComposableFunction0<Unit>, modifier: Modifier = ..., overlineContent: ComposableFunction0<Unit>? = ..., supportingContent: ComposableFunction0<Unit>? = ..., leadingContent: ComposableFunction0<Unit>? = ..., trailingContent: ComposableFunction0<Unit>? = ..., colors: ListItemColors = ..., tonalElevation: Dp = ..., shadowElevation: Dp = ...): Unit' is deprecated. Use the overload where `headlineContent` is now a trailing `content` lambda.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/component/Preference.kt:103:5 'fun PreferenceEntry(modifier: Modifier = ..., title: ComposableFunction0<Unit>, description: String? = ..., content: ComposableFunction0<Unit>? = ..., icon: ComposableFunction0<Unit>? = ..., trailingContent: ComposableFunction0<Unit>? = ..., onClick: (() -> Unit)? = ..., isEnabled: Boolean = ...): Unit' is deprecated. Use Material3SettingsGroup instead :).
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/menu/CustomThumbnailMenu.kt:41:13 'fun ListItem(headlineContent: ComposableFunction0<Unit>, modifier: Modifier = ..., overlineContent: ComposableFunction0<Unit>? = ..., supportingContent: ComposableFunction0<Unit>? = ..., leadingContent: ComposableFunction0<Unit>? = ..., trailingContent: ComposableFunction0<Unit>? = ..., colors: ListItemColors = ..., tonalElevation: Dp = ..., shadowElevation: Dp = ...): Unit' is deprecated. Use the overload where `headlineContent` is now a trailing `content` lambda.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/menu/CustomThumbnailMenu.kt:58:13 'fun ListItem(headlineContent: ComposableFunction0<Unit>, modifier: Modifier = ..., overlineContent: ComposableFunction0<Unit>? = ..., supportingContent: ComposableFunction0<Unit>? = ..., leadingContent: ComposableFunction0<Unit>? = ..., trailingContent: ComposableFunction0<Unit>? = ..., colors: ListItemColors = ..., tonalElevation: Dp = ..., shadowElevation: Dp = ...): Unit' is deprecated. Use the overload where `headlineContent` is now a trailing `content` lambda.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/menu/SongMenu.kt:262:17 'fun ListItem(headlineContent: ComposableFunction0<Unit>, modifier: Modifier = ..., overlineContent: ComposableFunction0<Unit>? = ..., supportingContent: ComposableFunction0<Unit>? = ..., leadingContent: ComposableFunction0<Unit>? = ..., trailingContent: ComposableFunction0<Unit>? = ..., colors: ListItemColors = ..., tonalElevation: Dp = ..., shadowElevation: Dp = ...): Unit' is deprecated. Use the overload where `headlineContent` is now a trailing `content` lambda.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubeAlbumMenu.kt:178:17 'fun ListItem(headlineContent: ComposableFunction0<Unit>, modifier: Modifier = ..., overlineContent: ComposableFunction0<Unit>? = ..., supportingContent: ComposableFunction0<Unit>? = ..., leadingContent: ComposableFunction0<Unit>? = ..., trailingContent: ComposableFunction0<Unit>? = ..., colors: ListItemColors = ..., tonalElevation: Dp = ..., shadowElevation: Dp = ...): Unit' is deprecated. Use the overload where `headlineContent` is now a trailing `content` lambda.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubePlaylistMenu.kt:351:17 'fun ListItem(headlineContent: ComposableFunction0<Unit>, modifier: Modifier = ..., overlineContent: ComposableFunction0<Unit>? = ..., supportingContent: ComposableFunction0<Unit>? = ..., leadingContent: ComposableFunction0<Unit>? = ..., trailingContent: ComposableFunction0<Unit>? = ..., colors: ListItemColors = ..., tonalElevation: Dp = ..., shadowElevation: Dp = ...): Unit' is deprecated. Use the overload where `headlineContent` is now a trailing `content` lambda.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubePlaylistMenu.kt:366:17 'fun ListItem(headlineContent: ComposableFunction0<Unit>, modifier: Modifier = ..., overlineContent: ComposableFunction0<Unit>? = ..., supportingContent: ComposableFunction0<Unit>? = ..., leadingContent: ComposableFunction0<Unit>? = ..., trailingContent: ComposableFunction0<Unit>? = ..., colors: ListItemColors = ..., tonalElevation: Dp = ..., shadowElevation: Dp = ...): Unit' is deprecated. Use the overload where `headlineContent` is now a trailing `content` lambda.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubeSongMenu.kt:188:5 'fun ListItem(headlineContent: ComposableFunction0<Unit>, modifier: Modifier = ..., overlineContent: ComposableFunction0<Unit>? = ..., supportingContent: ComposableFunction0<Unit>? = ..., leadingContent: ComposableFunction0<Unit>? = ..., trailingContent: ComposableFunction0<Unit>? = ..., colors: ListItemColors = ..., tonalElevation: Dp = ..., shadowElevation: Dp = ...): Unit' is deprecated. Use the overload where `headlineContent` is now a trailing `content` lambda.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:680:71 Elvis operator (?:) always returns the left operand of non-nullable type 'List<YTItem>'.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:739:79 Elvis operator (?:) always returns the left operand of non-nullable type 'List<YTItem>'.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/screens/equalizer/EqScreen.kt:318:5 'fun ListItem(headlineContent: ComposableFunction0<Unit>, modifier: Modifier = ..., overlineContent: ComposableFunction0<Unit>? = ..., supportingContent: ComposableFunction0<Unit>? = ..., leadingContent: ComposableFunction0<Unit>? = ..., trailingContent: ComposableFunction0<Unit>? = ..., colors: ListItemColors = ..., tonalElevation: Dp = ..., shadowElevation: Dp = ...): Unit' is deprecated. Use the overload where `headlineContent` is now a trailing `content` lambda.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/screens/equalizer/EqScreen.kt:346:5 'fun ListItem(headlineContent: ComposableFunction0<Unit>, modifier: Modifier = ..., overlineContent: ComposableFunction0<Unit>? = ..., supportingContent: ComposableFunction0<Unit>? = ..., leadingContent: ComposableFunction0<Unit>? = ..., trailingContent: ComposableFunction0<Unit>? = ..., colors: ListItemColors = ..., tonalElevation: Dp = ..., shadowElevation: Dp = ...): Unit' is deprecated. Use the overload where `headlineContent` is now a trailing `content` lambda.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibraryMixScreen.kt:303:21 'when' is exhaustive so 'else' is redundant here.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibraryMixScreen.kt:762:29 'when' is exhaustive so 'else' is redundant here.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibraryMixScreen.kt:1040:29 'when' is exhaustive so 'else' is redundant here.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AccountSettings.kt:383:13 'fun PreferenceEntry(modifier: Modifier = ..., title: ComposableFunction0<Unit>, description: String? = ..., content: ComposableFunction0<Unit>? = ..., icon: ComposableFunction0<Unit>? = ..., trailingContent: ComposableFunction0<Unit>? = ..., onClick: (() -> Unit)? = ..., isEnabled: Boolean = ...): Unit' is deprecated. Use Material3SettingsGroup instead :).
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AccountSettings.kt:397:13 'fun PreferenceEntry(modifier: Modifier = ..., title: ComposableFunction0<Unit>, description: String? = ..., content: ComposableFunction0<Unit>? = ..., icon: ComposableFunction0<Unit>? = ..., trailingContent: ComposableFunction0<Unit>? = ..., onClick: (() -> Unit)? = ..., isEnabled: Boolean = ...): Unit' is deprecated. Use Material3SettingsGroup instead :).
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AccountSettings.kt:426:21 'fun PreferenceEntry(modifier: Modifier = ..., title: ComposableFunction0<Unit>, description: String? = ..., content: ComposableFunction0<Unit>? = ..., icon: ComposableFunction0<Unit>? = ..., trailingContent: ComposableFunction0<Unit>? = ..., onClick: (() -> Unit)? = ..., isEnabled: Boolean = ...): Unit' is deprecated. Use Material3SettingsGroup instead :).
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/screens/settings/ChangelogScreen.kt:60:22 'fun rememberModalBottomSheetState(skipPartiallyExpanded: Boolean = ..., confirmValueChange: (SheetValue) -> Boolean = ...): SheetState' is deprecated. Use rememberBottomSheetState with Hidden initial value.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/utils/cipher/CipherWebView.kt:613:47 Unnecessary safe call on a non-null receiver of type 'FunctionNameExtractor.SigFunctionInfo'.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/utils/cipher/CipherWebView.kt:614:49 Unnecessary safe call on a non-null receiver of type 'FunctionNameExtractor.SigFunctionInfo'.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/utils/cipher/CipherWebView.kt:615:49 Unnecessary safe call on a non-null receiver of type 'FunctionNameExtractor.SigFunctionInfo'.
+w: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/utils/cipher/CipherWebView.kt:641:47 Unnecessary safe call on a non-null receiver of type 'FunctionNameExtractor.NFunctionInfo'.
+
+> Task :app:processGmsDudu7DebugJavaRes
+> Task :app:compileGmsDudu7DebugJavaWithJavac
+> Task :app:hiltCollectClassesGmsDudu7Debug
+> Task :app:mergeGmsDudu7DebugJavaResource
+> Task :app:hiltAggregateDepsGmsDudu7Debug
+> Task :app:hiltJavaCompileGmsDudu7Debug
+> Task :app:transformGmsDudu7DebugClassesWithAsm
+> Task :app:dexBuilderGmsDudu7Debug
+> Task :app:mergeProjectDexGmsDudu7Debug
+> Task :app:packageGmsDudu7Debug
+> Task :app:assembleGmsDudu7Debug
+> Task :app:createGmsDudu7DebugApkListingFileRedirect
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_3-1784720610062.json
+
+[Incubating] Problems report is available at: file:///home/runner/work/headunit_landscape/headunit_landscape/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 4m 15s
+187 actionable tasks: 187 executed
+Configuration cache entry stored.
