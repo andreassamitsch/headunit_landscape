@@ -28,15 +28,15 @@ jobs:
             local pattern="$2"
             shift 2
             echo "===== SEARCH: $label =====" >> "$OUT"
-            grep -RIn -B 45 -A 90 "$@" -e "$pattern" app/src 2>/dev/null >> "$OUT" || true
+            grep -RInE -B 45 -A 90 "$@" -e "$pattern" app/src 2>/dev/null >> "$OUT" || true
             echo >> "$OUT"
           }
 
-          capture_matches 'VehiclePlayerControls call sites' 'VehiclePlayerControls(' --include='*.kt'
-          capture_matches 'VehicleLandscapeLayout call sites' 'VehicleLandscapeLayout(' --include='*.kt'
+          capture_matches 'VehiclePlayerControls call sites' 'VehiclePlayerControls\(' --include='*.kt'
+          capture_matches 'VehicleLandscapeLayout call sites' 'VehicleLandscapeLayout\(' --include='*.kt'
           capture_matches 'Queue header English' 'Your Queue' --include='*.kt' --include='*.xml'
-          capture_matches 'Queue header resource' 'queue_title\|queue.*songs\|songs.*queue' --include='*.kt' --include='*.xml'
-          capture_matches 'Cast UI' 'CAST_AVAILABLE\|castButton\|CastButton\|R.drawable.cast\|R.drawable.google_cast' --include='*.kt'
+          capture_matches 'Queue header resource' 'queue_title|queue.*songs|songs.*queue' --include='*.kt' --include='*.xml'
+          capture_matches 'Cast UI' 'CAST_AVAILABLE|castButton|CastButton|R\.drawable\.(cast|google_cast)' --include='*.kt'
           capture_matches 'Shuffle state' 'shuffleModeEnabled' --include='*.kt'
           capture_matches 'Repeat state' 'repeatMode' --include='*.kt'
 
