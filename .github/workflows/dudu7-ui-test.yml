@@ -16,9 +16,9 @@ on:
         required: true
         default: "200"
       api_level:
-        description: Android emulator API level
+        description: Android emulator API level (Dudu7 uses Android 13)
         required: true
-        default: "34"
+        default: "33"
       test_url:
         description: YouTube Music URL opened during the smoke test
         required: false
@@ -45,8 +45,8 @@ jobs:
     timeout-minutes: 45
 
     env:
-      API_LEVEL: ${{ inputs.api_level || '34' }}
-      SYSTEM_TARGET: google_atd
+      API_LEVEL: ${{ inputs.api_level || '33' }}
+      SYSTEM_TARGET: google_apis
       DATA_PARTITION_SIZE: 1536M
       DUDU_WIDTH: ${{ inputs.width || '1280' }}
       DUDU_HEIGHT: ${{ inputs.height || '720' }}
