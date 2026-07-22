@@ -16,9 +16,9 @@ on:
         required: true
         default: "200"
       api_level:
-        description: Android API level (Dudu7 uses Android 13 / API 33)
+        description: Android emulator API level (34 is the stable CI default)
         required: true
-        default: "33"
+        default: "34"
       test_url:
         description: YouTube Music URL opened during the smoke test
         required: false
@@ -42,7 +42,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.head_commit.message, 'Run initial Dudu7 UI smoke test')
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     env:
       DUDU_WIDTH: ${{ inputs.width || '1280' }}
@@ -137,27 +137,25 @@ jobs:
       - name: Run Dudu7 emulator smoke test
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
-          api-level: ${{ inputs.api_level || '33' }}
+          api-level: ${{ inputs.api_level || '34' }}
           target: google_apis
           arch: x86_64
-          profile: pixel_2
           cores: 2
-          ram-size: 4096M
-          heap-size: 512M
-          disk-size: 6G
+          ram-size: 2048M
+          emulator-boot-timeout: 900
           disable-animations: true
           emulator-options: >-
-            -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-            -camera-back none -camera-front none -netdelay none -netspeed full
-          script: >-
-            APK_PATH=dist/Metrolist-Dudu7-emulator.apk
-            RESULTS_DIR=ui-test-results
-            DUDU_WIDTH="$DUDU_WIDTH"
-            DUDU_HEIGHT="$DUDU_HEIGHT"
-            DUDU_DENSITY="$DUDU_DENSITY"
-            TEST_URL="$TEST_URL"
-            PACKAGE_NAME="$PACKAGE_NAME"
-            ACTIVITY_NAME="$ACTIVITY_NAME"
+            -no-window -gpu swiftshader_indirect -no-snapshot-save -noaudio
+            -no-boot-anim -camera-back none -camera-front none
+          script: |
+            export APK_PATH="dist/Metrolist-Dudu7-emulator.apk"
+            export RESULTS_DIR="ui-test-results"
+            export DUDU_WIDTH="$DUDU_WIDTH"
+            export DUDU_HEIGHT="$DUDU_HEIGHT"
+            export DUDU_DENSITY="$DUDU_DENSITY"
+            export TEST_URL="$TEST_URL"
+            export PACKAGE_NAME="$PACKAGE_NAME"
+            export ACTIVITY_NAME="$ACTIVITY_NAME"
             scripts/dudu7_ui_smoke.sh
 
       - name: Publish test summary
