@@ -1,0 +1,300 @@
+2026-07-22T20:40:41.4349120Z   TEST_URL: https://music.youtube.com/watch?v=dQw4w9WgXcQ
+2026-07-22T20:40:41.4349569Z   PACKAGE_NAME: com.metrolist.music.dudu7.debug
+2026-07-22T20:40:41.4350016Z   ACTIVITY_NAME: com.metrolist.music.MainActivity
+2026-07-22T20:40:41.4350394Z   RESULTS_DIR: ui-test-results
+2026-07-22T20:40:41.4350761Z   APK_PATH: dist/Metrolist-Dudu7-WebRadio-emulator.apk
+2026-07-22T20:40:41.4351158Z   METROLIST_APP_NAME: Metrolist
+2026-07-22T20:40:41.4351772Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.11-10/x64
+2026-07-22T20:40:41.4352373Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.11-10/x64
+2026-07-22T20:40:41.4353109Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-07-22T20:40:41.4353488Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-07-22T20:40:41.4353844Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-07-22T20:40:41.4354206Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-07-22T20:40:41.4354739Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-07-22T20:40:41.4355323Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-07-22T20:40:41.4355722Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-07-22T20:40:41.4356058Z ##[endgroup]
+2026-07-22T20:40:42.1572295Z Stopping Daemon(s)
+2026-07-22T20:40:42.1572834Z 1 Daemon stopped
+2026-07-22T20:40:42.9493420Z Filesystem      Size  Used Avail Use% Mounted on
+2026-07-22T20:40:42.9494200Z /dev/root       146G   61G   86G  42% /
+2026-07-22T20:40:42.9494920Z tmpfs           7.9G  172K  7.9G   1% /dev/shm
+2026-07-22T20:40:42.9495695Z tmpfs           3.2G 1020K  3.2G   1% /run
+2026-07-22T20:40:42.9496442Z tmpfs           5.0M     0  5.0M   0% /run/lock
+2026-07-22T20:40:42.9497214Z efivarfs        128M   34K  128M   1% /sys/firmware/efi/efivars
+2026-07-22T20:40:42.9497904Z /dev/sda15      105M  6.1M   99M   6% /boot/efi
+2026-07-22T20:40:42.9498446Z tmpfs           1.6G   12K  1.6G   1% /run/user/1001
+2026-07-22T20:40:42.9529354Z ##[group]Run echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+2026-07-22T20:40:42.9529989Z [36;1mecho 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \[0m
+2026-07-22T20:40:42.9530479Z [36;1m  | sudo tee /etc/udev/rules.d/99-kvm4all.rules[0m
+2026-07-22T20:40:42.9530858Z [36;1msudo udevadm control --reload-rules[0m
+2026-07-22T20:40:42.9531209Z [36;1msudo udevadm trigger --name-match=kvm[0m
+2026-07-22T20:40:42.9602432Z shell: /usr/bin/bash -e {0}
+2026-07-22T20:40:42.9602902Z env:
+2026-07-22T20:40:42.9603413Z   API_LEVEL: 33
+2026-07-22T20:40:42.9619782Z   SYSTEM_TARGET: google_apis
+2026-07-22T20:40:42.9620262Z   DATA_PARTITION_SIZE: 1536M
+2026-07-22T20:40:42.9620694Z   DUDU_WIDTH: 1280
+2026-07-22T20:40:42.9621063Z   DUDU_HEIGHT: 720
+2026-07-22T20:40:42.9621770Z   DUDU_DENSITY: 200
+2026-07-22T20:40:42.9622304Z   TEST_URL: https://music.youtube.com/watch?v=dQw4w9WgXcQ
+2026-07-22T20:40:42.9622837Z   PACKAGE_NAME: com.metrolist.music.dudu7.debug
+2026-07-22T20:40:42.9623299Z   ACTIVITY_NAME: com.metrolist.music.MainActivity
+2026-07-22T20:40:42.9623667Z   RESULTS_DIR: ui-test-results
+2026-07-22T20:40:42.9624019Z   APK_PATH: dist/Metrolist-Dudu7-WebRadio-emulator.apk
+2026-07-22T20:40:42.9624400Z   METROLIST_APP_NAME: Metrolist
+2026-07-22T20:40:42.9624817Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.11-10/x64
+2026-07-22T20:40:42.9625384Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.11-10/x64
+2026-07-22T20:40:42.9625862Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-07-22T20:40:42.9626219Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-07-22T20:40:42.9626560Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-07-22T20:40:42.9626900Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-07-22T20:40:42.9627399Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-07-22T20:40:42.9627920Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-07-22T20:40:42.9628278Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-07-22T20:40:42.9628586Z ##[endgroup]
+2026-07-22T20:40:42.9804224Z KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"
+2026-07-22T20:40:43.0061349Z ##[group]Run mkdir -p "$RESULTS_DIR" radio-test-data
+2026-07-22T20:40:43.0062121Z [36;1mmkdir -p "$RESULTS_DIR" radio-test-data[0m
+2026-07-22T20:40:43.0062825Z [36;1mffmpeg -hide_banner -loglevel error -f lavfi -i 'sine=frequency=440:duration=4' -c:a libmp3lame -b:a 96k radio-test-data/station1.mp3[0m
+2026-07-22T20:40:43.0063787Z [36;1mffmpeg -hide_banner -loglevel error -f lavfi -i 'sine=frequency=660:duration=4' -c:a libmp3lame -b:a 96k radio-test-data/station2.mp3[0m
+2026-07-22T20:40:43.0064663Z [36;1mpython3 scripts/icy_test_server.py \[0m
+2026-07-22T20:40:43.0065036Z [36;1m  --audio1 radio-test-data/station1.mp3 \[0m
+2026-07-22T20:40:43.0065417Z [36;1m  --audio2 radio-test-data/station2.mp3 \[0m
+2026-07-22T20:40:43.0065770Z [36;1m  > "$RESULTS_DIR/icy-server.log" 2>&1 &[0m
+2026-07-22T20:40:43.0066120Z [36;1mecho $! > "$RESULTS_DIR/icy-server.pid"[0m
+2026-07-22T20:40:43.0066634Z [36;1mfor i in {1..20}; do curl -fsS http://127.0.0.1:8000/health && break; sleep 1; done[0m
+2026-07-22T20:40:43.0067116Z [36;1mcurl -fsS http://127.0.0.1:8000/health[0m
+2026-07-22T20:40:43.0067541Z [36;1mcp scripts/dudu7_webradio_smoke.sh scripts/dudu7_ui_smoke.sh[0m
+2026-07-22T20:40:43.0067963Z [36;1mchmod +x scripts/dudu7_ui_smoke.sh[0m
+2026-07-22T20:40:43.0068292Z [36;1mscripts/run_dudu7_emulator_ci.sh[0m
+2026-07-22T20:40:43.0138761Z shell: /usr/bin/bash -e {0}
+2026-07-22T20:40:43.0139047Z env:
+2026-07-22T20:40:43.0139265Z   API_LEVEL: 33
+2026-07-22T20:40:43.0139526Z   SYSTEM_TARGET: google_apis
+2026-07-22T20:40:43.0139814Z   DATA_PARTITION_SIZE: 1536M
+2026-07-22T20:40:43.0140078Z   DUDU_WIDTH: 1280
+2026-07-22T20:40:43.0140307Z   DUDU_HEIGHT: 720
+2026-07-22T20:40:43.0140530Z   DUDU_DENSITY: 200
+2026-07-22T20:40:43.0140843Z   TEST_URL: https://music.youtube.com/watch?v=dQw4w9WgXcQ
+2026-07-22T20:40:43.0141247Z   PACKAGE_NAME: com.metrolist.music.dudu7.debug
+2026-07-22T20:40:43.0141822Z   ACTIVITY_NAME: com.metrolist.music.MainActivity
+2026-07-22T20:40:43.0142189Z   RESULTS_DIR: ui-test-results
+2026-07-22T20:40:43.0142529Z   APK_PATH: dist/Metrolist-Dudu7-WebRadio-emulator.apk
+2026-07-22T20:40:43.0142887Z   METROLIST_APP_NAME: Metrolist
+2026-07-22T20:40:43.0143285Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.11-10/x64
+2026-07-22T20:40:43.0143821Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.11-10/x64
+2026-07-22T20:40:43.0144282Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-07-22T20:40:43.0144625Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-07-22T20:40:43.0144950Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-07-22T20:40:43.0145282Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-07-22T20:40:43.0145760Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-07-22T20:40:43.0146281Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-07-22T20:40:43.0146634Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-07-22T20:40:43.0146939Z ##[endgroup]
+2026-07-22T20:40:43.0251663Z /home/runner/work/_temp/d5994d66-1066-4765-b2e0-62d1ec3f3d90.sh: line 2: ffmpeg: command not found
+2026-07-22T20:40:43.0265587Z ##[error]Process completed with exit code 127.
+2026-07-22T20:40:43.0313847Z ##[group]Run if [[ -f ui-test-results/summary.md ]]; then
+2026-07-22T20:40:43.0314317Z [36;1mif [[ -f ui-test-results/summary.md ]]; then[0m
+2026-07-22T20:40:43.0314742Z [36;1m  cat ui-test-results/summary.md >> "$GITHUB_STEP_SUMMARY"[0m
+2026-07-22T20:40:43.0315112Z [36;1melse[0m
+2026-07-22T20:40:43.0315492Z [36;1m  echo 'WebRadio UI test did not produce a summary.' >> "$GITHUB_STEP_SUMMARY"[0m
+2026-07-22T20:40:43.0316117Z [36;1m  tail -n 100 ui-test-results/smoke-test.log 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || true[0m
+2026-07-22T20:40:43.0316582Z [36;1mfi[0m
+2026-07-22T20:40:43.0381651Z shell: /usr/bin/bash -e {0}
+2026-07-22T20:40:43.0381956Z env:
+2026-07-22T20:40:43.0382176Z   API_LEVEL: 33
+2026-07-22T20:40:43.0382427Z   SYSTEM_TARGET: google_apis
+2026-07-22T20:40:43.0382717Z   DATA_PARTITION_SIZE: 1536M
+2026-07-22T20:40:43.0382992Z   DUDU_WIDTH: 1280
+2026-07-22T20:40:43.0383228Z   DUDU_HEIGHT: 720
+2026-07-22T20:40:43.0383459Z   DUDU_DENSITY: 200
+2026-07-22T20:40:43.0383804Z   TEST_URL: https://music.youtube.com/watch?v=dQw4w9WgXcQ
+2026-07-22T20:40:43.0384235Z   PACKAGE_NAME: com.metrolist.music.dudu7.debug
+2026-07-22T20:40:43.0384636Z   ACTIVITY_NAME: com.metrolist.music.MainActivity
+2026-07-22T20:40:43.0384986Z   RESULTS_DIR: ui-test-results
+2026-07-22T20:40:43.0385328Z   APK_PATH: dist/Metrolist-Dudu7-WebRadio-emulator.apk
+2026-07-22T20:40:43.0385893Z   METROLIST_APP_NAME: Metrolist
+2026-07-22T20:40:43.0386295Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.11-10/x64
+2026-07-22T20:40:43.0386838Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.11-10/x64
+2026-07-22T20:40:43.0387297Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-07-22T20:40:43.0387639Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-07-22T20:40:43.0387967Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-07-22T20:40:43.0388296Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-07-22T20:40:43.0388778Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-07-22T20:40:43.0389301Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-07-22T20:40:43.0389646Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-07-22T20:40:43.0389940Z ##[endgroup]
+2026-07-22T20:40:43.0582343Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-07-22T20:40:43.0583697Z ##[group]Run actions/upload-artifact@v4
+2026-07-22T20:40:43.0584000Z with:
+2026-07-22T20:40:43.0584253Z   name: dudu7-webradio-ui-test-29955770799
+2026-07-22T20:40:43.0584574Z   path: ui-test-results/
+2026-07-22T20:40:43.0584839Z   if-no-files-found: error
+2026-07-22T20:40:43.0585096Z   retention-days: 7
+2026-07-22T20:40:43.0585340Z   compression-level: 6
+2026-07-22T20:40:43.0585579Z   overwrite: false
+2026-07-22T20:40:43.0585824Z   include-hidden-files: false
+2026-07-22T20:40:43.0586082Z env:
+2026-07-22T20:40:43.0586282Z   API_LEVEL: 33
+2026-07-22T20:40:43.0586515Z   SYSTEM_TARGET: google_apis
+2026-07-22T20:40:43.0586813Z   DATA_PARTITION_SIZE: 1536M
+2026-07-22T20:40:43.0587077Z   DUDU_WIDTH: 1280
+2026-07-22T20:40:43.0587303Z   DUDU_HEIGHT: 720
+2026-07-22T20:40:43.0587528Z   DUDU_DENSITY: 200
+2026-07-22T20:40:43.0587834Z   TEST_URL: https://music.youtube.com/watch?v=dQw4w9WgXcQ
+2026-07-22T20:40:43.0588249Z   PACKAGE_NAME: com.metrolist.music.dudu7.debug
+2026-07-22T20:40:43.0588629Z   ACTIVITY_NAME: com.metrolist.music.MainActivity
+2026-07-22T20:40:43.0588968Z   RESULTS_DIR: ui-test-results
+2026-07-22T20:40:43.0589302Z   APK_PATH: dist/Metrolist-Dudu7-WebRadio-emulator.apk
+2026-07-22T20:40:43.0589652Z   METROLIST_APP_NAME: Metrolist
+2026-07-22T20:40:43.0590042Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.11-10/x64
+2026-07-22T20:40:43.0590570Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.11-10/x64
+2026-07-22T20:40:43.0591032Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-07-22T20:40:43.0591569Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-07-22T20:40:43.0591905Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-07-22T20:40:43.0592230Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-07-22T20:40:43.0592703Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-07-22T20:40:43.0593208Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-07-22T20:40:43.0593552Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-07-22T20:40:43.0593848Z ##[endgroup]
+2026-07-22T20:40:43.2349234Z (node:2974) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-07-22T20:40:43.2350170Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-07-22T20:40:43.2432040Z ##[error]No files were found with the provided path: ui-test-results/. No artifacts will be uploaded.
+2026-07-22T20:40:43.2705527Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-07-22T20:40:43.2707587Z Post job cleanup.
+2026-07-22T20:40:43.5248120Z In post-action step
+2026-07-22T20:40:43.5262721Z ##[group]Stopping Gradle daemons
+2026-07-22T20:40:43.5263894Z Stopping Gradle daemons for /home/runner/.gradle/wrapper/dists/gradle-9.6.1-bin/4ticwg1pgcbps2hj28r8so764/gradle-9.6.1
+2026-07-22T20:40:43.5282328Z [command]/home/runner/.gradle/wrapper/dists/gradle-9.6.1-bin/4ticwg1pgcbps2hj28r8so764/gradle-9.6.1/bin/gradle --stop
+2026-07-22T20:40:44.2920736Z No Gradle daemons are running.
+2026-07-22T20:40:44.3022126Z ##[endgroup]
+2026-07-22T20:40:44.3053754Z ##[group]Provision Gradle >= 9.6.1
+2026-07-22T20:40:47.0203579Z Gradle version 9.6.1 is available at /usr/bin/gradle and >= 9.6.1. Not installing.
+2026-07-22T20:40:47.0204558Z ##[endgroup]
+2026-07-22T20:40:47.0206976Z ##[group]Executing Gradle to clean up caches
+2026-07-22T20:40:47.0207646Z Cleaning up caches last used before 1784752544889
+2026-07-22T20:40:47.0210652Z [command]/usr/bin/gradle -g /home/runner/.gradle -I init.gradle --info --no-daemon --no-scan --build-cache -DGITHUB_DEPENDENCY_GRAPH_ENABLED=false -DGRADLE_ACTIONS_SKIP_BUILD_RESULT_CAPTURE=true noop
+2026-07-22T20:40:47.4519003Z Initialized native services in: /home/runner/.gradle/native
+2026-07-22T20:40:47.4544734Z Initialized jansi services in: /home/runner/.gradle/native
+2026-07-22T20:40:47.6887646Z The current JVM process isn't compatible with build requirement. The maximum heap size is insufficient.
+2026-07-22T20:40:47.6888369Z 
+2026-07-22T20:40:48.0906303Z To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+2026-07-22T20:40:48.0915304Z Starting process 'Gradle build daemon'. Working directory: /home/runner/.gradle/daemon/9.6.1 Command: /usr/lib/jvm/temurin-21-jdk-amd64/bin/java --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED --add-opens=java.base/java.nio.charset=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.xml/javax.xml.namespace=ALL-UNNAMED --add-opens=java.base/java.time=ALL-UNNAMED -XX:MaxMetaspaceSize=384m -XX:+HeapDumpOnOutOfMemoryError -Xms256m -Xmx512m -Dfile.encoding=UTF-8 -Duser.country -Duser.language=en -Duser.variant -cp /usr/share/gradle-9.6.1/lib/gradle-daemon-main-9.6.1.jar -javaagent:/usr/share/gradle-9.6.1/lib/agents/gradle-instrumentation-agent-9.6.1.jar org.gradle.launcher.daemon.bootstrap.GradleDaemon 9.6.1
+2026-07-22T20:40:48.0920125Z Successfully started process 'Gradle build daemon'
+2026-07-22T20:40:52.6884168Z An attempt to start the daemon took 4.654 secs.
+2026-07-22T20:40:52.7884767Z The client will now receive all logging from the daemon (pid: 3106). The daemon log file: /home/runner/.gradle/daemon/9.6.1/daemon-3106.out.log
+2026-07-22T20:40:52.7889930Z Daemon will be stopped at the end of the build 
+2026-07-22T20:40:53.7884369Z Using 4 worker leases.
+2026-07-22T20:40:53.8885733Z Operational build model parameters: {cachingModelBuilding=false, configurationCache=false, configurationCacheDisabledReason=null, configurationCacheParallelLoad=false, configurationCacheParallelStore=false, configureOnDemand=false, invalidateCoupledProjects=false, isolatedProjects=false, isolatedProjectsDiagnostics=false, modelAsProjectDependency=false, modelBuilding=false, parallelModelBuilding=false, parallelProjectConfiguration=false, parallelProjectExecution=false, resilientModelBuilding=false, vintage=true}
+2026-07-22T20:40:54.5884775Z Received JVM installation metadata from '/usr/lib/jvm/temurin-21-jdk-amd64': {JAVA_HOME=/usr/lib/jvm/temurin-21-jdk-amd64, JAVA_VERSION=21.0.11, JAVA_VENDOR=Eclipse Adoptium, RUNTIME_NAME=OpenJDK Runtime Environment, RUNTIME_VERSION=21.0.11+10-LTS, VM_NAME=OpenJDK 64-Bit Server VM, VM_VERSION=21.0.11+10-LTS, VM_VENDOR=Eclipse Adoptium, OS_ARCH=amd64}
+2026-07-22T20:40:55.0882549Z Watching the file system is configured to be enabled if available
+2026-07-22T20:40:55.0883797Z Now considering [/home/runner/work/_temp/dummy-cleanup-project] as hierarchies to watch
+2026-07-22T20:40:55.0884532Z File system watching is active
+2026-07-22T20:40:55.7882643Z Caching disabled for Groovy DSL script compilation (cp_init) because:
+2026-07-22T20:40:55.7883354Z   Build cache is disabled
+2026-07-22T20:40:55.7883691Z   Not worth caching.
+2026-07-22T20:40:55.8882802Z Compiling initialization script '/home/runner/work/_temp/dummy-cleanup-project/init.gradle' using SubsetScriptTransformer.
+2026-07-22T20:40:57.2892974Z Caching disabled for Groovy DSL script compilation (init) because:
+2026-07-22T20:40:57.2894037Z   Build cache is disabled
+2026-07-22T20:40:57.2894892Z   Not worth caching.
+2026-07-22T20:40:57.2896204Z Compiling initialization script '/home/runner/work/_temp/dummy-cleanup-project/init.gradle' using BuildScriptTransformer.
+2026-07-22T20:40:58.0883362Z gradle/actions: Not capturing build results
+2026-07-22T20:40:58.2883056Z Starting Build
+2026-07-22T20:40:58.3885339Z Settings evaluated using settings file '/home/runner/work/_temp/dummy-cleanup-project/settings.gradle'.
+2026-07-22T20:40:58.3886497Z Using local directory build cache for the root build (location = /home/runner/.gradle/caches/build-cache-1, remove unused entries = older than 2026-07-22 20:35:44 UTC).
+2026-07-22T20:40:58.5885683Z Projects loaded. Root project using build file '/home/runner/work/_temp/dummy-cleanup-project/build.gradle'.
+2026-07-22T20:40:58.5887251Z Included projects: [root project 'dummy-cleanup-project']
+2026-07-22T20:40:58.8894270Z 
+2026-07-22T20:40:58.8912955Z > Configure project :
+2026-07-22T20:40:58.8914252Z Evaluating root project 'dummy-cleanup-project' using build file '/home/runner/work/_temp/dummy-cleanup-project/build.gradle'.
+2026-07-22T20:40:58.8915620Z All projects evaluated.
+2026-07-22T20:40:58.8916379Z Task name matched 'noop'
+2026-07-22T20:40:58.8917127Z Selected primary task 'noop' from project :
+2026-07-22T20:40:58.8917899Z Tasks to be executed: [task ':noop']
+2026-07-22T20:40:58.8918602Z Tasks that were excluded: []
+2026-07-22T20:40:58.8919475Z Resolve mutations for :noop (Thread[#51,Execution worker,5,main]) started.
+2026-07-22T20:40:58.8920503Z :noop (Thread[#51,Execution worker,5,main]) started.
+2026-07-22T20:40:58.9890858Z 
+2026-07-22T20:40:58.9904797Z > Task :noop UP-TO-DATE
+2026-07-22T20:40:58.9909979Z Skipping task ':noop' as it has no actions.
+2026-07-22T20:40:58.9910640Z 
+2026-07-22T20:40:58.9911011Z BUILD SUCCESSFUL in 11s
+2026-07-22T20:40:58.9912592Z Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.6.1/userguide/configuration_cache_enabling.html
+2026-07-22T20:40:58.9914449Z Build cache (/home/runner/.gradle/caches/build-cache-1) removing files not accessed on or after Wed Jul 22 20:35:44 UTC 2026.
+2026-07-22T20:40:58.9916030Z Build cache (/home/runner/.gradle/caches/build-cache-1) cleanup deleted 0 files/directories.
+2026-07-22T20:40:58.9917491Z Build cache (/home/runner/.gradle/caches/build-cache-1) cleaned up in 0.003 secs.
+2026-07-22T20:40:58.9940470Z jars (/home/runner/.gradle/caches/jars-9) cleanup deleted 0 files/directories.
+2026-07-22T20:40:58.9942332Z jars (/home/runner/.gradle/caches/jars-9) removing files not accessed on or after Wed Jul 22 20:35:44 UTC 2026.
+2026-07-22T20:40:59.0922794Z jars (/home/runner/.gradle/caches/jars-9) cleanup deleted 1 files/directories.
+2026-07-22T20:40:59.0987428Z jars (/home/runner/.gradle/caches/jars-9) cleaned up in 0.01 secs.
+2026-07-22T20:40:59.1010468Z Artifact transforms cache removing files not accessed on or after Wed Jul 22 20:35:44 UTC 2026.
+2026-07-22T20:40:59.4912760Z Artifact transforms cache cleanup deleted 0 files/directories.
+2026-07-22T20:40:59.4932842Z Artifact transforms cache cleaned up in 0.458 secs.
+2026-07-22T20:40:59.4962566Z groovy-dsl removing files not accessed on or after Wed Jul 22 20:35:44 UTC 2026.
+2026-07-22T20:40:59.4964520Z groovy-dsl cleanup deleted 0 files/directories.
+2026-07-22T20:40:59.5019700Z groovy-dsl cleaned up in 0.003 secs.
+2026-07-22T20:40:59.5020755Z dependencies-accessors removing files not accessed on or after Wed Jul 22 20:35:44 UTC 2026.
+2026-07-22T20:40:59.5052177Z dependencies-accessors cleanup deleted 0 files/directories.
+2026-07-22T20:40:59.5053367Z dependencies-accessors cleaned up in 0.0 secs.
+2026-07-22T20:40:59.5086044Z artifact cache (/home/runner/.gradle/caches/modules-2) cleanup deleted 0 files/directories.
+2026-07-22T20:40:59.5112776Z artifact cache (/home/runner/.gradle/caches/modules-2) [subdir: /home/runner/.gradle/caches/modules-2/resources-2.1] cleanup deleted 0 files/directories.
+2026-07-22T20:40:59.5143045Z artifact cache (/home/runner/.gradle/caches/modules-2) [subdir: /home/runner/.gradle/caches/modules-2/resources-2.1] removing files not accessed on or after Wed Jul 22 20:35:44 UTC 2026.
+2026-07-22T20:40:59.5172697Z artifact cache (/home/runner/.gradle/caches/modules-2) [subdir: /home/runner/.gradle/caches/modules-2/resources-2.1] cleanup deleted 0 files/directories.
+2026-07-22T20:40:59.5177207Z artifact cache (/home/runner/.gradle/caches/modules-2) [subdir: /home/runner/.gradle/caches/modules-2/files-2.1] cleanup deleted 0 files/directories.
+2026-07-22T20:40:59.5203034Z artifact cache (/home/runner/.gradle/caches/modules-2) [subdir: /home/runner/.gradle/caches/modules-2/files-2.1] removing files not accessed on or after Wed Jul 22 20:35:44 UTC 2026.
+2026-07-22T20:40:59.5385589Z artifact cache (/home/runner/.gradle/caches/modules-2) [subdir: /home/runner/.gradle/caches/modules-2/files-2.1] cleanup deleted 0 files/directories.
+2026-07-22T20:40:59.5389815Z artifact cache (/home/runner/.gradle/caches/modules-2) [subdir: /home/runner/.gradle/caches/modules-2/metadata-2.107] cleanup deleted 0 files/directories.
+2026-07-22T20:40:59.5391921Z artifact cache (/home/runner/.gradle/caches/modules-2) cleanup deleted 0 files/directories.
+2026-07-22T20:40:59.5393228Z artifact cache (/home/runner/.gradle/caches/modules-2) cleaned up in 0.064 secs.
+2026-07-22T20:40:59.6288108Z ##[endgroup]
+2026-07-22T20:40:59.6288851Z ##[group]Caching Gradle state
+2026-07-22T20:40:59.6382259Z Not saving configuration-cache state, as no encryption key was provided
+2026-07-22T20:40:59.9987657Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/headunit_landscape/headunit_landscape --files-from manifest.txt --use-compress-program zstdmt
+2026-07-22T20:41:00.0655353Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/headunit_landscape/headunit_landscape --files-from manifest.txt --use-compress-program zstdmt
+2026-07-22T20:41:00.1015868Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/headunit_landscape/headunit_landscape --files-from manifest.txt --use-compress-program zstdmt
+2026-07-22T20:41:00.1689476Z Sent 64603 of 64603 (100.0%), 0.7 MBs/sec
+2026-07-22T20:41:00.2766962Z Saved cache entry with key gradle-instrumented-jars-v1-b91250bd86705a8ea89cf8283c19d91e from /home/runner/.gradle/caches/jars-*/*/ in 295ms
+2026-07-22T20:41:00.2877852Z Sent 114037 of 114037 (100.0%), 1.0 MBs/sec
+2026-07-22T20:41:00.3007216Z Sent 200236 of 200236 (100.0%), 2.1 MBs/sec
+2026-07-22T20:41:00.3767674Z Saved cache entry with key gradle-groovy-dsl-v1-c5e67f69e1db1ed2419e2d80ffa93cee from /home/runner/.gradle/caches/*/groovy-dsl/*/ in 336ms
+2026-07-22T20:41:00.4184699Z Saved cache entry with key gradle-kotlin-dsl-v1-125fe838460074454df774ddefc9fef9 from /home/runner/.gradle/caches/*/kotlin-dsl/accessors/*/,/home/runner/.gradle/caches/*/kotlin-dsl/scripts/*/ in 415ms
+2026-07-22T20:41:00.5435304Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/headunit_landscape/headunit_landscape --files-from manifest.txt --use-compress-program zstdmt
+2026-07-22T20:41:01.7894627Z Failed to save cache entry with path '/home/runner/.gradle/caches/modules-*/files-*/*/*/*/*' and key: gradle-dependencies-v1-8c9099ec6713bd938e882fcf9f57930d: ReserveCacheError: Unable to reserve cache with key gradle-dependencies-v1-8c9099ec6713bd938e882fcf9f57930d, another job may be creating this cache.
+2026-07-22T20:41:02.8955602Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/headunit_landscape/headunit_landscape --files-from manifest.txt --use-compress-program zstdmt
+2026-07-22T20:41:06.2444273Z Sent 67108864 of 195210442 (34.4%), 64.0 MBs/sec
+2026-07-22T20:41:06.4886275Z Sent 195210442 of 195210442 (100.0%), 149.7 MBs/sec
+2026-07-22T20:41:06.6180479Z Saved cache entry with key gradle-transforms-v1-04b29f86142826f4cd6920c44f3d3d6a from /home/runner/.gradle/caches/transforms-4/*/,/home/runner/.gradle/caches/*/transforms/*/ in 5058ms
+2026-07-22T20:41:07.9786567Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/headunit_landscape/headunit_landscape --files-from manifest.txt --use-compress-program zstdmt
+2026-07-22T20:41:08.4382516Z Sent 7913483 of 7913483 (100.0%), 40.1 MBs/sec
+2026-07-22T20:41:08.5340029Z Saved cache entry with key gradle-home-v1|Linux-X64|ui-test[5f5c3575a2921a1f33eca019c500219e]-a902ebf82dc58b11e048b7f2d63b5bd98ea518da from /home/runner/.gradle/caches,/home/runner/.gradle/notifications,/home/runner/.gradle/.setup-gradle in 568ms
+2026-07-22T20:41:08.5341976Z ##[endgroup]
+2026-07-22T20:41:08.5348562Z Generating Job Summary
+2026-07-22T20:41:08.5362925Z Completed post-action step
+2026-07-22T20:41:08.5594546Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-07-22T20:41:08.5595863Z Post job cleanup.
+2026-07-22T20:41:08.6955234Z (node:3224) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-07-22T20:41:08.6956395Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-07-22T20:41:08.7209948Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-07-22T20:41:08.7212587Z Post job cleanup.
+2026-07-22T20:41:08.8203894Z [command]/usr/bin/git version
+2026-07-22T20:41:08.8251055Z git version 2.54.0
+2026-07-22T20:41:08.8297339Z Temporarily overriding HOME='/home/runner/work/_temp/87622a20-0608-4535-adae-07ea5af1d8f3' before making global git config changes
+2026-07-22T20:41:08.8298778Z Adding repository directory to the temporary git global config as a safe directory
+2026-07-22T20:41:08.8303581Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/headunit_landscape/headunit_landscape
+2026-07-22T20:41:08.8345106Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-07-22T20:41:08.8383142Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-07-22T20:41:08.8657298Z Entering 'metroproto'
+2026-07-22T20:41:08.8726499Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-07-22T20:41:08.8752745Z http.https://github.com/.extraheader
+2026-07-22T20:41:08.8765238Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-07-22T20:41:08.8805832Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-07-22T20:41:08.9092763Z Entering 'metroproto'
+2026-07-22T20:41:08.9098687Z http.https://github.com/.extraheader
+2026-07-22T20:41:08.9155332Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-07-22T20:41:08.9209892Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-07-22T20:41:08.9467878Z Entering 'metroproto'
+2026-07-22T20:41:08.9488649Z file:/home/runner/work/headunit_landscape/headunit_landscape/.git/modules/metroproto/config	remote.origin.url
+2026-07-22T20:41:08.9524721Z [command]/usr/bin/git config --file /home/runner/work/headunit_landscape/headunit_landscape/.git/modules/metroproto/config --name-only --get-regexp ^includeIf\.gitdir:
+2026-07-22T20:41:08.9706059Z Cleaning up orphan processes
+2026-07-22T20:41:08.9997367Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-java@v4, actions/upload-artifact@v4, gradle/actions/setup-gradle@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
