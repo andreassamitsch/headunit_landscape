@@ -1,6 +1,6 @@
 name: Dudu7 UI Smoke Test
 
-# Final buffered queue-return validation; removed after the successful run.
+# Final direct-callback validation; removed after the successful run.
 on:
   workflow_dispatch:
     inputs:
