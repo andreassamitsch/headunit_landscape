@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -121,20 +122,26 @@ fun VehicleLandscapeLayout(
         paneNavController.popBackStack()
     }
 
-    // React only to an explicit title/playlist selection made by the user.
-    // Automatic next-track transitions do not emit this signal and therefore
-    // never interrupt browsing in the other tabs.
-    LaunchedEffect(playerConnection, paneNavController) {
-        playerConnection?.userSongSelections?.collect {
+    // User selections happen on the main UI thread. Use a direct callback so
+    // the right pane returns immediately and no event can be dropped or consumed
+    // by a stale collector during service/player recomposition.
+    DisposableEffect(playerConnection, paneNavController) {
+        val activeConnection = playerConnection
+        val returnToQueue: () -> Unit = {
             if (paneNavController.currentDestination?.route != VEHICLE_QUEUE_ROUTE) {
                 selectedTab = VehicleRightPaneTab.QUEUE
-                paneNavController.navigate(VEHICLE_QUEUE_ROUTE) {
-                    popUpTo(VEHICLE_QUEUE_ROUTE) {
-                        inclusive = false
-                        saveState = true
+                val popped = paneNavController.popBackStack(VEHICLE_QUEUE_ROUTE, inclusive = false)
+                if (!popped) {
+                    paneNavController.navigate(VEHICLE_QUEUE_ROUTE) {
+                        launchSingleTop = true
                     }
-                    launchSingleTop = true
                 }
+            }
+        }
+        activeConnection?.onUserSongSelection = returnToQueue
+        onDispose {
+            if (activeConnection?.onUserSongSelection === returnToQueue) {
+                activeConnection.onUserSongSelection = null
             }
         }
     }
