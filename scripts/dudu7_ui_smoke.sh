@@ -82,13 +82,19 @@ import xml.etree.ElementTree as ET
 xml_path, *labels = sys.argv[1:]
 labels = {label.casefold() for label in labels}
 root = ET.parse(xml_path).getroot()
+parent = {child: node for node in root.iter() for child in node}
 for node in root.iter("node"):
     values = {
         node.attrib.get("text", "").strip().casefold(),
         node.attrib.get("content-desc", "").strip().casefold(),
     }
-    if values & labels and node.attrib.get("selected") == "true":
-        raise SystemExit(0)
+    if not values & labels:
+        continue
+    current = node
+    while current is not None:
+        if current.attrib.get("selected") == "true":
+            raise SystemExit(0)
+        current = parent.get(current)
 raise SystemExit(1)
 PY_SELECTED
     local status=$?
@@ -114,6 +120,7 @@ minimum_left = int(width) // 2
 exact = [value[1:].casefold() for value in raw_needles if value.startswith("=")]
 partial = [value.casefold() for value in raw_needles if not value.startswith("=")]
 root = ET.parse(xml_path).getroot()
+parent = {child: node for node in root.iter() for child in node}
 for node in root.iter("node"):
     values = [
         node.attrib.get("text", "").strip().casefold(),
@@ -124,14 +131,24 @@ for node in root.iter("node"):
         haystack and any(needle in haystack for needle in partial)
     ):
         continue
-    match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds", ""))
-    if not match:
-        continue
-    left, top, right, bottom = map(int, match.groups())
-    if left < minimum_left or right <= left or bottom <= top:
-        continue
-    print(f"{(left + right) // 2} {(top + bottom) // 2}")
-    raise SystemExit(0)
+
+    current = node
+    fallback = None
+    while current is not None:
+        match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", current.attrib.get("bounds", ""))
+        if match:
+            left, top, right, bottom = map(int, match.groups())
+            if left >= minimum_left and right > left and bottom > top:
+                fallback = (left, top, right, bottom)
+                if current.attrib.get("clickable") == "true":
+                    print(f"{(left + right) // 2} {(top + bottom) // 2}")
+                    raise SystemExit(0)
+        current = parent.get(current)
+
+    if fallback is not None:
+        left, top, right, bottom = fallback
+        print(f"{(left + right) // 2} {(top + bottom) // 2}")
+        raise SystemExit(0)
 raise SystemExit(1)
 PY_RIGHT
 ) || return 1

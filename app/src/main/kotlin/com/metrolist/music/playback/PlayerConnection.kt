@@ -36,9 +36,9 @@ import com.metrolist.music.utils.get
 import com.metrolist.music.utils.reportException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
@@ -203,11 +203,11 @@ class PlayerConnection(
     var onSkipPrevious: (() -> Unit)? = null
     var onSkipNext: (() -> Unit)? = null
 
-    private val _userSongSelections = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    val userSongSelections = _userSongSelections.asSharedFlow()
+    private val userSongSelectionChannel = Channel<Unit>(capacity = Channel.BUFFERED)
+    val userSongSelections = userSongSelectionChannel.receiveAsFlow()
 
     fun notifyUserSongSelection() {
-        _userSongSelections.tryEmit(Unit)
+        userSongSelectionChannel.trySend(Unit)
     }
 
     private var attachedPlayer: Player? = null

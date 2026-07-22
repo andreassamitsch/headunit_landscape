@@ -105,6 +105,11 @@ checks = {
         "database.withTransaction",
         "incrementTotalPlayTime(mediaItem.mediaId, playbackStats.totalPlayTimeMs)",
     ),
+    "app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt": (
+        "Channel.BUFFERED",
+        "userSongSelectionChannel.receiveAsFlow()",
+        "userSongSelectionChannel.trySend(Unit)",
+    ),
     "app/src/main/kotlin/com/metrolist/music/utils/cipher/PlayerConfigStore.kt": (
         "scheduleStartupRefresh",
         "refreshAfterStreamRejection",
