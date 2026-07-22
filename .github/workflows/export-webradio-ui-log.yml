@@ -23,12 +23,12 @@ jobs:
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/jobs/89044324299/logs" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/jobs/89049720846/logs" \
             -o /tmp/job.log
           mkdir -p _assistant
-          tail -n 300 /tmp/job.log > _assistant/webradio_ui_failure.txt
+          tail -n 300 /tmp/job.log > _assistant/icy_metadata_build_failure.txt
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -f _assistant/webradio_ui_failure.txt
-          git commit -m 'Record WebRadio UI failure details [skip ci]'
+          git add -f _assistant/icy_metadata_build_failure.txt
+          git commit -m 'Record ICY metadata build failure details [skip ci]'
           git push
