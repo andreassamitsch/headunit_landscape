@@ -77,6 +77,8 @@ checks = {
         "HOME(\"Startseite\"",
         "ScrollableTabRow(",
         "embeddedInPlayer = true",
+        "MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED",
+        "selectedTab = VehicleRightPaneTab.QUEUE",
     ),
     "app/src/main/kotlin/com/metrolist/music/ui/component/BottomSheet.kt": (
         "if (!isExpandable || !state.isCollapsed)",
@@ -99,10 +101,6 @@ checks = {
         "activeHistoryMonitorJob",
         "Recorded active history item",
         "incrementTotalPlayTime(mediaItem.mediaId, playbackStats.totalPlayTimeMs)",
-    ),
-    "app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt": (
-        "MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED",
-        "selectedTab = VehicleRightPaneTab.QUEUE",
     ),
     "app/src/main/kotlin/com/metrolist/music/utils/cipher/PlayerConfigStore.kt": (
         "scheduleStartupRefresh",
