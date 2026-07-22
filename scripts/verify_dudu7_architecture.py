@@ -2,6 +2,8 @@
 """Fast structural checks for the maintainable Dudu7 overlay."""
 from pathlib import Path
 
+# Keep the live-history transaction and explicit user-selection queue return
+# protected by the lightweight Dudu7 architecture check.
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = (
     "VehicleVariantConfig.kt",
