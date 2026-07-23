@@ -849,13 +849,13 @@ tap_tab "WebRadio" "=WebRadio"
 tap_text "favorite two after YouTube" 1 "=Test Radio Two"
 sleep 10
 assert_text "radio after YouTube title" 0 "=Test Track Two"
-assert_text "radio after YouTube live" 0 "=LIVE"
+assert_text "radio after YouTube live" 0 "LIVE"
 
 tap_tab "WebRadio" "=WebRadio"
 tap_text "restart same favorite two" 1 "=Test Radio Two"
 sleep 10
 assert_text "same favorite restarts" 0 "=Test Track Two"
-assert_text "same favorite remains live" 0 "=LIVE"
+assert_text "same favorite remains live" 0 "LIVE"
 
 # Switch back to YouTube a second time, then start favorite one again.
 adb shell am start -W -a android.intent.action.VIEW -d "$TEST_URL" "$PACKAGE_NAME" | tee "$RESULTS_DIR/radio-to-youtube-second.txt" || true
@@ -867,7 +867,7 @@ tap_tab "WebRadio" "=WebRadio"
 tap_text "favorite one final restart" 1 "=Test Radio One"
 sleep 10
 assert_text "final radio restart title" 0 "=Never Gonna Give You Up"
-assert_text "final radio restart live" 0 "=LIVE"
+assert_text "final radio restart live" 0 "LIVE"
 capture "radio-final-restart"
 
 '''
