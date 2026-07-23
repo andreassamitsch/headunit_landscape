@@ -15,28 +15,59 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Locate right-pane tab state and WebRadio selection hooks
+      - name: Probe Antenne Steiermark logo sources
         run: |
           set -euo pipefail
-          mkdir -p _assistant
-          {
-            echo '=== VehicleLandscapeLayout definition ==='
-            grep -RIn --include='*.kt' 'fun VehicleLandscapeLayout' app/src || true
-            echo '=== all VehicleLandscapeLayout references ==='
-            grep -RIn --include='*.kt' 'VehicleLandscapeLayout' app/src || true
-            echo '=== all WebRadioScreen references ==='
-            grep -RIn --include='*.kt' 'WebRadioScreen' app/src || true
-            echo '=== tab enums and selected state ==='
-            grep -RIn --include='*.kt' -E 'enum class .*Tab|selectedTab|activeTab|currentTab|rememberSaveable.*Tab|Queue.*WebRadio|WebRadio.*Queue' app/src | head -n 1000 || true
-            echo '=== relevant source excerpts ==='
-            while IFS=: read -r file line rest; do
-              start=$((line > 80 ? line - 80 : 1)); end=$((line + 180));
-              echo "--- $file:$start-$end ---"
-              sed -n "${start},${end}p" "$file"
-            done < <(grep -RIn --include='*.kt' 'fun VehicleLandscapeLayout' app/src || true)
-          } > _assistant/webradio_tab_logo_diagnosis.txt
+          mkdir -p _assistant /tmp/antenne
+          python3 - <<'PY' > _assistant/webradio_tab_logo_diagnosis.txt
+          import json, urllib.parse, urllib.request, ssl, re
+          ua = {'User-Agent':'MetrolistHU/13.6.5 (Android WebRadio probe)','Accept':'*/*'}
+          def fetch(url, limit=1024*1024):
+              req=urllib.request.Request(url, headers=ua)
+              with urllib.request.urlopen(req, timeout=15, context=ssl.create_default_context()) as r:
+                  data=r.read(limit)
+                  return r.status, r.geturl(), r.headers.get('content-type',''), data
+          print('=== Radio Browser search ===')
+          q=urllib.parse.quote('Antenne Steiermark')
+          for endpoint in [
+              f'https://all.api.radio-browser.info/json/stations/search?name={q}&hidebroken=true&limit=20&order=clickcount&reverse=true',
+              f'https://de1.api.radio-browser.info/json/stations/bynameexact/{q}?hidebroken=true&limit=20',
+          ]:
+              try:
+                  status, final, ct, data = fetch(endpoint)
+                  print('ENDPOINT', endpoint, status, final, ct)
+                  arr=json.loads(data.decode('utf-8','replace'))
+                  for item in arr[:20]:
+                      print(json.dumps({k:item.get(k) for k in ['stationuuid','name','homepage','favicon','url_resolved','lastcheckok','clickcount']}, ensure_ascii=False))
+              except Exception as e:
+                  print('ERROR', endpoint, repr(e))
+          print('=== Website pages and metadata ===')
+          pages=['https://www.antenne.at/','https://www.antenne.at/steiermark/','https://steiermark.antenne.at/','https://www.antenne.at/radioplayercontent/steiermark/']
+          for page in pages:
+              try:
+                  status, final, ct, data=fetch(page)
+                  text=data.decode('utf-8','replace')
+                  print('\nPAGE',page,'=>',status,final,ct,'bytes',len(data))
+                  for tag in re.findall(r'<(?:meta|link)\b[^>]*>', text, re.I):
+                      low=tag.lower()
+                      if any(x in low for x in ['icon','manifest','og:image','twitter:image']): print(tag[:1000])
+                  for url in sorted(set(re.findall(r'https?://[^\"\'<> ]+', text))):
+                      if any(x in url.lower() for x in ['logo','icon','favicon','antenne']): print('URL',url[:1000])
+              except Exception as e:
+                  print('ERROR PAGE',page,repr(e))
+          print('=== Common icon paths ===')
+          bases=['https://www.antenne.at','https://steiermark.antenne.at']
+          paths=['/favicon.ico','/favicon.png','/apple-touch-icon.png','/android-chrome-192x192.png','/android-chrome-512x512.png','/site.webmanifest','/manifest.json']
+          for base in bases:
+              for path in paths:
+                  try:
+                      status, final, ct, data=fetch(base+path, 4096)
+                      print(base+path,'=>',status,final,ct,'bytes',len(data),data[:200])
+                  except Exception as e:
+                      print(base+path,'=> ERROR',repr(e))
+          PY
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -f _assistant/webradio_tab_logo_diagnosis.txt
-          git commit -m 'Record expanded WebRadio tab diagnosis [skip ci]'
+          git commit -m 'Record Antenne Steiermark logo probe [skip ci]'
           git push
