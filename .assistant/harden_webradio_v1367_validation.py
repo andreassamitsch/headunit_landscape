@@ -77,7 +77,11 @@ replace_once(
                                                         navController.popBackStack("vehicle_queue", inclusive = false)
                                                     }
                                                     playerConnection.playQueue(YouTubeQueue(radioEndpoint))''',
-    '''                                                    if (embeddedInPlayer) {
+    '''                                                    android.util.Log.d(
+                                                        "Dudu7ArtistAction",
+                                                        "Radio clicked embedded=$embeddedInPlayer callback=${playerConnection.onUserSongSelection != null}",
+                                                    )
+                                                    if (embeddedInPlayer) {
                                                         playerConnection.notifyUserSongSelection()
                                                     }
                                                     playerConnection.playQueue(
@@ -91,13 +95,46 @@ replace_once(
                                                             navController.popBackStack("vehicle_queue", inclusive = false)
                                                         }
                                                         playerConnection.playQueue(YouTubeQueue(shuffleEndpoint))''',
-    '''                                                        if (embeddedInPlayer) {
+    '''                                                        android.util.Log.d(
+                                                            "Dudu7ArtistAction",
+                                                            "Shuffle clicked embedded=$embeddedInPlayer callback=${playerConnection.onUserSongSelection != null}",
+                                                        )
+                                                        if (embeddedInPlayer) {
                                                             playerConnection.notifyUserSongSelection()
                                                         }
                                                         playerConnection.playQueue(
                                                             YouTubeQueue(shuffleEndpoint),
                                                             notifyUserSelection = !embeddedInPlayer,
                                                         )''',
+)
+
+# Optional short diagnostic path used by the dedicated x86 emulator workflow.
+replace_once(
+    test,
+    '''capture "launch"
+
+# Verify original local history behavior by finishing one normal music playback session.''',
+    '''capture "launch"
+
+if [[ "${FOCUSED_ARTIST_ACTION:-0}" == "1" ]]; then
+    tap_tab "WebRadio" "=WebRadio"
+    tap_text "focused station one" 1 "=Test Radio One"
+    sleep 12
+    tap_text "focused radio artist" 0 "=Rick Astley"
+    sleep 12
+    tap_text "focused artist Radio action" 1 "=Radio"
+    sleep 8
+    adb logcat -d -v threadtime > "$RESULTS_DIR/focused-artist-action-logcat.txt" 2>&1 || true
+    capture "focused-artist-action-result"
+    grep -E 'Dudu7ArtistAction|FATAL EXCEPTION|IllegalStateException|IllegalArgumentException|NavController' \
+        "$RESULTS_DIR/focused-artist-action-logcat.txt" || true
+    assert_selected_tab "focused artist action selected queue" "Warteschlange" "Queue"
+    assert_absent_anywhere "focused LIVE after artist action" "=LIVE"
+    echo "Focused embedded artist action passed"
+    exit 0
+fi
+
+# Verify original local history behavior by finishing one normal music playback session.''',
 )
 
 print("WebRadio 13.6.7 validation hardened and embedded artist actions fixed")
