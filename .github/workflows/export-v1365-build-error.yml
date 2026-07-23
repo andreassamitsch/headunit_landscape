@@ -26,7 +26,7 @@ jobs:
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/jobs/89132747136/logs" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/jobs/89133776535/logs" \
             -o /tmp/log
           {
             grep -n -E '^.*(e: file|error:|Unresolved reference|Type mismatch|Compilation error|FAILURE:)' /tmp/log | tail -n 120 || true
@@ -38,3 +38,5 @@ jobs:
           git add -f _assistant/v1365_build_error.txt
           git commit -m 'Record WebRadio 13.6.5 compiler error [skip ci]'
           git push
+
+# latest-build-error
