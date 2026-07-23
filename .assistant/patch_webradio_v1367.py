@@ -686,3 +686,29 @@ replace_once(
 )
 
 print("WebRadio 13.6.7 final artist/test corrections applied")
+# Ensure embedded artist navigation happens before queue preparation. Some
+# radio endpoints resolve asynchronously; navigating first keeps the right pane
+# responsive even while the new music queue is prepared.
+replace_once(
+    artist_screen,
+    '''                                                    playerConnection.playQueue(YouTubeQueue(radioEndpoint))
+                                                    if (embeddedInPlayer) {
+                                                        navController.popBackStack("vehicle_queue", inclusive = false)
+                                                    }''',
+    '''                                                    if (embeddedInPlayer) {
+                                                        navController.popBackStack("vehicle_queue", inclusive = false)
+                                                    }
+                                                    playerConnection.playQueue(YouTubeQueue(radioEndpoint))''',
+)
+replace_once(
+    artist_screen,
+    '''                                                        playerConnection.playQueue(YouTubeQueue(shuffleEndpoint))
+                                                        if (embeddedInPlayer) {
+                                                            navController.popBackStack("vehicle_queue", inclusive = false)
+                                                        }''',
+    '''                                                        if (embeddedInPlayer) {
+                                                            navController.popBackStack("vehicle_queue", inclusive = false)
+                                                        }
+                                                        playerConnection.playQueue(YouTubeQueue(shuffleEndpoint))''',
+)
+print("Embedded artist navigation now precedes queue preparation")
