@@ -419,11 +419,11 @@ replace_once(
 test = "scripts/dudu7_webradio_reliability_smoke.sh"
 replace_once(
     test,
-    '''  {"uuid":"test-radio-three","name":"Test Radio Three","streamUrl":"http://10.0.2.2:8000/station3","homepage":"http://10.0.2.2:8000/station3-home","favicon":"","country":"Austria","language":"German","tags":"Test,Indie","codec":"MP3","bitrate":96},
-  {"uuid":"9608a2aa-0601-11e8-ae97-52543be04c81","name":"Antenne Steiermark","streamUrl":"http://live.antenne.at/as","homepage":"http://www.antenne.at/","favicon":"https://upload.wikimedia.org/wikipedia/commons/6/63/Antenne_Logo.svg","country":"Austria","language":"German","tags":"Pop,Austria","codec":"MP3","bitrate":128}''',
-    '''  {"uuid":"test-radio-three","name":"Test Radio Three","streamUrl":"http://10.0.2.2:8000/station3","homepage":"http://10.0.2.2:8000/station3-home","favicon":"","country":"Austria","language":"German","tags":"Test,Indie","codec":"MP3","bitrate":96},
-  {"uuid":"test-radio-four","name":"kronehit","streamUrl":"http://10.0.2.2:8000/station4","homepage":"http://10.0.2.2:8000/kronehit-home","favicon":"http://10.0.2.2:8000/kronehit.svg","country":"Austria","language":"German","tags":"Hits,Austria","codec":"MP3","bitrate":96},
-  {"uuid":"9608a2aa-0601-11e8-ae97-52543be04c81","name":"Antenne Steiermark","streamUrl":"http://live.antenne.at/as","homepage":"http://www.antenne.at/","favicon":"https://upload.wikimedia.org/wikipedia/commons/6/63/Antenne_Logo.svg","country":"Austria","language":"German","tags":"Pop,Austria","codec":"MP3","bitrate":128}''',
+    ''' {"uuid":"test-radio-three","name":"Test Radio Three","streamUrl":"http://10.0.2.2:8000/station3","homepage":"http://10.0.2.2:8000/station3-home","favicon":"","country":"Austria","language":"German","tags":"Test,Indie","codec":"MP3","bitrate":96},
+ {"uuid":"9608a2aa-0601-11e8-ae97-52543be04c81","name":"Antenne Steiermark","streamUrl":"http://live.antenne.at/as","homepage":"http://www.antenne.at/","favicon":"https://upload.wikimedia.org/wikipedia/commons/6/63/Antenne_Logo.svg","country":"Austria","language":"German","tags":"Pop,Austria","codec":"MP3","bitrate":128}''',
+    ''' {"uuid":"test-radio-three","name":"Test Radio Three","streamUrl":"http://10.0.2.2:8000/station3","homepage":"http://10.0.2.2:8000/station3-home","favicon":"","country":"Austria","language":"German","tags":"Test,Indie","codec":"MP3","bitrate":96},
+ {"uuid":"test-radio-four","name":"kronehit","streamUrl":"http://10.0.2.2:8000/station4","homepage":"http://10.0.2.2:8000/kronehit-home","favicon":"http://10.0.2.2:8000/kronehit.svg","country":"Austria","language":"German","tags":"Hits,Austria","codec":"MP3","bitrate":96},
+ {"uuid":"9608a2aa-0601-11e8-ae97-52543be04c81","name":"Antenne Steiermark","streamUrl":"http://live.antenne.at/as","homepage":"http://www.antenne.at/","favicon":"https://upload.wikimedia.org/wikipedia/commons/6/63/Antenne_Logo.svg","country":"Austria","language":"German","tags":"Pop,Austria","codec":"MP3","bitrate":128}''',
 )
 replace_once(
     test,
