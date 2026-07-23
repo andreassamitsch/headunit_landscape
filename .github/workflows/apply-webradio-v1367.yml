@@ -1,16 +1,13 @@
-name: Build Metrolist 13.6.7 APK
+name: Manual Metrolist 13.6.7 APK build
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/apply-webradio-v1367.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: build-metrolist-v1367-apk
+  group: manual-metrolist-v1367-apk
   cancel-in-progress: true
 
 jobs:
@@ -72,5 +69,3 @@ jobs:
           path: artifacts/
           if-no-files-found: error
           retention-days: 14
-
-# final-arm-apk-11
