@@ -66,9 +66,10 @@ replace_once(
 }''',
 )
 
-# Use an explicit queue-root route for actions inside the embedded artist page.
-# Saved-state restoration can make popBackStack(route) return false, leaving the
-# artist page visible while normal YouTube playback starts.
+# The vehicle layout owns both the embedded pane navigator and the selected-tab
+# state. Ask that owner to return to the queue before starting normal YouTube
+# playback. A raw NavController route changes only the destination and can race
+# the independently saved tab state after Search/Artist restoration.
 artist = "app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt"
 replace_once(
     artist,
@@ -77,12 +78,12 @@ replace_once(
                                                     }
                                                     playerConnection.playQueue(YouTubeQueue(radioEndpoint))''',
     '''                                                    if (embeddedInPlayer) {
-                                                        navController.navigate("vehicle_queue") {
-                                                            popUpTo("vehicle_queue") { inclusive = true }
-                                                            launchSingleTop = true
-                                                        }
+                                                        playerConnection.notifyUserSongSelection()
                                                     }
-                                                    playerConnection.playQueue(YouTubeQueue(radioEndpoint))''',
+                                                    playerConnection.playQueue(
+                                                        YouTubeQueue(radioEndpoint),
+                                                        notifyUserSelection = !embeddedInPlayer,
+                                                    )''',
 )
 replace_once(
     artist,
@@ -91,12 +92,12 @@ replace_once(
                                                         }
                                                         playerConnection.playQueue(YouTubeQueue(shuffleEndpoint))''',
     '''                                                        if (embeddedInPlayer) {
-                                                            navController.navigate("vehicle_queue") {
-                                                                popUpTo("vehicle_queue") { inclusive = true }
-                                                                launchSingleTop = true
-                                                            }
+                                                            playerConnection.notifyUserSongSelection()
                                                         }
-                                                        playerConnection.playQueue(YouTubeQueue(shuffleEndpoint))''',
+                                                        playerConnection.playQueue(
+                                                            YouTubeQueue(shuffleEndpoint),
+                                                            notifyUserSelection = !embeddedInPlayer,
+                                                        )''',
 )
 
 print("WebRadio 13.6.7 validation hardened and embedded artist actions fixed")
