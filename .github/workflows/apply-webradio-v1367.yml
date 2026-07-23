@@ -48,7 +48,8 @@ jobs:
           set -euxo pipefail
           grep -q 'versionCode = 156' app/build.gradle.kts
           grep -q 'versionName = "13.6.7"' app/build.gradle.kts
-          grep -q 'navController.navigate("vehicle_queue")' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'playerConnection.notifyUserSongSelection()' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'notifyUserSelection = !embeddedInPlayer' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
           grep -q 'for attempt in 1 2 3; do' scripts/dudu7_webradio_reliability_smoke.sh
           chmod +x gradlew scripts/run_dudu7_emulator_ci.sh scripts/dudu7_webradio_reliability_smoke.sh
 
@@ -154,4 +155,4 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-# validation-retry-9
+# validation-retry-10
