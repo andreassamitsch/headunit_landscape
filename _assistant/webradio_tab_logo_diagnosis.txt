@@ -1,250 +1,319 @@
 === Radio Browser search ===
-ENDPOINT https://all.api.radio-browser.info/json/stations/search?name=Antenne%20Steiermark&hidebroken=true&limit=20&order=clickcount&reverse=true 200 https://all.api.radio-browser.info/json/stations/search?name=Antenne%20Steiermark&hidebroken=true&limit=20&order=clickcount&reverse=true application/json
-{"stationuuid": "9608a2aa-0601-11e8-ae97-52543be04c81", "name": "Antenne Steiermark", "homepage": "http://www.antenne.at/", "favicon": "https://upload.wikimedia.org/wikipedia/commons/6/63/Antenne_Logo.svg", "url_resolved": "http://live.antenne.at/as", "lastcheckok": 1, "clickcount": 16}
-{"stationuuid": "17911476-e5ec-45ed-a96a-7c2e9802e2c5", "name": "Antenne Steiermark (werbefrei)", "homepage": "https://www.antenne.at/", "favicon": "https://upload.wikimedia.org/wikipedia/commons/6/63/Antenne_Logo.svg", "url_resolved": "https://60efd7a2b4d02.streamlock.net/a_steiermark/ngrp:livestream_all/playlist.m3u8", "lastcheckok": 1, "clickcount": 4}
-ENDPOINT https://de1.api.radio-browser.info/json/stations/bynameexact/Antenne%20Steiermark?hidebroken=true&limit=20 200 https://de1.api.radio-browser.info/json/stations/bynameexact/Antenne%20Steiermark?hidebroken=true&limit=20 application/json
-{"stationuuid": "9608a2aa-0601-11e8-ae97-52543be04c81", "name": "Antenne Steiermark", "homepage": "http://www.antenne.at/", "favicon": "https://upload.wikimedia.org/wikipedia/commons/6/63/Antenne_Logo.svg", "url_resolved": "http://live.antenne.at/as", "lastcheckok": 1, "clickcount": 16}
-=== Website pages and metadata ===
+{"stationuuid":"9608a2aa-0601-11e8-ae97-52543be04c81","name":"Antenne Steiermark","homepage":"http://www.antenne.at/","favicon":"https://upload.wikimedia.org/wikipedia/commons/6/63/Antenne_Logo.svg","url_resolved":"http://live.antenne.at/as","lastcheckok":1,"clickcount":16}
+{"stationuuid":"17911476-e5ec-45ed-a96a-7c2e9802e2c5","name":"Antenne Steiermark (werbefrei)","homepage":"https://www.antenne.at/","favicon":"https://upload.wikimedia.org/wikipedia/commons/6/63/Antenne_Logo.svg","url_resolved":"https://60efd7a2b4d02.streamlock.net/a_steiermark/ngrp:livestream_all/playlist.m3u8","lastcheckok":1,"clickcount":4}
+=== Website metadata ===
+--- https://www.antenne.at/ ---
 
-PAGE https://www.antenne.at/ => 200 https://www.antenne.at/welcome/ text/html bytes 16543
 <link rel="icon" type="image/x-icon" href="favicon.ico">
-URL https://antenne.at/
+https://antenne.at/
+--- https://www.antenne.at/steiermark/ ---
 
-PAGE https://www.antenne.at/steiermark/ => 200 https://steiermark.antenne.at/player text/html;charset=UTF-8 bytes 604532
 <link rel="icon" type="image/x-icon" href="favicon.ico">
 <link rel="manifest" href="manifest.steiermark.webmanifest">
 <meta property="og:image" content="https://steiermark.antenne.at/media/1024-QBE62OCK.png">
 <meta property="og:image:secure_url" content="https://steiermark.antenne.at/media/1024-QBE62OCK.png">
-URL https://at.linkedin.com/company/antenne-steiermark
-URL https://cms.steiermark.antenne.at
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-1280x720.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-1920x1080.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-400x225.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-600x338.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-960x540.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2-1280x853.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2-1920x1280.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2-400x267.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2-600x400.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2-960x640.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6-1280x720.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6-1920x1080.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6-400x225.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6-600x338.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6-960x540.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504-1280x853.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504-1920x1280.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504-400x267.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504-600x400.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504-960x640.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Helles-minimalist-Wohnzimmer-mit-Pflanzen-1280x720.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Helles-minimalist-Wohnzimmer-mit-Pflanzen-1672x940.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Helles-minimalist-Wohnzimmer-mit-Pflanzen-400x225.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Helles-minimalist-Wohnzimmer-mit-Pflanzen-600x337.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Helles-minimalist-Wohnzimmer-mit-Pflanzen-960x540.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Helles-minimalist-Wohnzimmer-mit-Pflanzen.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/JUMAP-Ad-RMSZR-FotoImgorthand-1280x852.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/JUMAP-Ad-RMSZR-FotoImgorthand-1920x1278.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/JUMAP-Ad-RMSZR-FotoImgorthand-400x266.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/JUMAP-Ad-RMSZR-FotoImgorthand-600x400.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/JUMAP-Ad-RMSZR-FotoImgorthand-960x639.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/JUMAP-Ad-RMSZR-FotoImgorthand.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Top
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Top%20Job-1280x640.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Top%20Job-1920x960.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Top%20Job-400x200.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Top%20Job-600x300.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Top%20Job-960x480.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/AS-Logo-Button-1182x1182.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/AS-Logo-Button-400x400.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/AS-Logo-Button-600x600.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/AS-Logo-Button-960x960.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/AS-Logo-Button.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/Logo
-URL https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live-1280x1280.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live-1920x1920.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live-400x400.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live-600x600.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live-960x960.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5-1280x689.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5-1600x861.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5-400x215.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5-600x323.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5-960x517.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28-1280x853.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28-1536x1024.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28-400x267.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28-600x400.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28-960x640.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28.webp
-URL https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler-1280x1920.webp
-URL https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler-1667x2500.webp
-URL https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler-400x600.webp
-URL https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler-600x900.webp
-URL https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler-960x1440.webp
-URL https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Temperatur
-URL https://cms.steiermark.antenne.at/public/media/media/Temperatur%20-%20Hitze-1-1280x853.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Temperatur%20-%20Hitze-1-1920x1279.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Temperatur%20-%20Hitze-1-400x266.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Temperatur%20-%20Hitze-1-600x400.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Temperatur%20-%20Hitze-1-960x640.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1-1280x853.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1-1920x1280.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1-400x267.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1-600x400.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1-960x640.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Valentina
-URL https://cms.steiermark.antenne.at/public/media/media/Valentina%20Ober%20und%20Markus%20Dietrich-1-1280x1280.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Valentina%20Ober%20und%20Markus%20Dietrich-1-1920x1920.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Valentina%20Ober%20und%20Markus%20Dietrich-1-400x400.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Valentina%20Ober%20und%20Markus%20Dietrich-1-600x600.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Valentina%20Ober%20und%20Markus%20Dietrich-1-960x960.webp
-URL https://graz.evofitness.at/?utm_campaign=presale-graz-hans-sachs-gasse&amp;utm_medium=banner&amp;utm_source=antenne-steiermark
-URL https://insights.antenne.at/script.js
-URL https://kaernten.antenne.at/
-URL https://steiermark.antenne.at/
-URL https://steiermark.antenne.at/media/1024-QBE62OCK.png
-URL https://steiermark.antenne.at/player
-URL https://steiermark.antenne.at/story/ihr-top-job
-URL https://www.antenne.at
-URL https://www.facebook.com/antennestmk
-URL https://www.instagram.com/antennesteiermark/
-URL https://www.tiktok.com/@antennesteiermark
-URL https://www.youtube.com/user/AntenneST/
+https://cms.steiermark.antenne.at
+https://www.antenne.at
+https://steiermark.antenne.at/
+https://steiermark.antenne.at/player
+https://steiermark.antenne.at/player
+https://steiermark.antenne.at/media/1024-QBE62OCK.png
+https://steiermark.antenne.at/media/1024-QBE62OCK.png
+https://cms.steiermark.antenne.at/public/media/media-assets/Logo
+https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live.webp
+https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live-400x400.webp
+https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live-600x600.webp
+https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live-960x960.webp
+https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live-1280x1280.webp
+https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live-1920x1920.webp
+https://cms.steiermark.antenne.at/public/media/media-assets/Logo
+https://cms.steiermark.antenne.at/public/media/media-assets/Logo
+https://cms.steiermark.antenne.at/public/media/media/Temperatur
+https://cms.steiermark.antenne.at/public/media/media/Temperatur%20-%20Hitze-1-400x266.webp
+https://cms.steiermark.antenne.at/public/media/media/Temperatur%20-%20Hitze-1-600x400.webp
+https://cms.steiermark.antenne.at/public/media/media/Temperatur%20-%20Hitze-1-960x640.webp
+https://cms.steiermark.antenne.at/public/media/media/Temperatur%20-%20Hitze-1-1280x853.webp
+https://cms.steiermark.antenne.at/public/media/media/Temperatur%20-%20Hitze-1-1920x1279.webp
+https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5.webp
+https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5-400x215.webp
+https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5-600x323.webp
+https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5-960x517.webp
+https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5-1280x689.webp
+https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5-1600x861.webp
+https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1.webp
+https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1-400x267.webp
+https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1-600x400.webp
+https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1-960x640.webp
+https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1-1280x853.webp
+https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1-1920x1280.webp
+https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler.webp
+https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler-400x600.webp
+https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler-600x900.webp
+https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler-960x1440.webp
+https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler-1280x1920.webp
+https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler-1667x2500.webp
+https://cms.steiermark.antenne.at/public/media/media/Valentina
+https://cms.steiermark.antenne.at/public/media/media/Valentina%20Ober%20und%20Markus%20Dietrich-1-400x400.webp
+https://cms.steiermark.antenne.at/public/media/media/Valentina%20Ober%20und%20Markus%20Dietrich-1-600x600.webp
+https://cms.steiermark.antenne.at/public/media/media/Valentina%20Ober%20und%20Markus%20Dietrich-1-960x960.webp
+https://cms.steiermark.antenne.at/public/media/media/Valentina%20Ober%20und%20Markus%20Dietrich-1-1280x1280.webp
+https://cms.steiermark.antenne.at/public/media/media/Valentina%20Ober%20und%20Markus%20Dietrich-1-1920x1920.webp
+https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28.webp
+https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28-400x267.webp
+https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28-600x400.webp
+https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28-960x640.webp
+https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28-1280x853.webp
+https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28-1536x1024.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2-400x267.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2-600x400.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2-960x640.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2-1280x853.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2-1920x1280.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6-400x225.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6-600x338.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6-960x540.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6-1280x720.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6-1920x1080.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504-400x267.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504-600x400.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504-960x640.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504-1280x853.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504-1920x1280.webp
+https://graz.evofitness.at/?utm_campaign=presale-graz-hans-sachs-gasse&amp;utm_medium=banner&amp;utm_source=antenne-steiermark
+https://cms.steiermark.antenne.at/public/media/media-ads/Kopfhoerer1V1.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/Kopfhoerer1V1-400x225.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/Kopfhoerer1V1-600x338.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/Kopfhoerer1V1-960x540.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/Kopfhoerer1V1-1280x720.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/Kopfhoerer1V1-1920x1081.webp
+https://steiermark.antenne.at/story/audioproduktion
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-400x225.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-600x338.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-960x540.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-1280x720.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-1920x1080.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-400x225.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-600x338.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-960x540.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-1280x720.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-1920x1080.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/business_gdd9cb44b5_1920_MEy6u_Dj61-KNqAWxTLoG.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/business_gdd9cb44b5_1920_MEy6u_Dj61-KNqAWxTLoG-400x225.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/business_gdd9cb44b5_1920_MEy6u_Dj61-KNqAWxTLoG-600x337.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/business_gdd9cb44b5_1920_MEy6u_Dj61-KNqAWxTLoG-960x540.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/business_gdd9cb44b5_1920_MEy6u_Dj61-KNqAWxTLoG-1280x720.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/business_gdd9cb44b5_1920_MEy6u_Dj61-KNqAWxTLoG-1920x1080.webp
+https://steiermark.antenne.at/gelbe-radiowerbung
+https://cms.steiermark.antenne.at/public/media/media-ads/OEVP-Steiermark-4.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/OEVP-Steiermark-4-400x307.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/OEVP-Steiermark-4-600x460.webp
+--- https://steiermark.antenne.at/ ---
 
-PAGE https://steiermark.antenne.at/ => 200 https://steiermark.antenne.at/player text/html;charset=UTF-8 bytes 604532
 <link rel="icon" type="image/x-icon" href="favicon.ico">
 <link rel="manifest" href="manifest.steiermark.webmanifest">
 <meta property="og:image" content="https://steiermark.antenne.at/media/1024-QBE62OCK.png">
 <meta property="og:image:secure_url" content="https://steiermark.antenne.at/media/1024-QBE62OCK.png">
-URL https://at.linkedin.com/company/antenne-steiermark
-URL https://cms.steiermark.antenne.at
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-1280x720.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-1920x1080.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-400x225.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-600x338.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-960x540.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2-1280x853.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2-1920x1280.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2-400x267.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2-600x400.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2-960x640.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6-1280x720.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6-1920x1080.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6-400x225.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6-600x338.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6-960x540.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504-1280x853.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504-1920x1280.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504-400x267.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504-600x400.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504-960x640.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Helles-minimalist-Wohnzimmer-mit-Pflanzen-1280x720.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Helles-minimalist-Wohnzimmer-mit-Pflanzen-1672x940.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Helles-minimalist-Wohnzimmer-mit-Pflanzen-400x225.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Helles-minimalist-Wohnzimmer-mit-Pflanzen-600x337.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Helles-minimalist-Wohnzimmer-mit-Pflanzen-960x540.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Helles-minimalist-Wohnzimmer-mit-Pflanzen.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/JUMAP-Ad-RMSZR-FotoImgorthand-1280x852.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/JUMAP-Ad-RMSZR-FotoImgorthand-1920x1278.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/JUMAP-Ad-RMSZR-FotoImgorthand-400x266.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/JUMAP-Ad-RMSZR-FotoImgorthand-600x400.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/JUMAP-Ad-RMSZR-FotoImgorthand-960x639.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/JUMAP-Ad-RMSZR-FotoImgorthand.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Top
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Top%20Job-1280x640.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Top%20Job-1920x960.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Top%20Job-400x200.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Top%20Job-600x300.webp
-URL https://cms.steiermark.antenne.at/public/media/media-ads/Top%20Job-960x480.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/AS-Logo-Button-1182x1182.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/AS-Logo-Button-400x400.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/AS-Logo-Button-600x600.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/AS-Logo-Button-960x960.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/AS-Logo-Button.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/Logo
-URL https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live-1280x1280.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live-1920x1920.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live-400x400.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live-600x600.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live-960x960.webp
-URL https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5-1280x689.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5-1600x861.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5-400x215.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5-600x323.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5-960x517.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28-1280x853.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28-1536x1024.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28-400x267.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28-600x400.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28-960x640.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28.webp
-URL https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler-1280x1920.webp
-URL https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler-1667x2500.webp
-URL https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler-400x600.webp
-URL https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler-600x900.webp
-URL https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler-960x1440.webp
-URL https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Temperatur
-URL https://cms.steiermark.antenne.at/public/media/media/Temperatur%20-%20Hitze-1-1280x853.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Temperatur%20-%20Hitze-1-1920x1279.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Temperatur%20-%20Hitze-1-400x266.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Temperatur%20-%20Hitze-1-600x400.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Temperatur%20-%20Hitze-1-960x640.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1-1280x853.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1-1920x1280.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1-400x267.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1-600x400.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1-960x640.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Valentina
-URL https://cms.steiermark.antenne.at/public/media/media/Valentina%20Ober%20und%20Markus%20Dietrich-1-1280x1280.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Valentina%20Ober%20und%20Markus%20Dietrich-1-1920x1920.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Valentina%20Ober%20und%20Markus%20Dietrich-1-400x400.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Valentina%20Ober%20und%20Markus%20Dietrich-1-600x600.webp
-URL https://cms.steiermark.antenne.at/public/media/media/Valentina%20Ober%20und%20Markus%20Dietrich-1-960x960.webp
-URL https://graz.evofitness.at/?utm_campaign=presale-graz-hans-sachs-gasse&amp;utm_medium=banner&amp;utm_source=antenne-steiermark
-URL https://insights.antenne.at/script.js
-URL https://kaernten.antenne.at/
-URL https://steiermark.antenne.at/
-URL https://steiermark.antenne.at/media/1024-QBE62OCK.png
-URL https://steiermark.antenne.at/player
-URL https://steiermark.antenne.at/story/ihr-top-job
-URL https://www.antenne.at
-URL https://www.facebook.com/antennestmk
-URL https://www.instagram.com/antennesteiermark/
-URL https://www.tiktok.com/@antennesteiermark
-URL https://www.youtube.com/user/AntenneST/
+https://cms.steiermark.antenne.at
+https://www.antenne.at
+https://steiermark.antenne.at/
+https://steiermark.antenne.at/player
+https://steiermark.antenne.at/player
+https://steiermark.antenne.at/media/1024-QBE62OCK.png
+https://steiermark.antenne.at/media/1024-QBE62OCK.png
+https://cms.steiermark.antenne.at/public/media/media-assets/Logo
+https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live.webp
+https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live-400x400.webp
+https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live-600x600.webp
+https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live-960x960.webp
+https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live-1280x1280.webp
+https://cms.steiermark.antenne.at/public/media/media-assets/cover-stmk-live-1920x1920.webp
+https://cms.steiermark.antenne.at/public/media/media-assets/Logo
+https://cms.steiermark.antenne.at/public/media/media-assets/Logo
+https://cms.steiermark.antenne.at/public/media/media/Temperatur
+https://cms.steiermark.antenne.at/public/media/media/Temperatur%20-%20Hitze-1-400x266.webp
+https://cms.steiermark.antenne.at/public/media/media/Temperatur%20-%20Hitze-1-600x400.webp
+https://cms.steiermark.antenne.at/public/media/media/Temperatur%20-%20Hitze-1-960x640.webp
+https://cms.steiermark.antenne.at/public/media/media/Temperatur%20-%20Hitze-1-1280x853.webp
+https://cms.steiermark.antenne.at/public/media/media/Temperatur%20-%20Hitze-1-1920x1279.webp
+https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5.webp
+https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5-400x215.webp
+https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5-600x323.webp
+https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5-960x517.webp
+https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5-1280x689.webp
+https://cms.steiermark.antenne.at/public/media/media/Kino-Toy-Story-5-1600x861.webp
+https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1.webp
+https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1-400x267.webp
+https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1-600x400.webp
+https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1-960x640.webp
+https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1-1280x853.webp
+https://cms.steiermark.antenne.at/public/media/media/Unsplash-Viel.Verkehr-Auto-1-1920x1280.webp
+https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler.webp
+https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler-400x600.webp
+https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler-600x900.webp
+https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler-960x1440.webp
+https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler-1280x1920.webp
+https://cms.steiermark.antenne.at/public/media/media/SK-Sturm-Spieler-jubel-gemeinsam-mit-dem-Fans-c-Sebastian-Atzler-1667x2500.webp
+https://cms.steiermark.antenne.at/public/media/media/Valentina
+https://cms.steiermark.antenne.at/public/media/media/Valentina%20Ober%20und%20Markus%20Dietrich-1-400x400.webp
+https://cms.steiermark.antenne.at/public/media/media/Valentina%20Ober%20und%20Markus%20Dietrich-1-600x600.webp
+https://cms.steiermark.antenne.at/public/media/media/Valentina%20Ober%20und%20Markus%20Dietrich-1-960x960.webp
+https://cms.steiermark.antenne.at/public/media/media/Valentina%20Ober%20und%20Markus%20Dietrich-1-1280x1280.webp
+https://cms.steiermark.antenne.at/public/media/media/Valentina%20Ober%20und%20Markus%20Dietrich-1-1920x1920.webp
+https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28.webp
+https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28-400x267.webp
+https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28-600x400.webp
+https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28-960x640.webp
+https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28-1280x853.webp
+https://cms.steiermark.antenne.at/public/media/media/Omega-3-Fettsaeuren-zur-Chemotherapie-Med-Uni-Graz-kompakt-Folge-28-1536x1024.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2-400x267.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2-600x400.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2-960x640.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2-1280x853.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-EmeraldHorizon-2-1920x1280.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6-400x225.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6-600x338.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6-960x540.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6-1280x720.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-sReal-Job-2024-6-1920x1080.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504-400x267.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504-600x400.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504-960x640.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504-1280x853.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/EVO-Wien8504-1920x1280.webp
+https://graz.evofitness.at/?utm_campaign=presale-graz-hans-sachs-gasse&amp;utm_medium=banner&amp;utm_source=antenne-steiermark
+https://cms.steiermark.antenne.at/public/media/media-ads/Kopfhoerer1V1.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/Kopfhoerer1V1-400x225.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/Kopfhoerer1V1-600x338.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/Kopfhoerer1V1-960x540.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/Kopfhoerer1V1-1280x720.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/Kopfhoerer1V1-1920x1081.webp
+https://steiermark.antenne.at/story/audioproduktion
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-400x225.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-600x338.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-960x540.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-1280x720.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-1920x1080.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-400x225.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-600x338.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-960x540.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-1280x720.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/CA-AmoreLoui-Jul26-1920x1080.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/business_gdd9cb44b5_1920_MEy6u_Dj61-KNqAWxTLoG.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/business_gdd9cb44b5_1920_MEy6u_Dj61-KNqAWxTLoG-400x225.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/business_gdd9cb44b5_1920_MEy6u_Dj61-KNqAWxTLoG-600x337.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/business_gdd9cb44b5_1920_MEy6u_Dj61-KNqAWxTLoG-960x540.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/business_gdd9cb44b5_1920_MEy6u_Dj61-KNqAWxTLoG-1280x720.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/business_gdd9cb44b5_1920_MEy6u_Dj61-KNqAWxTLoG-1920x1080.webp
+https://steiermark.antenne.at/gelbe-radiowerbung
+https://cms.steiermark.antenne.at/public/media/media-ads/OEVP-Steiermark-4.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/OEVP-Steiermark-4-400x307.webp
+https://cms.steiermark.antenne.at/public/media/media-ads/OEVP-Steiermark-4-600x460.webp
+--- https://www.antenne.at/radioplayercontent/steiermark/ ---
 
-PAGE https://www.antenne.at/radioplayercontent/steiermark/ => 200 https://www.antenne.at/radioplayercontent/steiermark/ text/html bytes 817
 <link rel="manifest" href="./manifest.json">
 <link rel="shortcut icon" href="./favicon.ico">
 === Common icon paths ===
-https://www.antenne.at/favicon.ico => 200 https://www.antenne.at/welcome/ text/html bytes 4096 b'<!doctype html>\n<html lang="en" data-beasties-container>\n  <head>\n    <meta charset="utf-8">\n    <meta name="description" content="Erfolgreichster Privatradiosender \xc3\x96sterreichs - Aktuelle Nachrichten'
-https://www.antenne.at/favicon.png => 200 https://www.antenne.at/welcome/ text/html bytes 4096 b'<!doctype html>\n<html lang="en" data-beasties-container>\n  <head>\n    <meta charset="utf-8">\n    <meta name="description" content="Erfolgreichster Privatradiosender \xc3\x96sterreichs - Aktuelle Nachrichten'
-https://www.antenne.at/apple-touch-icon.png => 200 https://www.antenne.at/welcome/ text/html bytes 4096 b'<!doctype html>\n<html lang="en" data-beasties-container>\n  <head>\n    <meta charset="utf-8">\n    <meta name="description" content="Erfolgreichster Privatradiosender \xc3\x96sterreichs - Aktuelle Nachrichten'
-https://www.antenne.at/android-chrome-192x192.png => 200 https://www.antenne.at/welcome/ text/html bytes 4096 b'<!doctype html>\n<html lang="en" data-beasties-container>\n  <head>\n    <meta charset="utf-8">\n    <meta name="description" content="Erfolgreichster Privatradiosender \xc3\x96sterreichs - Aktuelle Nachrichten'
-https://www.antenne.at/android-chrome-512x512.png => 200 https://www.antenne.at/welcome/ text/html bytes 4096 b'<!doctype html>\n<html lang="en" data-beasties-container>\n  <head>\n    <meta charset="utf-8">\n    <meta name="description" content="Erfolgreichster Privatradiosender \xc3\x96sterreichs - Aktuelle Nachrichten'
-https://www.antenne.at/site.webmanifest => 200 https://www.antenne.at/welcome/ text/html bytes 4096 b'<!doctype html>\n<html lang="en" data-beasties-container>\n  <head>\n    <meta charset="utf-8">\n    <meta name="description" content="Erfolgreichster Privatradiosender \xc3\x96sterreichs - Aktuelle Nachrichten'
-https://www.antenne.at/manifest.json => 200 https://www.antenne.at/welcome/ text/html bytes 4096 b'<!doctype html>\n<html lang="en" data-beasties-container>\n  <head>\n    <meta charset="utf-8">\n    <meta name="description" content="Erfolgreichster Privatradiosender \xc3\x96sterreichs - Aktuelle Nachrichten'
-https://steiermark.antenne.at/favicon.ico => 200 https://steiermark.antenne.at/favicon.ico image/vnd.microsoft.icon bytes 1578 b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00x\x00\x00\x00x\x08\x06\x00\x00\x009d6\xd2\x00\x00\x00\tpHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\x9a\x9c\x18\x00\x00\x00\x01sRGB\x00\xae\xce\x1c\xe9\x00\x00\x00\x04gAMA\x00\x00\xb1\x8f\x0b\xfca\x05\x00\x00\x05\xbfIDATx\x01\xed\x9d=\x8f\x14G\x10\x86\xfb,\xc7\xfe\xf8\x01\xf8\x90c\xa3[b\xdb\xe2Hm\xc9\xe6/\x10\xd9\x92e\xd9\x99CG\x90\x12\x11\x83\x84D\xca\x81\x04\x84\\\x00\xa4\xec\tb\xee\x80\x18\xc1\xf1\x07\x80:\xb4Rk\x99\xfe\xd8\x9a\xea\xea\xa9w\xea\x91H\xd8+\xadv\xde\xa9\xea\xea\xaa\xea\x99\xad\xf7\xaf\xc3\xfb\xe0\xc0\xf2Ep\xa0q\x81\xc1q\x81\xc1q\x81\xc1q\x81\xc1'
-https://steiermark.antenne.at/favicon.png => ERROR <HTTPError 404: 'Not Found'>
-https://steiermark.antenne.at/apple-touch-icon.png => ERROR <HTTPError 404: 'Not Found'>
-https://steiermark.antenne.at/android-chrome-192x192.png => ERROR <HTTPError 404: 'Not Found'>
-https://steiermark.antenne.at/android-chrome-512x512.png => ERROR <HTTPError 404: 'Not Found'>
-https://steiermark.antenne.at/site.webmanifest => ERROR <HTTPError 404: 'Not Found'>
-https://steiermark.antenne.at/manifest.json => ERROR <HTTPError 404: 'Not Found'>
+https://www.antenne.at/favicon.ico => 200 https://www.antenne.at/welcome/ text/html 16543
+https://www.antenne.at/favicon.png => 200 https://www.antenne.at/welcome/ text/html 16543
+https://www.antenne.at/apple-touch-icon.png => 200 https://www.antenne.at/welcome/ text/html 16543
+https://www.antenne.at/android-chrome-192x192.png => 200 https://www.antenne.at/welcome/ text/html 16543
+https://www.antenne.at/android-chrome-512x512.png => 200 https://www.antenne.at/welcome/ text/html 16543
+https://www.antenne.at/site.webmanifest => 200 https://www.antenne.at/welcome/ text/html 16543
+<!doctype html>
+<html lang="en" data-beasties-container>
+  <head>
+    <meta charset="utf-8">
+    <meta name="description" content="Erfolgreichster Privatradiosender Österreichs - Aktuelle Nachrichten aus Verkehr, Wetter, der Steiermark, Kärnten und der Welt immer 5 Minuten früher.">
+    <title>Antenne Steiermark & Kärnten</title>
+    <base href="/welcome/">
+    <meta name="viewport" content="width=device-width, initial-scale=1,viewport-fit=cover">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <meta name="google-site-verification" content="-ZyHSjeR0JSfy-tidHrI0FE6QsOnH8TScQ2R9LOHzsU">
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Antenne Steiermark & Kärnten",
+        "url": "https://antenne.at/"
+      }
+    </script>
+  <style>@layer properties{@supports (((-webkit-hyphens:none)) and (not (margin-trim:inline))) or ((-moz-orient:inline) and (not (color:rgb(from red r g b)))){*,:before,:after{--tw-shadow:0 0 #0000;--tw-shadow-color:initial;--tw-shadow-alpha:100%;--tw-inset-shadow:0 0 #0000;--tw-inset-shadow-color:initial;--tw-inset-shadow-alpha:100%;--tw-ring-color:initial;--tw-ring-shadow:0 0 #0000;--tw-inset-ring-color:initial;--tw-inset-ring-shadow:0 0 #0000;--tw-ring-inset:initial;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-offset-shadow:0 0 #0000;--tw-translate-x:0;--tw-translate-y:0;--tw-translate-z:0;--tw-rotate-x:initial;--tw-rotate-y:initial;--tw-rotate-z:initial;--tw-skew-x:initial;--tw-skew-y:initial;--tw-space-y-reverse:0;--tw-border-style:solid;--tw-gradient-position:initial;--tw-gradient-from:#0000;--tw-gradient-via:#0000;--tw-gradient-to:#0000;--tw-gradient-stops:initial;--tw-gradient-via-stops:initial;--tw-gradient-from-position:0%;--tw-gradient-via-position:50%;--tw-gradient-to-position:100%;--tw-leading:initial;--tw-font-weight:initial;--tw-tracking:initial;--tw-outline-style:solid;--tw-blur:initial;--tw-brightness:init
+https://www.antenne.at/manifest.json => 200 https://www.antenne.at/welcome/ text/html 16543
+<!doctype html>
+<html lang="en" data-beasties-container>
+  <head>
+    <meta charset="utf-8">
+    <meta name="description" content="Erfolgreichster Privatradiosender Österreichs - Aktuelle Nachrichten aus Verkehr, Wetter, der Steiermark, Kärnten und der Welt immer 5 Minuten früher.">
+    <title>Antenne Steiermark & Kärnten</title>
+    <base href="/welcome/">
+    <meta name="viewport" content="width=device-width, initial-scale=1,viewport-fit=cover">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <meta name="google-site-verification" content="-ZyHSjeR0JSfy-tidHrI0FE6QsOnH8TScQ2R9LOHzsU">
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Antenne Steiermark & Kärnten",
+        "url": "https://antenne.at/"
+      }
+    </script>
+  <style>@layer properties{@supports (((-webkit-hyphens:none)) and (not (margin-trim:inline))) or ((-moz-orient:inline) and (not (color:rgb(from red r g b)))){*,:before,:after{--tw-shadow:0 0 #0000;--tw-shadow-color:initial;--tw-shadow-alpha:100%;--tw-inset-shadow:0 0 #0000;--tw-inset-shadow-color:initial;--tw-inset-shadow-alpha:100%;--tw-ring-color:initial;--tw-ring-shadow:0 0 #0000;--tw-inset-ring-color:initial;--tw-inset-ring-shadow:0 0 #0000;--tw-ring-inset:initial;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-offset-shadow:0 0 #0000;--tw-translate-x:0;--tw-translate-y:0;--tw-translate-z:0;--tw-rotate-x:initial;--tw-rotate-y:initial;--tw-rotate-z:initial;--tw-skew-x:initial;--tw-skew-y:initial;--tw-space-y-reverse:0;--tw-border-style:solid;--tw-gradient-position:initial;--tw-gradient-from:#0000;--tw-gradient-via:#0000;--tw-gradient-to:#0000;--tw-gradient-stops:initial;--tw-gradient-via-stops:initial;--tw-gradient-from-position:0%;--tw-gradient-via-position:50%;--tw-gradient-to-position:100%;--tw-leading:initial;--tw-font-weight:initial;--tw-tracking:initial;--tw-outline-style:solid;--tw-blur:initial;--tw-brightness:init
+https://steiermark.antenne.at/favicon.ico => 200 https://steiermark.antenne.at/favicon.ico image/vnd.microsoft.icon 1578
+https://steiermark.antenne.at/favicon.png => 404 https://steiermark.antenne.at/favicon.png text/html;charset=UTF-8 236461
+https://steiermark.antenne.at/apple-touch-icon.png => 404 https://steiermark.antenne.at/apple-touch-icon.png text/html;charset=UTF-8 236479
+https://steiermark.antenne.at/android-chrome-192x192.png => 404 https://steiermark.antenne.at/android-chrome-192x192.png text/html;charset=UTF-8 236491
+https://steiermark.antenne.at/android-chrome-512x512.png => 404 https://steiermark.antenne.at/android-chrome-512x512.png text/html;charset=UTF-8 236491
+https://steiermark.antenne.at/site.webmanifest => 404 https://steiermark.antenne.at/site.webmanifest text/html;charset=UTF-8 236471
+<!DOCTYPE html><html lang="de" data-beasties-container><head>
+    <meta charset="utf-8">
+    <title>Antenne Steiermark</title>
+    <base href="/">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#ffed00">
+    <meta name="apple-itunes-app" content="app-id=351107806">
+    <link rel="preconnect" href="https://cms.steiermark.antenne.at">
+    <link rel="preconnect" href="https://www.antenne.at">
+
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="manifest" href="manifest.steiermark.webmanifest">
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Antenne Steiermark",
+        "url": "https://steiermark.antenne.at/"
+      }
+    </script>
+  <style>html{--mat-sys-body-large: 400 1rem / 1.5rem Inter;--mat-sys-body-large-font: Inter;--mat-sys-body-large-line-height: 1.5rem;--mat-sys-body-large-size: 1rem;--mat-sys-body-large-tracking: .031rem;--mat-sys-body-large-weight: 400;--mat-sys-body-medium: 400 .875rem / 1.25rem Inter;--mat-sys-body-medium-font: Inter;--mat-sys-body-medium-line-height: 1.25rem;--mat-sys-body-medium-size: .875rem;--mat-sys-body-medium-tracking: .016rem;--mat-sys-body-medium-weight: 400;--mat-sys-body-small: 400 .75rem / 1rem Inter;--mat-sys-body-small-font: Inter;--mat-sys-body-small-line-height: 1rem;--mat-sys-body-small-size: .75rem;--mat-sys-body-small-tracking: .025rem;--mat-sys-body-small-weight: 400;--mat-sys-display-large: 400 3.562rem / 4rem Inter;--mat-sys-display-large-font: Inter;--mat-sys-display-large-line-height: 4rem;--mat-sys-display-large-size: 3.562rem;--mat-sys-display-large-tracking: -.016rem;--mat-sys-display-large-weight: 400;--mat-sys-display-medium: 400 2.812rem / 3.25rem Inter;--mat-sys-display-medium-font: Inter;--mat-sys-display-medium-line-height: 3.25rem;--mat-sys-display-medium-size: 2.812rem;--mat-sys-display-medium-tracking: 0;--mat-sy
+https://steiermark.antenne.at/manifest.json => 404 https://steiermark.antenne.at/manifest.json text/html;charset=UTF-8 236465
+<!DOCTYPE html><html lang="de" data-beasties-container><head>
+    <meta charset="utf-8">
+    <title>Antenne Steiermark</title>
+    <base href="/">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#ffed00">
+    <meta name="apple-itunes-app" content="app-id=351107806">
+    <link rel="preconnect" href="https://cms.steiermark.antenne.at">
+    <link rel="preconnect" href="https://www.antenne.at">
+
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="manifest" href="manifest.steiermark.webmanifest">
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Antenne Steiermark",
+        "url": "https://steiermark.antenne.at/"
+      }
+    </script>
+  <style>html{--mat-sys-body-large: 400 1rem / 1.5rem Inter;--mat-sys-body-large-font: Inter;--mat-sys-body-large-line-height: 1.5rem;--mat-sys-body-large-size: 1rem;--mat-sys-body-large-tracking: .031rem;--mat-sys-body-large-weight: 400;--mat-sys-body-medium: 400 .875rem / 1.25rem Inter;--mat-sys-body-medium-font: Inter;--mat-sys-body-medium-line-height: 1.25rem;--mat-sys-body-medium-size: .875rem;--mat-sys-body-medium-tracking: .016rem;--mat-sys-body-medium-weight: 400;--mat-sys-body-small: 400 .75rem / 1rem Inter;--mat-sys-body-small-font: Inter;--mat-sys-body-small-line-height: 1rem;--mat-sys-body-small-size: .75rem;--mat-sys-body-small-tracking: .025rem;--mat-sys-body-small-weight: 400;--mat-sys-display-large: 400 3.562rem / 4rem Inter;--mat-sys-display-large-font: Inter;--mat-sys-display-large-line-height: 4rem;--mat-sys-display-large-size: 3.562rem;--mat-sys-display-large-tracking: -.016rem;--mat-sys-display-large-weight: 400;--mat-sys-display-medium: 400 2.812rem / 3.25rem Inter;--mat-sys-display-medium-font: Inter;--mat-sys-display-medium-line-height: 3.25rem;--mat-sys-display-medium-size: 2.812rem;--mat-sys-display-medium-tracking: 0;--mat-sy
