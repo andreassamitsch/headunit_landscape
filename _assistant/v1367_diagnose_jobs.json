@@ -2,21 +2,21 @@
   "total_count": 1,
   "jobs": [
     {
-      "id": 89244175352,
-      "run_id": 30018339702,
+      "id": 89249003388,
+      "run_id": 30019732369,
       "workflow_name": "Diagnose WebRadio artist action",
       "head_branch": "main",
-      "run_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30018339702",
+      "run_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30019732369",
       "run_attempt": 1,
-      "node_id": "CR_kwDOSW2IEs8AAAAUx14L-A",
-      "head_sha": "ea20867b8e8397b40df5166cacd466529fdc6d82",
-      "url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/jobs/89244175352",
-      "html_url": "https://github.com/andreassamitsch/headunit_landscape/actions/runs/30018339702/job/89244175352",
-      "status": "in_progress",
-      "conclusion": null,
-      "created_at": "2026-07-23T14:58:31Z",
-      "started_at": "2026-07-23T14:58:34Z",
-      "completed_at": null,
+      "node_id": "CR_kwDOSW2IEs8AAAAUx6e3fA",
+      "head_sha": "6bfef567ee1d149f2e4c00b6f5c044cc7677292b",
+      "url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/jobs/89249003388",
+      "html_url": "https://github.com/andreassamitsch/headunit_landscape/actions/runs/30019732369/job/89249003388",
+      "status": "completed",
+      "conclusion": "failure",
+      "created_at": "2026-07-23T15:16:01Z",
+      "started_at": "2026-07-23T15:16:03Z",
+      "completed_at": "2026-07-23T15:16:11Z",
       "name": "focused-test",
       "steps": [
         {
@@ -24,112 +24,104 @@
           "status": "completed",
           "conclusion": "success",
           "number": 1,
-          "started_at": "2026-07-23T14:58:34Z",
-          "completed_at": "2026-07-23T14:58:36Z"
+          "started_at": "2026-07-23T15:16:03Z",
+          "completed_at": "2026-07-23T15:16:06Z"
         },
         {
           "name": "Run actions/checkout@v4",
           "status": "completed",
           "conclusion": "success",
           "number": 2,
-          "started_at": "2026-07-23T14:58:36Z",
-          "completed_at": "2026-07-23T14:58:38Z"
+          "started_at": "2026-07-23T15:16:06Z",
+          "completed_at": "2026-07-23T15:16:08Z"
         },
         {
           "name": "Apply WebRadio sources and focused diagnostics",
           "status": "completed",
-          "conclusion": "success",
+          "conclusion": "failure",
           "number": 3,
-          "started_at": "2026-07-23T14:58:38Z",
-          "completed_at": "2026-07-23T14:58:38Z"
+          "started_at": "2026-07-23T15:16:08Z",
+          "completed_at": "2026-07-23T15:16:08Z"
         },
         {
           "name": "Run actions/setup-java@v4",
           "status": "completed",
-          "conclusion": "success",
+          "conclusion": "skipped",
           "number": 4,
-          "started_at": "2026-07-23T14:58:38Z",
-          "completed_at": "2026-07-23T14:58:39Z"
+          "started_at": "2026-07-23T15:16:08Z",
+          "completed_at": "2026-07-23T15:16:08Z"
         },
         {
           "name": "Run gradle/actions/setup-gradle@v4",
           "status": "completed",
-          "conclusion": "success",
+          "conclusion": "skipped",
           "number": 5,
-          "started_at": "2026-07-23T14:58:39Z",
-          "completed_at": "2026-07-23T14:58:47Z"
+          "started_at": "2026-07-23T15:16:08Z",
+          "completed_at": "2026-07-23T15:16:08Z"
         },
         {
           "name": "Build focused emulator APK",
-          "status": "in_progress",
-          "conclusion": null,
+          "status": "completed",
+          "conclusion": "skipped",
           "number": 6,
-          "started_at": "2026-07-23T14:58:47Z",
-          "completed_at": null
+          "started_at": "2026-07-23T15:16:08Z",
+          "completed_at": "2026-07-23T15:16:08Z"
         },
         {
           "name": "Free disk space",
-          "status": "pending",
-          "conclusion": null,
+          "status": "completed",
+          "conclusion": "skipped",
           "number": 7,
-          "started_at": null,
-          "completed_at": null
+          "started_at": "2026-07-23T15:16:08Z",
+          "completed_at": "2026-07-23T15:16:08Z"
         },
         {
           "name": "Enable KVM access",
-          "status": "pending",
-          "conclusion": null,
+          "status": "completed",
+          "conclusion": "skipped",
           "number": 8,
-          "started_at": null,
-          "completed_at": null
+          "started_at": "2026-07-23T15:16:08Z",
+          "completed_at": "2026-07-23T15:16:08Z"
         },
         {
           "name": "Run focused artist action test",
-          "status": "pending",
-          "conclusion": null,
+          "status": "completed",
+          "conclusion": "skipped",
           "number": 9,
-          "started_at": null,
-          "completed_at": null
+          "started_at": "2026-07-23T15:16:08Z",
+          "completed_at": "2026-07-23T15:16:08Z"
         },
         {
           "name": "Upload focused evidence",
-          "status": "pending",
-          "conclusion": null,
+          "status": "completed",
+          "conclusion": "success",
           "number": 10,
-          "started_at": null,
-          "completed_at": null
-        },
-        {
-          "name": "Post Run gradle/actions/setup-gradle@v4",
-          "status": "pending",
-          "conclusion": null,
-          "number": 18,
-          "started_at": null,
-          "completed_at": null
-        },
-        {
-          "name": "Post Run actions/setup-java@v4",
-          "status": "pending",
-          "conclusion": null,
-          "number": 19,
-          "started_at": null,
-          "completed_at": null
+          "started_at": "2026-07-23T15:16:08Z",
+          "completed_at": "2026-07-23T15:16:08Z"
         },
         {
           "name": "Post Run actions/checkout@v4",
-          "status": "pending",
-          "conclusion": null,
+          "status": "completed",
+          "conclusion": "success",
           "number": 20,
-          "started_at": null,
-          "completed_at": null
+          "started_at": "2026-07-23T15:16:08Z",
+          "completed_at": "2026-07-23T15:16:08Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 21,
+          "started_at": "2026-07-23T15:16:08Z",
+          "completed_at": "2026-07-23T15:16:08Z"
         }
       ],
-      "check_run_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/check-runs/89244175352",
+      "check_run_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/check-runs/89249003388",
       "labels": [
         "ubuntu-22.04"
       ],
-      "runner_id": 1000001313,
-      "runner_name": "GitHub Actions 1000001313",
+      "runner_id": 1000001315,
+      "runner_name": "GitHub Actions 1000001315",
       "runner_group_id": 0,
       "runner_group_name": "GitHub Actions"
     }
