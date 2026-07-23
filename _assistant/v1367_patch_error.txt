@@ -1,0 +1,83 @@
+182:2026-07-23T12:19:43.5510067Z Missing expected text in scripts/dudu7_webradio_reliability_smoke.sh: '  {"uuid":"test-radio-three","name":"Test Radio Three","streamUrl":"http://10.0.2.2:8000/station3","homepage":"http://10.0.2.2:8000/station3-home","favicon":"","country":"Austria",'
+183:2026-07-23T12:19:43.5554688Z ##[error]Process completed with exit code 1.
+--- tail ---
+2026-07-23T12:19:43.5130907Z   ACTIVITY_NAME: com.metrolist.music.MainActivity
+2026-07-23T12:19:43.5131212Z   RESULTS_DIR: ui-test-results
+2026-07-23T12:19:43.5131498Z   APK_PATH: dist/Metrolist-Dudu7-13.6.7-emulator.apk
+2026-07-23T12:19:43.5131867Z ##[endgroup]
+2026-07-23T12:19:43.5510067Z Missing expected text in scripts/dudu7_webradio_reliability_smoke.sh: '  {"uuid":"test-radio-three","name":"Test Radio Three","streamUrl":"http://10.0.2.2:8000/station3","homepage":"http://10.0.2.2:8000/station3-home","favicon":"","country":"Austria",'
+2026-07-23T12:19:43.5554688Z ##[error]Process completed with exit code 1.
+2026-07-23T12:19:43.5645454Z ##[group]Run if [[ -f /tmp/build.gradle.arm.kts ]]; then
+2026-07-23T12:19:43.5645872Z [36;1mif [[ -f /tmp/build.gradle.arm.kts ]]; then[0m
+2026-07-23T12:19:43.5646235Z [36;1m  cp /tmp/build.gradle.arm.kts app/build.gradle.kts[0m
+2026-07-23T12:19:43.5646551Z [36;1mfi[0m
+2026-07-23T12:19:43.5716781Z shell: /usr/bin/bash -e {0}
+2026-07-23T12:19:43.5717038Z env:
+2026-07-23T12:19:43.5717250Z   METROLIST_APP_NAME: Metrolist
+2026-07-23T12:19:43.5717498Z   API_LEVEL: 33
+2026-07-23T12:19:43.5717709Z   SYSTEM_TARGET: google_apis
+2026-07-23T12:19:43.5717950Z   DATA_PARTITION_SIZE: 1536M
+2026-07-23T12:19:43.5718182Z   DUDU_WIDTH: 1280
+2026-07-23T12:19:43.5718383Z   DUDU_HEIGHT: 720
+2026-07-23T12:19:43.5718574Z   DUDU_DENSITY: 200
+2026-07-23T12:19:43.5719083Z   TEST_URL: https://music.youtube.com/watch?v=dQw4w9WgXcQ
+2026-07-23T12:19:43.5719448Z   PACKAGE_NAME: com.metrolist.music.dudu7.debug
+2026-07-23T12:19:43.5719784Z   ACTIVITY_NAME: com.metrolist.music.MainActivity
+2026-07-23T12:19:43.5720128Z   RESULTS_DIR: ui-test-results
+2026-07-23T12:19:43.5720424Z   APK_PATH: dist/Metrolist-Dudu7-13.6.7-emulator.apk
+2026-07-23T12:19:43.5720919Z ##[endgroup]
+2026-07-23T12:19:43.5887647Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-07-23T12:19:43.5889423Z ##[group]Run actions/upload-artifact@v4
+2026-07-23T12:19:43.5889695Z with:
+2026-07-23T12:19:43.5889911Z   name: Metrolist-Dudu7-13.6.7-30006536837
+2026-07-23T12:19:43.5890202Z   path: artifacts/
+ui-test-results/
+
+2026-07-23T12:19:43.5890472Z   if-no-files-found: warn
+2026-07-23T12:19:43.5890701Z   retention-days: 14
+2026-07-23T12:19:43.5890920Z   compression-level: 6
+2026-07-23T12:19:43.5891134Z   overwrite: false
+2026-07-23T12:19:43.5891353Z   include-hidden-files: false
+2026-07-23T12:19:43.5891588Z env:
+2026-07-23T12:19:43.5891778Z   METROLIST_APP_NAME: Metrolist
+2026-07-23T12:19:43.5892023Z   API_LEVEL: 33
+2026-07-23T12:19:43.5892272Z   SYSTEM_TARGET: google_apis
+2026-07-23T12:19:43.5892512Z   DATA_PARTITION_SIZE: 1536M
+2026-07-23T12:19:43.5892745Z   DUDU_WIDTH: 1280
+2026-07-23T12:19:43.5892966Z   DUDU_HEIGHT: 720
+2026-07-23T12:19:43.5893208Z   DUDU_DENSITY: 200
+2026-07-23T12:19:43.5893474Z   TEST_URL: https://music.youtube.com/watch?v=dQw4w9WgXcQ
+2026-07-23T12:19:43.5893827Z   PACKAGE_NAME: com.metrolist.music.dudu7.debug
+2026-07-23T12:19:43.5894159Z   ACTIVITY_NAME: com.metrolist.music.MainActivity
+2026-07-23T12:19:43.5894461Z   RESULTS_DIR: ui-test-results
+2026-07-23T12:19:43.5894737Z   APK_PATH: dist/Metrolist-Dudu7-13.6.7-emulator.apk
+2026-07-23T12:19:43.5895032Z ##[endgroup]
+2026-07-23T12:19:43.7606546Z (node:2256) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-07-23T12:19:43.7607558Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-07-23T12:19:43.7648952Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-07-23T12:19:43.7651593Z The least common ancestor is /home/runner/work/headunit_landscape/headunit_landscape. This will be the root directory of the artifact
+2026-07-23T12:19:43.7666610Z ##[warning]No files were found with the provided path: artifacts/
+ui-test-results/. No artifacts will be uploaded.
+2026-07-23T12:19:43.7912917Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-07-23T12:19:43.7914944Z Post job cleanup.
+2026-07-23T12:19:43.8839853Z [command]/usr/bin/git version
+2026-07-23T12:19:43.8882987Z git version 2.54.0
+2026-07-23T12:19:43.8920005Z Temporarily overriding HOME='/home/runner/work/_temp/bb315ab0-e7a8-4763-a338-e131539f057d' before making global git config changes
+2026-07-23T12:19:43.8921424Z Adding repository directory to the temporary git global config as a safe directory
+2026-07-23T12:19:43.8925043Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/headunit_landscape/headunit_landscape
+2026-07-23T12:19:43.8968675Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-07-23T12:19:43.9007200Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-07-23T12:19:43.9282028Z Entering 'metroproto'
+2026-07-23T12:19:43.9356526Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-07-23T12:19:43.9398458Z http.https://github.com/.extraheader
+2026-07-23T12:19:43.9411070Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-07-23T12:19:43.9447929Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-07-23T12:19:43.9743500Z Entering 'metroproto'
+2026-07-23T12:19:43.9778168Z http.https://github.com/.extraheader
+2026-07-23T12:19:43.9846409Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-07-23T12:19:43.9891745Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-07-23T12:19:44.0156836Z Entering 'metroproto'
+2026-07-23T12:19:44.0178543Z file:/home/runner/work/headunit_landscape/headunit_landscape/.git/modules/metroproto/config	remote.origin.url
+2026-07-23T12:19:44.0217936Z [command]/usr/bin/git config --file /home/runner/work/headunit_landscape/headunit_landscape/.git/modules/metroproto/config --name-only --get-regexp ^includeIf\.gitdir:
+2026-07-23T12:19:44.0409044Z Cleaning up orphan processes
+2026-07-23T12:19:44.0680205Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
