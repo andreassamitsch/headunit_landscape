@@ -1,0 +1,53 @@
+name: Diagnose WebRadio 13.6.7 static checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-v1367-static.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Apply patch and record each check
+        run: |
+          set -u
+          python3 .assistant/patch_webradio_v1367.py
+          mkdir -p _assistant
+          out=_assistant/v1367_static_diagnosis.txt
+          : > "$out"
+          check() {
+            label="$1"; shift
+            if "$@"; then echo "PASS $label" >> "$out"; else echo "FAIL $label" >> "$out"; fi
+          }
+          check version-code grep -q 'versionCode = 156' app/build.gradle.kts
+          check version-name grep -q 'versionName = "13.6.7"' app/build.gradle.kts
+          check start-index grep -q 'startIndex = startIndex' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
+          check active-indicator grep -q '● LÄUFT' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
+          check row-effect grep -q 'LaunchedEffect(station.uuid, station.homepage)' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
+          if grep -q 'LaunchedEffect(savedStations.map' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt; then echo 'FAIL duplicate-logo-effect' >> "$out"; else echo 'PASS duplicate-logo-effect' >> "$out"; fi
+          check stable-logo grep -q 'existingArtwork != null && !isVectorUrl(existingArtwork)' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoResolver.kt
+          check box-constraints grep -q 'BoxWithConstraints' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          check captured-width grep -q 'embeddedPaneWidth = maxWidth' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          check embedded-nav grep -q 'embeddedInPlayer = embeddedInPlayer' app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt
+          check radio-artwork grep -q 'targetState = showInlineLyrics && !isWebRadio' app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt
+          check kronehit-test grep -q 'kronehit logo stayed stable' scripts/dudu7_webradio_reliability_smoke.sh
+          {
+            echo '--- ArtistScreen pane excerpt ---'
+            grep -n -C 5 'embeddedPaneWidth\|artistHeaderAspectRatio' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt || true
+            echo '--- Player radio artwork excerpt ---'
+            grep -n -C 3 'targetState = showInlineLyrics' app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt || true
+          } >> "$out"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -f "$out"
+          git commit -m 'Record WebRadio 13.6.7 static diagnosis [skip ci]'
+          git push
