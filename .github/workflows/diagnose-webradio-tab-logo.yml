@@ -17,57 +17,45 @@ jobs:
       - uses: actions/checkout@v4
       - name: Probe Antenne Steiermark logo sources
         run: |
-          set -euo pipefail
+          set -u
           mkdir -p _assistant /tmp/antenne
-          python3 - <<'PY' > _assistant/webradio_tab_logo_diagnosis.txt
-          import json, urllib.parse, urllib.request, ssl, re
-          ua = {'User-Agent':'MetrolistHU/13.6.5 (Android WebRadio probe)','Accept':'*/*'}
-          def fetch(url, limit=1024*1024):
-              req=urllib.request.Request(url, headers=ua)
-              with urllib.request.urlopen(req, timeout=15, context=ssl.create_default_context()) as r:
-                  data=r.read(limit)
-                  return r.status, r.geturl(), r.headers.get('content-type',''), data
-          print('=== Radio Browser search ===')
-          q=urllib.parse.quote('Antenne Steiermark')
-          for endpoint in [
-              f'https://all.api.radio-browser.info/json/stations/search?name={q}&hidebroken=true&limit=20&order=clickcount&reverse=true',
-              f'https://de1.api.radio-browser.info/json/stations/bynameexact/{q}?hidebroken=true&limit=20',
-          ]:
-              try:
-                  status, final, ct, data = fetch(endpoint)
-                  print('ENDPOINT', endpoint, status, final, ct)
-                  arr=json.loads(data.decode('utf-8','replace'))
-                  for item in arr[:20]:
-                      print(json.dumps({k:item.get(k) for k in ['stationuuid','name','homepage','favicon','url_resolved','lastcheckok','clickcount']}, ensure_ascii=False))
-              except Exception as e:
-                  print('ERROR', endpoint, repr(e))
-          print('=== Website pages and metadata ===')
-          pages=['https://www.antenne.at/','https://www.antenne.at/steiermark/','https://steiermark.antenne.at/','https://www.antenne.at/radioplayercontent/steiermark/']
-          for page in pages:
-              try:
-                  status, final, ct, data=fetch(page)
-                  text=data.decode('utf-8','replace')
-                  print('\nPAGE',page,'=>',status,final,ct,'bytes',len(data))
-                  for tag in re.findall(r'<(?:meta|link)\b[^>]*>', text, re.I):
-                      low=tag.lower()
-                      if any(x in low for x in ['icon','manifest','og:image','twitter:image']): print(tag[:1000])
-                  for url in sorted(set(re.findall(r'https?://[^\"\'<> ]+', text))):
-                      if any(x in url.lower() for x in ['logo','icon','favicon','antenne']): print('URL',url[:1000])
-              except Exception as e:
-                  print('ERROR PAGE',page,repr(e))
-          print('=== Common icon paths ===')
-          bases=['https://www.antenne.at','https://steiermark.antenne.at']
-          paths=['/favicon.ico','/favicon.png','/apple-touch-icon.png','/android-chrome-192x192.png','/android-chrome-512x512.png','/site.webmanifest','/manifest.json']
-          for base in bases:
-              for path in paths:
-                  try:
-                      status, final, ct, data=fetch(base+path, 4096)
-                      print(base+path,'=>',status,final,ct,'bytes',len(data),data[:200])
-                  except Exception as e:
-                      print(base+path,'=> ERROR',repr(e))
-          PY
+          OUT=_assistant/webradio_tab_logo_diagnosis.txt
+          : > "$OUT"
+          echo '=== Radio Browser search ===' >> "$OUT"
+          curl -A 'MetrolistHU/13.6.5 logo probe' -L --max-time 30 -sS -G \
+            --data-urlencode 'name=Antenne Steiermark' \
+            --data 'hidebroken=true' --data 'limit=30' --data 'order=clickcount' --data 'reverse=true' \
+            'https://de1.api.radio-browser.info/json/stations/search' \
+            -o /tmp/antenne/rb.json || true
+          if test -s /tmp/antenne/rb.json; then
+            jq -c '.[] | {stationuuid,name,homepage,favicon,url_resolved,lastcheckok,clickcount}' /tmp/antenne/rb.json >> "$OUT" || cat /tmp/antenne/rb.json >> "$OUT"
+          else
+            echo 'Radio Browser returned no data' >> "$OUT"
+          fi
+          echo '=== Website metadata ===' >> "$OUT"
+          for url in \
+            'https://www.antenne.at/' \
+            'https://www.antenne.at/steiermark/' \
+            'https://steiermark.antenne.at/' \
+            'https://www.antenne.at/radioplayercontent/steiermark/'
+          do
+            echo "--- $url ---" >> "$OUT"
+            curl -A 'MetrolistHU/13.6.5 logo probe' -L --max-time 30 -sS -D /tmp/antenne/headers -o /tmp/antenne/page "$url" || true
+            tail -n 1 /tmp/antenne/headers >> "$OUT" || true
+            grep -Eio '<(meta|link)[^>]+(icon|manifest|og:image|twitter:image)[^>]*>' /tmp/antenne/page | head -n 100 >> "$OUT" || true
+            grep -Eo 'https?://[^"<> ]+' /tmp/antenne/page | grep -Ei '(logo|icon|favicon|antenne)' | head -n 100 >> "$OUT" || true
+          done
+          echo '=== Common icon paths ===' >> "$OUT"
+          for base in 'https://www.antenne.at' 'https://steiermark.antenne.at'; do
+            for path in '/favicon.ico' '/favicon.png' '/apple-touch-icon.png' '/android-chrome-192x192.png' '/android-chrome-512x512.png' '/site.webmanifest' '/manifest.json'; do
+              result=$(curl -A 'MetrolistHU/13.6.5 logo probe' -L --max-time 20 -sS -o /tmp/antenne/icon -w '%{http_code} %{url_effective} %{content_type} %{size_download}' "$base$path" || true)
+              echo "$base$path => $result" >> "$OUT"
+              if [[ "$path" == *.json || "$path" == *.webmanifest ]]; then head -c 2000 /tmp/antenne/icon >> "$OUT" 2>/dev/null || true; echo >> "$OUT"; fi
+            done
+          done
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -f _assistant/webradio_tab_logo_diagnosis.txt
-          git commit -m 'Record Antenne Steiermark logo probe [skip ci]'
-          git push
+          git add -f "$OUT"
+          git commit -m 'Record simple Antenne Steiermark logo probe [skip ci]' || true
+          git pull --rebase origin main || true
+          git push || true
