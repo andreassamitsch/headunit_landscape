@@ -19,11 +19,11 @@ text = replace_once(
     "pointer imports",
 )
 
-radio_click = '''                                                                .combinedClickable(
+radio_click = '''                                                                ).combinedClickable(
                                                                     onClick = playArtistRadio,
                                                                     onLongClick = {},
                                                                 ).padding(horizontal = 16.dp),'''
-radio_pointer = '''                                                                .pointerInput(radioEndpoint) {
+radio_pointer = '''                                                                ).pointerInput(radioEndpoint) {
                                                                     awaitPointerEventScope {
                                                                         while (true) {
                                                                             val event = awaitPointerEvent(PointerEventPass.Initial)
