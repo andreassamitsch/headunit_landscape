@@ -41,6 +41,7 @@ jobs:
           python3 .assistant/patch_webradio_v1367.py
           python3 .assistant/normalize_webradio_v1367_artist_source.py
           python3 .assistant/harden_webradio_v1367_validation.py
+          python3 .assistant/force_webradio_artist_pointer_actions.py
           python3 - <<'PY'
           from pathlib import Path
           path = Path('app/build.gradle.kts')
@@ -117,4 +118,4 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-# retry-reliable-embedded-actions-5
+# retry-initial-pointer-pass-6
