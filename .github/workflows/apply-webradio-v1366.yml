@@ -38,7 +38,9 @@ jobs:
           submodules: recursive
 
       - name: Apply WebRadio 13.6.6 patch
-        run: python3 .assistant/patch_webradio_v1366.py
+        run: |
+          python3 .assistant/patch_webradio_v1366.py
+          python3 .assistant/patch_webradio_v1366_testfix.py
 
       - name: Verify changed architecture
         run: |
@@ -49,6 +51,7 @@ jobs:
           grep -q 'notifyUserSelection = false' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
           grep -q 'onRadioArtistSelection' app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt
           grep -q 'FILTER_ARTIST' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+          grep -q 'Resolved radio artist navigation' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'regionalHomepageCandidates' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoResolver.kt
           grep -q 'Antenne Steiermark received a persisted raster station logo' scripts/dudu7_webradio_reliability_smoke.sh
           chmod +x gradlew scripts/run_dudu7_emulator_ci.sh scripts/dudu7_webradio_reliability_smoke.sh
@@ -178,3 +181,5 @@ jobs:
             ui-test-results/
           if-no-files-found: warn
           retention-days: 14
+
+# robust-radio-artist-validation
