@@ -1,0 +1,63 @@
+name: Fix WebRadio 13.6.7 artist queue route
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-v1367-artist-queue-route.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Replace unreliable pop with explicit embedded queue navigation
+        run: |
+          cat >> .assistant/patch_webradio_v1367.py <<'PY'
+
+# Explicitly navigate to the vehicle queue. popBackStack(route) can return false
+# after saved-state tab restoration, while navigate + inclusive popUpTo always
+# produces the required root destination in this nested NavHost.
+replace_once(
+    artist_screen,
+    '''                                                    if (embeddedInPlayer) {
+                                                        navController.popBackStack("vehicle_queue", inclusive = false)
+                                                    }
+                                                    playerConnection.playQueue(YouTubeQueue(radioEndpoint))''',
+    '''                                                    if (embeddedInPlayer) {
+                                                        navController.navigate("vehicle_queue") {
+                                                            popUpTo("vehicle_queue") { inclusive = true }
+                                                            launchSingleTop = true
+                                                        }
+                                                    }
+                                                    playerConnection.playQueue(YouTubeQueue(radioEndpoint))''',
+)
+replace_once(
+    artist_screen,
+    '''                                                        if (embeddedInPlayer) {
+                                                            navController.popBackStack("vehicle_queue", inclusive = false)
+                                                        }
+                                                        playerConnection.playQueue(YouTubeQueue(shuffleEndpoint))''',
+    '''                                                        if (embeddedInPlayer) {
+                                                            navController.navigate("vehicle_queue") {
+                                                                popUpTo("vehicle_queue") { inclusive = true }
+                                                                launchSingleTop = true
+                                                            }
+                                                        }
+                                                        playerConnection.playQueue(YouTubeQueue(shuffleEndpoint))''',
+)
+print("Embedded artist actions now navigate explicitly to vehicle_queue")
+PY
+          python3 -m py_compile .assistant/patch_webradio_v1367.py
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .assistant/patch_webradio_v1367.py
+          git commit -m 'Use explicit embedded queue route for artist actions'
+          git pull --rebase origin main
+          git push
