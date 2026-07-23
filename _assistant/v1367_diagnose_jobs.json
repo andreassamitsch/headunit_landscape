@@ -2,86 +2,134 @@
   "total_count": 1,
   "jobs": [
     {
-      "id": 89250627006,
-      "run_id": 30020204520,
+      "id": 89251018610,
+      "run_id": 30020318497,
       "workflow_name": "Diagnose WebRadio artist action",
       "head_branch": "main",
-      "run_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30020204520",
+      "run_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30020318497",
       "run_attempt": 1,
-      "node_id": "CR_kwDOSW2IEs8AAAAUx8B9vg",
-      "head_sha": "b87660c21c1a5183de6c4a13fe2b9e7eeb0ad7ab",
-      "url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/jobs/89250627006",
-      "html_url": "https://github.com/andreassamitsch/headunit_landscape/actions/runs/30020204520/job/89250627006",
-      "status": "completed",
-      "conclusion": "success",
-      "created_at": "2026-07-23T15:22:03Z",
-      "started_at": "2026-07-23T15:22:16Z",
-      "completed_at": "2026-07-23T15:22:26Z",
-      "name": "patch-diagnostic",
+      "node_id": "CR_kwDOSW2IEs8AAAAUx8Z3cg",
+      "head_sha": "a35e323e8a58aa20a6414f0e135cb058f0ca30d7",
+      "url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/jobs/89251018610",
+      "html_url": "https://github.com/andreassamitsch/headunit_landscape/actions/runs/30020318497/job/89251018610",
+      "status": "in_progress",
+      "conclusion": null,
+      "created_at": "2026-07-23T15:23:32Z",
+      "started_at": "2026-07-23T15:23:34Z",
+      "completed_at": null,
+      "name": "focused-test",
       "steps": [
         {
           "name": "Set up job",
           "status": "completed",
           "conclusion": "success",
           "number": 1,
-          "started_at": "2026-07-23T15:22:17Z",
-          "completed_at": "2026-07-23T15:22:19Z"
+          "started_at": "2026-07-23T15:23:34Z",
+          "completed_at": "2026-07-23T15:23:37Z"
         },
         {
           "name": "Run actions/checkout@v4",
           "status": "completed",
           "conclusion": "success",
           "number": 2,
-          "started_at": "2026-07-23T15:22:19Z",
-          "completed_at": "2026-07-23T15:22:22Z"
+          "started_at": "2026-07-23T15:23:37Z",
+          "completed_at": "2026-07-23T15:23:39Z"
         },
         {
-          "name": "Verify complete WebRadio patch application",
+          "name": "Apply WebRadio sources and focused diagnostics",
           "status": "completed",
           "conclusion": "success",
           "number": 3,
-          "started_at": "2026-07-23T15:22:22Z",
-          "completed_at": "2026-07-23T15:22:22Z"
+          "started_at": "2026-07-23T15:23:39Z",
+          "completed_at": "2026-07-23T15:23:39Z"
         },
         {
-          "name": "Upload patch diagnostic",
+          "name": "Run actions/setup-java@v4",
           "status": "completed",
           "conclusion": "success",
           "number": 4,
-          "started_at": "2026-07-23T15:22:22Z",
-          "completed_at": "2026-07-23T15:22:24Z"
+          "started_at": "2026-07-23T15:23:39Z",
+          "completed_at": "2026-07-23T15:23:40Z"
         },
         {
-          "name": "Fail when patch failed",
+          "name": "Run gradle/actions/setup-gradle@v4",
           "status": "completed",
-          "conclusion": "skipped",
+          "conclusion": "success",
           "number": 5,
-          "started_at": "2026-07-23T15:22:24Z",
-          "completed_at": "2026-07-23T15:22:24Z"
+          "started_at": "2026-07-23T15:23:40Z",
+          "completed_at": "2026-07-23T15:23:50Z"
+        },
+        {
+          "name": "Build focused emulator APK",
+          "status": "in_progress",
+          "conclusion": null,
+          "number": 6,
+          "started_at": "2026-07-23T15:23:50Z",
+          "completed_at": null
+        },
+        {
+          "name": "Free disk space",
+          "status": "pending",
+          "conclusion": null,
+          "number": 7,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Enable KVM access",
+          "status": "pending",
+          "conclusion": null,
+          "number": 8,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Run focused artist action test",
+          "status": "pending",
+          "conclusion": null,
+          "number": 9,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Upload focused evidence",
+          "status": "pending",
+          "conclusion": null,
+          "number": 10,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Post Run gradle/actions/setup-gradle@v4",
+          "status": "pending",
+          "conclusion": null,
+          "number": 18,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Post Run actions/setup-java@v4",
+          "status": "pending",
+          "conclusion": null,
+          "number": 19,
+          "started_at": null,
+          "completed_at": null
         },
         {
           "name": "Post Run actions/checkout@v4",
-          "status": "completed",
-          "conclusion": "success",
-          "number": 10,
-          "started_at": "2026-07-23T15:22:24Z",
-          "completed_at": "2026-07-23T15:22:24Z"
-        },
-        {
-          "name": "Complete job",
-          "status": "completed",
-          "conclusion": "success",
-          "number": 11,
-          "started_at": "2026-07-23T15:22:24Z",
-          "completed_at": "2026-07-23T15:22:24Z"
+          "status": "pending",
+          "conclusion": null,
+          "number": 20,
+          "started_at": null,
+          "completed_at": null
         }
       ],
-      "check_run_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/check-runs/89250627006",
+      "check_run_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/check-runs/89251018610",
       "labels": [
-        "ubuntu-slim"
+        "ubuntu-22.04"
       ],
-      "runner_id": 1000001319,
-      "runner_name": "GitHub Actions 1000001319",
+      "runner_id": 1000001321,
+      "runner_name": "GitHub Actions 1000001321",
       "runner_group_id": 0,
       "runner_group_name": "GitHub Actions"
     }
