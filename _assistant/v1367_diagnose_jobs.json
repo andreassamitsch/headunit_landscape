@@ -2,21 +2,21 @@
   "total_count": 1,
   "jobs": [
     {
-      "id": 89249971758,
-      "run_id": 30020012475,
+      "id": 89250627006,
+      "run_id": 30020204520,
       "workflow_name": "Diagnose WebRadio artist action",
       "head_branch": "main",
-      "run_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30020012475",
+      "run_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30020204520",
       "run_attempt": 1,
-      "node_id": "CR_kwDOSW2IEs8AAAAUx7Z-Lg",
-      "head_sha": "301ea119462eb891874a1da80cc8833c2cc8a776",
-      "url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/jobs/89249971758",
-      "html_url": "https://github.com/andreassamitsch/headunit_landscape/actions/runs/30020012475/job/89249971758",
+      "node_id": "CR_kwDOSW2IEs8AAAAUx8B9vg",
+      "head_sha": "b87660c21c1a5183de6c4a13fe2b9e7eeb0ad7ab",
+      "url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/jobs/89250627006",
+      "html_url": "https://github.com/andreassamitsch/headunit_landscape/actions/runs/30020204520/job/89250627006",
       "status": "completed",
-      "conclusion": "failure",
-      "created_at": "2026-07-23T15:19:37Z",
-      "started_at": "2026-07-23T15:19:40Z",
-      "completed_at": "2026-07-23T15:19:48Z",
+      "conclusion": "success",
+      "created_at": "2026-07-23T15:22:03Z",
+      "started_at": "2026-07-23T15:22:16Z",
+      "completed_at": "2026-07-23T15:22:26Z",
       "name": "patch-diagnostic",
       "steps": [
         {
@@ -24,64 +24,64 @@
           "status": "completed",
           "conclusion": "success",
           "number": 1,
-          "started_at": "2026-07-23T15:19:40Z",
-          "completed_at": "2026-07-23T15:19:42Z"
+          "started_at": "2026-07-23T15:22:17Z",
+          "completed_at": "2026-07-23T15:22:19Z"
         },
         {
           "name": "Run actions/checkout@v4",
           "status": "completed",
           "conclusion": "success",
           "number": 2,
-          "started_at": "2026-07-23T15:19:42Z",
-          "completed_at": "2026-07-23T15:19:44Z"
+          "started_at": "2026-07-23T15:22:19Z",
+          "completed_at": "2026-07-23T15:22:22Z"
         },
         {
-          "name": "Capture exact patch failure",
+          "name": "Verify complete WebRadio patch application",
           "status": "completed",
           "conclusion": "success",
           "number": 3,
-          "started_at": "2026-07-23T15:19:44Z",
-          "completed_at": "2026-07-23T15:19:45Z"
+          "started_at": "2026-07-23T15:22:22Z",
+          "completed_at": "2026-07-23T15:22:22Z"
         },
         {
           "name": "Upload patch diagnostic",
           "status": "completed",
           "conclusion": "success",
           "number": 4,
-          "started_at": "2026-07-23T15:19:45Z",
-          "completed_at": "2026-07-23T15:19:46Z"
+          "started_at": "2026-07-23T15:22:22Z",
+          "completed_at": "2026-07-23T15:22:24Z"
         },
         {
           "name": "Fail when patch failed",
           "status": "completed",
-          "conclusion": "failure",
+          "conclusion": "skipped",
           "number": 5,
-          "started_at": "2026-07-23T15:19:46Z",
-          "completed_at": "2026-07-23T15:19:46Z"
+          "started_at": "2026-07-23T15:22:24Z",
+          "completed_at": "2026-07-23T15:22:24Z"
         },
         {
           "name": "Post Run actions/checkout@v4",
           "status": "completed",
           "conclusion": "success",
           "number": 10,
-          "started_at": "2026-07-23T15:19:46Z",
-          "completed_at": "2026-07-23T15:19:46Z"
+          "started_at": "2026-07-23T15:22:24Z",
+          "completed_at": "2026-07-23T15:22:24Z"
         },
         {
           "name": "Complete job",
           "status": "completed",
           "conclusion": "success",
           "number": 11,
-          "started_at": "2026-07-23T15:19:46Z",
-          "completed_at": "2026-07-23T15:19:46Z"
+          "started_at": "2026-07-23T15:22:24Z",
+          "completed_at": "2026-07-23T15:22:24Z"
         }
       ],
-      "check_run_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/check-runs/89249971758",
+      "check_run_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/check-runs/89250627006",
       "labels": [
         "ubuntu-slim"
       ],
-      "runner_id": 1000001317,
-      "runner_name": "GitHub Actions 1000001317",
+      "runner_id": 1000001319,
+      "runner_name": "GitHub Actions 1000001319",
       "runner_group_id": 0,
       "runner_group_name": "GitHub Actions"
     }
