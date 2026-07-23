@@ -7,14 +7,14 @@ on:
       - '.github/workflows/apply-webradio-v1367.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: apply-webradio-v1367
   cancel-in-progress: true
 
 jobs:
-  build-test-commit:
+  build-test:
     runs-on: ubuntu-22.04
     timeout-minutes: 70
     env:
@@ -37,10 +37,10 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Apply WebRadio 13.6.7 patch
+      - name: Apply final WebRadio patch
         run: python3 .assistant/patch_webradio_v1367.py
 
-      - name: Verify changed architecture
+      - name: Verify final architecture and tests
         run: |
           set -euxo pipefail
           grep -q 'versionCode = 156' app/build.gradle.kts
@@ -50,10 +50,11 @@ jobs:
           grep -q 'LaunchedEffect(station.uuid, station.homepage)' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
           ! grep -q 'LaunchedEffect(savedStations.map' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
           grep -q 'existingArtwork != null && !isVectorUrl(existingArtwork)' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoResolver.kt
-          grep -q 'BoxWithConstraints' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
           grep -q 'embeddedPaneWidth = maxWidth' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
-          grep -q 'embeddedInPlayer = embeddedInPlayer' app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt
+          grep -q 'navController.popBackStack("vehicle_queue", inclusive = false)' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
           grep -q 'targetState = showInlineLyrics && !isWebRadio' app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt
+          grep -q 'assert_selected_tab()' scripts/dudu7_webradio_reliability_smoke.sh
+          grep -q 'assert_station_active()' scripts/dudu7_webradio_reliability_smoke.sh
           grep -q 'kronehit logo stayed stable' scripts/dudu7_webradio_reliability_smoke.sh
           chmod +x gradlew scripts/run_dudu7_emulator_ci.sh scripts/dudu7_webradio_reliability_smoke.sh
 
@@ -125,7 +126,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run complete WebRadio regression test
+      - name: Run strict WebRadio regression test
         run: |
           set -euxo pipefail
           mkdir -p "$RESULTS_DIR" radio-test-data
@@ -148,32 +149,6 @@ jobs:
           chmod +x scripts/dudu7_ui_smoke.sh
           scripts/run_dudu7_emulator_ci.sh
 
-      - name: Restore ARM build file
-        if: always()
-        run: |
-          if [[ -f /tmp/build.gradle.arm.kts ]]; then
-            cp /tmp/build.gradle.arm.kts app/build.gradle.kts
-          fi
-
-      - name: Commit verified source changes
-        if: success()
-        run: |
-          set -euxo pipefail
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add app/build.gradle.kts \
-            app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt \
-            app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoResolver.kt \
-            app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt \
-            app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt \
-            app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt \
-            app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt \
-            scripts/icy_test_server.py \
-            scripts/dudu7_webradio_reliability_smoke.sh
-          git commit -m 'Fix WebRadio queue state artwork and embedded artist pages'
-          git pull --rebase origin main
-          git push
-
       - name: Upload APK and test evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -184,7 +159,3 @@ jobs:
             ui-test-results/
           if-no-files-found: warn
           retention-days: 14
-
-# corrected-station-seed-patch
-# corrected-embedded-pane-width
-# final-pane-width-patch-applied
