@@ -1,0 +1,104 @@
+PASS version-code
+PASS version-name
+PASS start-index
+PASS active-indicator
+PASS row-effect
+PASS duplicate-logo-effect
+PASS stable-logo
+PASS box-constraints
+FAIL captured-width
+PASS embedded-nav
+PASS radio-artwork
+PASS kronehit-test
+--- ArtistScreen pane excerpt ---
+159-
+160-    val lazyListState = rememberLazyListState()
+161-    val snackbarHostState = remember { SnackbarHostState() }
+162-    var showLocal by rememberSaveable { mutableStateOf(false) }
+163-    val density = LocalDensity.current
+164:    val artistHeaderAspectRatio = if (embeddedInPlayer) 1.45f else 1f
+165-
+166-    // Calculate the offset value outside of the offset lambda
+167-    val systemBarsTopPadding = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()
+168-    val headerOffset =
+169-        with(density) {
+--
+296-                        if (thumbnail != null) {
+297-                            Box(
+298-                                modifier =
+299-                                    Modifier
+300-                                        .fillMaxWidth()
+301:                                        .aspectRatio(artistHeaderAspectRatio)
+302-                                        .offset {
+303-                                            IntOffset(x = 0, y = headerOffset)
+304-                                        },
+305-                            ) {
+306-                                AsyncImage(
+--
+327-                                        top =
+328-                                            if (thumbnail != null) {
+329-                                                // BoxWithConstraints reports the real right-pane width.
+330-                                                // The previous full-screen displayMetrics value pushed all
+331-                                                // controls below the visible embedded area.
+332:                                                (maxWidth / artistHeaderAspectRatio -
+333-                                                    if (embeddedInPlayer) 88.dp else 144.dp)
+334-                                                    .coerceAtLeast(if (embeddedInPlayer) 180.dp else 240.dp)
+335-                                            } else {
+336-                                                16.dp
+337-                                            },
+--- Player radio artwork excerpt ---
+985-                        .padding(horizontal = PlayerHorizontalPadding),
+986-            ) {
+987-                AnimatedContent(
+988:                    targetState = showInlineLyrics,
+989-                    label = "ThumbnailAnimation",
+990-                ) { showLyrics ->
+991-                    if (showLyrics) {
+--
+1180-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+1181-                        verticalAlignment = Alignment.CenterVertically,
+1182-                    ) {
+1183:                        AnimatedContent(targetState = showInlineLyrics, label = "ShareButton") { showLyrics ->
+1184-                            if (showLyrics) {
+1185-                                FilledIconButton(
+1186-                                    onClick = { isFullScreen = !isFullScreen },
+--
+1229-                            }
+1230-                        }
+1231-
+1232:                        AnimatedContent(targetState = showInlineLyrics, label = "LikeButton") { showLyrics ->
+1233-                            if (showLyrics) {
+1234-                                val currentLyrics by playerConnection.currentLyrics.collectAsStateWithLifecycle(initialValue = null)
+1235-                                FilledIconButton(
+--
+1295-                        }
+1296-                    }
+1297-                } else {
+1298:                    AnimatedContent(targetState = showInlineLyrics, label = "ShareButton") { showLyrics ->
+1299-                        if (showLyrics) {
+1300-                            Box(
+1301-                                modifier =
+--
+1350-
+1351-                    Spacer(modifier = Modifier.size(12.dp))
+1352-
+1353:                    AnimatedContent(targetState = showInlineLyrics, label = "LikeButton") { showLyrics ->
+1354-                        if (showLyrics) {
+1355-                            val currentLyrics by playerConnection.currentLyrics.collectAsStateWithLifecycle(initialValue = null)
+1356-                            Box(
+--
+1879-                        val sliderPositionProvider = remember { { currentSliderPosition } }
+1880-                        val isExpandedProvider = remember(state) { { state.isExpanded } }
+1881-                        AnimatedContent(
+1882:                            targetState = showInlineLyrics && !isWebRadio,
+1883-                            label = "Lyrics",
+1884-                            transitionSpec = { fadeIn() togetherWith fadeOut() },
+1885-                        ) { showLyrics ->
+--
+2082-                        val sliderPositionProvider = remember { { currentSliderPosition } }
+2083-                        val isExpandedProvider = remember(state) { { state.isExpanded } }
+2084-                        AnimatedContent(
+2085:                            targetState = showInlineLyrics,
+2086-                            label = "Lyrics",
+2087-                            transitionSpec = { fadeIn() togetherWith fadeOut() },
+2088-                        ) { showLyrics ->
