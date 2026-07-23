@@ -127,7 +127,7 @@ object RadioStationLogoResolver {
 
     private fun parseDeclaredSize(value: String?): Int =
         value
-            ?.split(Regex("\\s+"))
+            ?.split(Regex("\\\\s+"))
             ?.mapNotNull { size ->
                 val parts = size.lowercase().split('x')
                 if (parts.size != 2) null else minOf(parts[0].toIntOrNull() ?: 0, parts[1].toIntOrNull() ?: 0)
