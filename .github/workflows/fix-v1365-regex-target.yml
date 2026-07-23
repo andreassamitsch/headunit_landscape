@@ -1,0 +1,48 @@
+name: Fix exact WebRadio 13.6.5 regex targets
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-v1365-regex-target.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore resolver regex and remove initials regex
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.assistant/patch_webradio_reliability_logos_cover.py')
+          text = path.read_text(encoding='utf-8')
+
+          old_resolver = r'?.split(Regex("\\\\s+"))'
+          new_resolver = r'?.split(Regex("\\s+"))'
+          if old_resolver not in text:
+              raise SystemExit('Over-escaped resolver regex not found')
+          text = text.replace(old_resolver, new_resolver, 1)
+
+          old_ui = r'''.trim()
+                        .split(Regex("\\s+"))'''
+          new_ui = '''.trim()
+                        .split(' ')'''
+          if old_ui not in text:
+              raise SystemExit('Initials regex block not found')
+          text = text.replace(old_ui, new_ui, 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .assistant/patch_webradio_reliability_logos_cover.py
+          git commit -m 'Fix exact generated WebRadio regex targets'
+          git pull --rebase origin main
+          git push
