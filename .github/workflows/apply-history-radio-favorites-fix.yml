@@ -1,0 +1,171 @@
+name: Apply history and radio favorites fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-history-radio-favorites-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix-build-test:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 55
+    env:
+      METROLIST_APP_NAME: Metrolist
+      API_LEVEL: '33'
+      SYSTEM_TARGET: google_apis
+      DATA_PARTITION_SIZE: 1536M
+      DUDU_WIDTH: '1280'
+      DUDU_HEIGHT: '720'
+      DUDU_DENSITY: '200'
+      TEST_URL: https://music.youtube.com/watch?v=dQw4w9WgXcQ
+      PACKAGE_NAME: com.metrolist.music.dudu7.debug
+      ACTIVITY_NAME: com.metrolist.music.MainActivity
+      RESULTS_DIR: ui-test-results
+      APK_PATH: dist/Metrolist-Dudu7-13.6.4-emulator.apk
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Apply source patch
+        run: python3 .assistant/patch_history_radio_favorites.py
+
+      - name: Verify source changes
+        run: |
+          set -euxo pipefail
+          grep -q 'getSharedPreferences("metrolist_history"' app/src/main/kotlin/com/metrolist/music/viewmodels/HistoryViewModel.kt
+          grep -q '?: HistorySource.REMOTE' app/src/main/kotlin/com/metrolist/music/viewmodels/HistoryViewModel.kt
+          grep -q 'onValueUpdate = viewModel::setHistorySource' app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt
+          grep -q 'val orderedStations = listOf(selected)' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
+          grep -q 'startIndex = 0' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
+          grep -q 'versionCode = 153' app/build.gradle.kts
+          grep -q 'versionName = "13.6.4"' app/build.gradle.kts
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-cleanup: on-success
+
+      - name: Build ARM update APK
+        run: ./gradlew --console=plain :app:assembleGmsDudu7Debug --warning-mode summary
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+
+      - name: Collect and verify ARM APK
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts dist
+          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
+          test -n "$APK"
+          cp "$APK" artifacts/Metrolist-Dudu7-13.6.4.apk
+          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          "$build_tools/aapt" dump badging artifacts/Metrolist-Dudu7-13.6.4.apk | tee artifacts/apk-badging.txt
+          "$build_tools/apksigner" verify --verbose --print-certs artifacts/Metrolist-Dudu7-13.6.4.apk | tee artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='153'" artifacts/apk-badging.txt
+          sha256sum artifacts/Metrolist-Dudu7-13.6.4.apk | tee artifacts/SHA256SUMS.txt
+
+      - name: Prepare x86_64 emulator build
+        run: |
+          cp app/build.gradle.kts /tmp/build.gradle.patched.kts
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('app/build.gradle.kts')
+          text = path.read_text(encoding='utf-8')
+          old = 'abiFilters += listOf("arm64-v8a", "armeabi-v7a")'
+          if old not in text:
+              raise SystemExit('Expected ARM ABI declaration not found')
+          path.write_text(text.replace(old, 'abiFilters += listOf("x86_64")', 1), encoding='utf-8')
+          PY
+          chmod +x gradlew scripts/run_dudu7_emulator_ci.sh scripts/dudu7_webradio_smoke.sh
+
+      - name: Build emulator APK
+        run: |
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --warning-mode summary
+          mkdir -p dist
+          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
+          test -n "$APK"
+          cp "$APK" "$APK_PATH"
+          unzip -l "$APK_PATH" | grep 'lib/x86_64/'
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+
+      - name: Free disk space for emulator
+        run: |
+          ./gradlew --stop || true
+          find . -type d -name build -prune -exec rm -rf {} +
+          rm -rf "$HOME/.gradle/caches/transforms-"* || true
+          df -h
+          test -f "$APK_PATH"
+
+      - name: Enable KVM access
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run favorite and history test
+        run: |
+          mkdir -p "$RESULTS_DIR" radio-test-data
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          ffmpeg -hide_banner -loglevel error -f lavfi -i 'sine=frequency=440:duration=4' -c:a libmp3lame -b:a 96k radio-test-data/station1.mp3
+          ffmpeg -hide_banner -loglevel error -f lavfi -i 'sine=frequency=660:duration=4' -c:a libmp3lame -b:a 96k radio-test-data/station2.mp3
+          python3 scripts/icy_test_server.py \
+            --audio1 radio-test-data/station1.mp3 \
+            --audio2 radio-test-data/station2.mp3 \
+            > "$RESULTS_DIR/icy-server.log" 2>&1 &
+          echo $! > "$RESULTS_DIR/icy-server.pid"
+          for i in {1..20}; do curl -fsS http://127.0.0.1:8000/health && break; sleep 1; done
+          curl -fsS http://127.0.0.1:8000/health
+          cp scripts/dudu7_webradio_smoke.sh scripts/dudu7_ui_smoke.sh
+          chmod +x scripts/dudu7_ui_smoke.sh
+          scripts/run_dudu7_emulator_ci.sh
+
+      - name: Restore ARM build file
+        if: always()
+        run: |
+          if [[ -f /tmp/build.gradle.patched.kts ]]; then
+            cp /tmp/build.gradle.patched.kts app/build.gradle.kts
+          fi
+
+      - name: Commit verified source fix
+        if: success()
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/build.gradle.kts \
+            app/src/main/kotlin/com/metrolist/music/viewmodels/HistoryViewModel.kt \
+            app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt \
+            app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt \
+            app/src/main/kotlin/com/metrolist/music/radio/RadioBrowserClient.kt \
+            scripts/dudu7_webradio_smoke.sh
+          git rm -f .assistant/patch_history_radio_favorites.py \
+            .github/workflows/apply-history-radio-favorites-fix.yml \
+            .github/workflows/diagnose-history-radio-favorites.yml \
+            _assistant/history_radio_diagnosis.txt || true
+          git commit -m 'Persist history source and fix saved WebRadio playback'
+          git push
+
+      - name: Upload APK and test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-Dudu7-13.6.4-${{ github.run_id }}
+          path: |
+            artifacts/
+            ui-test-results/
+          if-no-files-found: error
+          retention-days: 14
