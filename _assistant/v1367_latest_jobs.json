@@ -1,0 +1,177 @@
+{
+  "total_count": 1,
+  "jobs": [
+    {
+      "id": 89234358705,
+      "run_id": 30015517154,
+      "workflow_name": "Apply WebRadio 13.6.7 fixes",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30015517154",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOSW2IEs8AAAAUxshBsQ",
+      "head_sha": "fb0ca480ac2d31c9abf7b66cc8454e669b2e6d9e",
+      "url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/jobs/89234358705",
+      "html_url": "https://github.com/andreassamitsch/headunit_landscape/actions/runs/30015517154/job/89234358705",
+      "status": "in_progress",
+      "conclusion": null,
+      "created_at": "2026-07-23T14:22:35Z",
+      "started_at": "2026-07-23T14:22:38Z",
+      "completed_at": null,
+      "name": "build-test",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-07-23T14:22:38Z",
+          "completed_at": "2026-07-23T14:22:40Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-07-23T14:22:40Z",
+          "completed_at": "2026-07-23T14:22:42Z"
+        },
+        {
+          "name": "Apply final WebRadio patch",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-07-23T14:22:42Z",
+          "completed_at": "2026-07-23T14:22:42Z"
+        },
+        {
+          "name": "Harden validation and embedded artist actions",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-07-23T14:22:42Z",
+          "completed_at": "2026-07-23T14:22:42Z"
+        },
+        {
+          "name": "Verify version and test executables",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-07-23T14:22:42Z",
+          "completed_at": "2026-07-23T14:22:42Z"
+        },
+        {
+          "name": "Run actions/setup-java@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-07-23T14:22:42Z",
+          "completed_at": "2026-07-23T14:22:42Z"
+        },
+        {
+          "name": "Run gradle/actions/setup-gradle@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-07-23T14:22:42Z",
+          "completed_at": "2026-07-23T14:22:54Z"
+        },
+        {
+          "name": "Build ARM update APK",
+          "status": "in_progress",
+          "conclusion": null,
+          "number": 8,
+          "started_at": "2026-07-23T14:22:54Z",
+          "completed_at": null
+        },
+        {
+          "name": "Collect and verify ARM APK",
+          "status": "pending",
+          "conclusion": null,
+          "number": 9,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Prepare x86_64 emulator build",
+          "status": "pending",
+          "conclusion": null,
+          "number": 10,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Build emulator APK",
+          "status": "pending",
+          "conclusion": null,
+          "number": 11,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Free disk space for Android emulator",
+          "status": "pending",
+          "conclusion": null,
+          "number": 12,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Enable KVM access",
+          "status": "pending",
+          "conclusion": null,
+          "number": 13,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Run strict WebRadio regression test",
+          "status": "pending",
+          "conclusion": null,
+          "number": 14,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Upload APK and test evidence",
+          "status": "pending",
+          "conclusion": null,
+          "number": 15,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Post Run gradle/actions/setup-gradle@v4",
+          "status": "pending",
+          "conclusion": null,
+          "number": 28,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Post Run actions/setup-java@v4",
+          "status": "pending",
+          "conclusion": null,
+          "number": 29,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "pending",
+          "conclusion": null,
+          "number": 30,
+          "started_at": null,
+          "completed_at": null
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/check-runs/89234358705",
+      "labels": [
+        "ubuntu-22.04"
+      ],
+      "runner_id": 1000001309,
+      "runner_name": "GitHub Actions 1000001309",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    }
+  ]
+}
