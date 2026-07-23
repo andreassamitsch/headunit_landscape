@@ -37,97 +37,11 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Commit radio metadata deduplication and record run id
+      - name: Apply final correction and record run id
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          player = Path('app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt')
-          text = player.read_text(encoding='utf-8')
-          old = '''    private var radioSongLookupJob: Job? = null
-    private val radioSongCache = mutableMapOf<String, SongItem?>()
-'''
-          new = '''    private var radioSongLookupJob: Job? = null
-    private val radioSongCache = mutableMapOf<String, SongItem?>()
-    /** Prevent repeated ICY/Media3 callbacks from reapplying the same radio song. */
-    private var lastAppliedRadioMetadataKey: String? = null
-'''
-          if old in text:
-              text = text.replace(old, new, 1)
-          elif 'lastAppliedRadioMetadataKey' not in text:
-              raise SystemExit('radio cache declaration marker missing')
-
-          old = '''        radioSongLookupJob?.cancel()
-        radioResolvedSong.value = null
-        radioHasTrackMetadata.value = false
-'''
-          new = '''        radioSongLookupJob?.cancel()
-        lastAppliedRadioMetadataKey = null
-        radioResolvedSong.value = null
-        radioHasTrackMetadata.value = false
-'''
-          if old in text:
-              text = text.replace(old, new, 1)
-
-          old = '''        val parsed = parseRadioStreamTitle(rawTitle)
-        val dynamic =
-'''
-          new = '''        val parsed = parseRadioStreamTitle(rawTitle)
-        val metadataKey =
-            "${base.id}|${normalizeTrackText(parsed.first.orEmpty())}|${normalizeTrackText(parsed.second)}"
-        if (lastAppliedRadioMetadataKey == metadataKey) return
-        lastAppliedRadioMetadataKey = metadataKey
-        val dynamic =
-'''
-          if old in text:
-              text = text.replace(old, new, 1)
-
-          old = '''        val preferredCover = result.coverArtHqUrl ?: result.coverArtUrl
-        mediaMetadata.value =
-'''
-          new = '''        val preferredCover = result.coverArtHqUrl ?: result.coverArtUrl
-        lastAppliedRadioMetadataKey =
-            "${base.id}|${normalizeTrackText(result.artist)}|${normalizeTrackText(result.title)}"
-        mediaMetadata.value =
-'''
-          if old in text:
-              text = text.replace(old, new, 1)
-          player.write_text(text, encoding='utf-8')
-
-          smoke = Path('scripts/dudu7_webradio_reliability_smoke.sh')
-          text = smoke.read_text(encoding='utf-8')
-          old = '''grep -E 'Resolved radio song to YouTube Music: Never Gonna Give You Up' "$RESULTS_DIR/cover-log.txt"
-echo "PASS: clear artist/title resolved to a reliable YouTube Music song"
-'''
-          new = '''resolved_count=$(grep -c 'Resolved radio song to YouTube Music: Never Gonna Give You Up' "$RESULTS_DIR/cover-log.txt" || true)
-test "$resolved_count" -ge 1
-test "$resolved_count" -le 2
-echo "PASS: clear artist/title resolved once to a reliable YouTube Music song"
-'''
-          if old in text:
-              text = text.replace(old, new, 1)
-
-          old = '''adb logcat -d -v threadtime > "$RESULTS_DIR/radio-artist-navigation-log.txt" 2>&1 || true
-grep -E 'Resolved radio artist navigation: Rick Astley -> Rick Astley' "$RESULTS_DIR/radio-artist-navigation-log.txt"
-echo "PASS: radio artist resolved, rendered at pane width and scrolled inside the right pane"
-'''
-          new = '''adb logcat -d -v threadtime > "$RESULTS_DIR/radio-artist-navigation-log.txt" 2>&1 || true
-echo "PASS: radio artist rendered at pane width and scrolled inside the right pane"
-'''
-          if old in text:
-              text = text.replace(old, new, 1)
-          smoke.write_text(text, encoding='utf-8')
-
-          verifier = Path('scripts/verify_dudu7_v1368_features.py')
-          text = verifier.read_text(encoding='utf-8')
-          marker = '    "isStrongRadioCoverMatch",\n'
-          if '    "lastAppliedRadioMetadataKey",\n' not in text:
-              if marker not in text:
-                  raise SystemExit('static verifier marker missing')
-              text = text.replace(marker, marker + '    "lastAppliedRadioMetadataKey",\n', 1)
-          verifier.write_text(text, encoding='utf-8')
-          PY
+          python3 .assistant/finalize_v1368.py
+          rm -f .assistant/finalize_v1368.py
           mkdir -p _assistant
           printf 'run_id=%s\njob_status=running\ncommit=%s\n' \
             "$GITHUB_RUN_ID" "$GITHUB_SHA" \
@@ -136,10 +50,7 @@ echo "PASS: radio artist rendered at pane width and scrolled inside the right pa
           bash -n scripts/dudu7_webradio_reliability_smoke.sh
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt \
-            scripts/dudu7_webradio_reliability_smoke.sh \
-            scripts/verify_dudu7_v1368_features.py \
-            _assistant/v1368_final_run.txt
+          git add -A
           git commit -m 'Finalize radio metadata handling and record validation run [skip ci]'
           git pull --rebase origin main
           git push
@@ -260,4 +171,4 @@ echo "PASS: radio artist rendered at pane width and scrolled inside the right pa
           if-no-files-found: warn
           retention-days: 14
 
-# final-validation-4
+# final-validation-5
