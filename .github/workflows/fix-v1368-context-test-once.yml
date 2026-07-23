@@ -1,0 +1,49 @@
+name: Fix Metrolist 13.6.8 context test once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-v1368-context-test-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Correct centered dialog assertions
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/dudu7_webradio_reliability_smoke.sh')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              'assert_text "station long-click edit action" 1 "=Bearbeiten"':
+                  'assert_text "station long-click edit action" 0 "=Bearbeiten"',
+              'assert_text "station long-click delete action" 1 "=Löschen"':
+                  'assert_text "station long-click delete action" 0 "=Löschen"',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'Missing assertion: {old}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+          bash -n scripts/dudu7_webradio_reliability_smoke.sh
+          grep -q 'station long-click delete action" 0' scripts/dudu7_webradio_reliability_smoke.sh
+          rm -f .github/workflows/fix-v1368-context-test-once.yml
+      - name: Commit corrected test and self-delete
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m 'Fix centered WebRadio context assertions [skip ci]'
+          git pull --rebase origin main
+          git push
