@@ -22,7 +22,7 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Capture exact patch failure
+      - name: Verify complete WebRadio patch application
         id: patch
         continue-on-error: true
         run: |
@@ -30,12 +30,14 @@ jobs:
           set +e
           python3 .assistant/patch_webradio_v1367.py > patch-diagnostic/main-patch.log 2>&1
           main_rc=$?
+          python3 .assistant/normalize_webradio_v1367_artist_source.py > patch-diagnostic/normalizer.log 2>&1
+          normalizer_rc=$?
           python3 .assistant/harden_webradio_v1367_validation.py > patch-diagnostic/hardener.log 2>&1
           hardener_rc=$?
-          cp app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt patch-diagnostic/ArtistScreen.after-main.kt || true
-          cp scripts/dudu7_webradio_reliability_smoke.sh patch-diagnostic/smoke.after-main.sh || true
-          printf 'main_rc=%s\nhardener_rc=%s\n' "$main_rc" "$hardener_rc" | tee patch-diagnostic/status.txt
-          exit "$hardener_rc"
+          cp app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt patch-diagnostic/ArtistScreen.after-hardener.kt || true
+          cp scripts/dudu7_webradio_reliability_smoke.sh patch-diagnostic/smoke.after-hardener.sh || true
+          printf 'main_rc=%s\nnormalizer_rc=%s\nhardener_rc=%s\n' "$main_rc" "$normalizer_rc" "$hardener_rc" | tee patch-diagnostic/status.txt
+          test "$main_rc" -eq 0 && test "$normalizer_rc" -eq 0 && test "$hardener_rc" -eq 0
 
       - name: Upload patch diagnostic
         if: always()
@@ -50,4 +52,4 @@ jobs:
         if: steps.patch.outcome == 'failure'
         run: exit 1
 
-# patch-diagnostic-3
+# patch-diagnostic-4
