@@ -278,7 +278,8 @@ replace_once(
     ) {''',
     '''    BoxWithConstraints(
         modifier = Modifier.fillMaxSize(),
-    ) {''',
+    ) {
+        val embeddedPaneWidth = maxWidth''',
 )
 replace_once(
     artist_screen,
@@ -309,7 +310,7 @@ replace_once(
                                                 // BoxWithConstraints reports the real right-pane width.
                                                 // The previous full-screen displayMetrics value pushed all
                                                 // controls below the visible embedded area.
-                                                (maxWidth / artistHeaderAspectRatio -
+                                                (embeddedPaneWidth / artistHeaderAspectRatio -
                                                     if (embeddedInPlayer) 88.dp else 144.dp)
                                                     .coerceAtLeast(if (embeddedInPlayer) 180.dp else 240.dp)
                                             } else {
