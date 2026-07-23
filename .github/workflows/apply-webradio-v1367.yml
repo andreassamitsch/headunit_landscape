@@ -51,7 +51,7 @@ jobs:
           ! grep -q 'LaunchedEffect(savedStations.map' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
           grep -q 'existingArtwork != null && !isVectorUrl(existingArtwork)' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoResolver.kt
           grep -q 'embeddedPaneWidth = maxWidth' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
-          grep -q 'navController.popBackStack("vehicle_queue", inclusive = false)' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'navController.navigate("vehicle_queue")' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
           grep -q 'targetState = showInlineLyrics && !isWebRadio' app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt
           grep -q 'assert_selected_tab()' scripts/dudu7_webradio_reliability_smoke.sh
           grep -q 'assert_station_active()' scripts/dudu7_webradio_reliability_smoke.sh
@@ -160,4 +160,4 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-# navigation-before-queue-validation
+# explicit-queue-route-validation
