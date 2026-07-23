@@ -1,0 +1,63 @@
+135:2026-07-23T06:06:32.1935752Z [36;1m        raise SystemExit(f'Missing patch text: {old}')[0m
+161:2026-07-23T06:06:33.6130992Z error: failed to push some refs to 'https://github.com/andreassamitsch/headunit_landscape'
+162:2026-07-23T06:06:33.6160224Z ##[error]Process completed with exit code 1.
+2026-07-23T06:06:32.1574268Z ##[endgroup]
+2026-07-23T06:06:32.1624622Z [command]/usr/bin/git log -1 --format=%H
+2026-07-23T06:06:32.1656436Z 1a5d5f1e22725acf34ae1f050b43483c7d87462a
+2026-07-23T06:06:32.1916605Z ##[group]Run python3 - <<'PY'
+2026-07-23T06:06:32.1918298Z [36;1mpython3 - <<'PY'[0m
+2026-07-23T06:06:32.1919572Z [36;1mfrom pathlib import Path[0m
+2026-07-23T06:06:32.1921317Z [36;1mpatch = Path('.assistant/patch_webradio_reliability_logos_cover.py')[0m
+2026-07-23T06:06:32.1923274Z [36;1mtext = patch.read_text(encoding='utf-8')[0m
+2026-07-23T06:06:32.1924677Z [36;1mreplacements = [[0m
+2026-07-23T06:06:32.1926210Z [36;1m    ("'''  {\"uuid\":\"test-radio-one\"", "''' {\"uuid\":\"test-radio-one\""),[0m
+2026-07-23T06:06:32.1928453Z [36;1m    ('\n  {"uuid":"test-radio-two"', '\n {"uuid":"test-radio-two"'),[0m
+2026-07-23T06:06:32.1930452Z [36;1m    ('\n  {"uuid":"test-radio-three"', '\n {"uuid":"test-radio-three"'),[0m
+2026-07-23T06:06:32.1932085Z [36;1m][0m
+2026-07-23T06:06:32.1933086Z [36;1mfor old, new in replacements:[0m
+2026-07-23T06:06:32.1934339Z [36;1m    if old not in text:[0m
+2026-07-23T06:06:32.1935752Z [36;1m        raise SystemExit(f'Missing patch text: {old}')[0m
+2026-07-23T06:06:32.1937266Z [36;1m    text = text.replace(old, new)[0m
+2026-07-23T06:06:32.1938945Z [36;1mpatch.write_text(text, encoding='utf-8')[0m
+2026-07-23T06:06:32.1940280Z [36;1m[0m
+2026-07-23T06:06:32.1941754Z [36;1mworkflow = Path('.github/workflows/apply-webradio-reliability-v1365.yml')[0m
+2026-07-23T06:06:32.1943713Z [36;1mwf = workflow.read_text(encoding='utf-8')[0m
+2026-07-23T06:06:32.1945168Z [36;1mmarker = '# corrected-seed-patch-v2\n'[0m
+2026-07-23T06:06:32.1946498Z [36;1mif marker not in wf:[0m
+2026-07-23T06:06:32.1947595Z [36;1m    wf += '\n' + marker[0m
+2026-07-23T06:06:32.1949022Z [36;1mworkflow.write_text(wf, encoding='utf-8')[0m
+2026-07-23T06:06:32.1950338Z [36;1mPY[0m
+2026-07-23T06:06:32.1951383Z [36;1mgit config user.name github-actions[bot][0m
+2026-07-23T06:06:32.1953271Z [36;1mgit config user.email 41898282+github-actions[bot]@users.noreply.github.com[0m
+2026-07-23T06:06:32.1956223Z [36;1mgit add .assistant/patch_webradio_reliability_logos_cover.py .github/workflows/apply-webradio-reliability-v1365.yml[0m
+2026-07-23T06:06:32.1959030Z [36;1mgit commit -m 'Fix 13.6.5 reliability test station seeds'[0m
+2026-07-23T06:06:32.1960586Z [36;1mgit pull --rebase origin main[0m
+2026-07-23T06:06:32.1961775Z [36;1mgit push[0m
+2026-07-23T06:06:32.2104873Z shell: /usr/bin/bash -e {0}
+2026-07-23T06:06:32.2106052Z ##[endgroup]
+2026-07-23T06:06:32.3714429Z [main 4f14526] Fix 13.6.5 reliability test station seeds
+2026-07-23T06:06:32.3716182Z  2 files changed, 7 insertions(+), 5 deletions(-)
+2026-07-23T06:06:32.7231874Z From https://github.com/andreassamitsch/headunit_landscape
+2026-07-23T06:06:32.7232499Z  * branch            main       -> FETCH_HEAD
+2026-07-23T06:06:32.7849584Z Current branch main is up to date.
+2026-07-23T06:06:33.6126968Z To https://github.com/andreassamitsch/headunit_landscape
+2026-07-23T06:06:33.6128987Z  ! [remote rejected] main -> main (refusing to allow a GitHub App to create or update workflow `.github/workflows/apply-webradio-reliability-v1365.yml` without `workflows` permission)
+2026-07-23T06:06:33.6130992Z error: failed to push some refs to 'https://github.com/andreassamitsch/headunit_landscape'
+2026-07-23T06:06:33.6160224Z ##[error]Process completed with exit code 1.
+2026-07-23T06:06:33.6303713Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-07-23T06:06:33.6305399Z Post job cleanup.
+2026-07-23T06:06:33.7210737Z [command]/usr/bin/git version
+2026-07-23T06:06:33.7257757Z git version 2.54.0
+2026-07-23T06:06:33.7305181Z Temporarily overriding HOME='/home/runner/work/_temp/880178e8-8d20-426b-8249-aff50c93b47b' before making global git config changes
+2026-07-23T06:06:33.7306640Z Adding repository directory to the temporary git global config as a safe directory
+2026-07-23T06:06:33.7316030Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/headunit_landscape/headunit_landscape
+2026-07-23T06:06:33.7356018Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-07-23T06:06:33.7394725Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-07-23T06:06:33.7674361Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-07-23T06:06:33.7701992Z http.https://github.com/.extraheader
+2026-07-23T06:06:33.7714234Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-07-23T06:06:33.7751315Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-07-23T06:06:33.8042369Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-07-23T06:06:33.8082734Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-07-23T06:06:33.8563744Z Cleaning up orphan processes
+2026-07-23T06:06:33.8845500Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
