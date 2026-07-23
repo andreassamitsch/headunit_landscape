@@ -11,9 +11,11 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -61,13 +63,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -135,6 +139,7 @@ import kotlinx.coroutines.withContext
 fun ArtistScreen(
     navController: NavController,
     viewModel: ArtistViewModel = hiltViewModel(),
+    embeddedInPlayer: Boolean = false,
 ) {
     val context = LocalContext.current
     val database = LocalDatabase.current
@@ -160,6 +165,7 @@ fun ArtistScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var showLocal by rememberSaveable { mutableStateOf(false) }
     val density = LocalDensity.current
+    val artistHeaderAspectRatio = if (embeddedInPlayer) 1.45f else 1f
 
     // Calculate the offset value outside of the offset lambda
     val systemBarsTopPadding = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()
@@ -185,9 +191,10 @@ fun ArtistScreen(
         showLocal = libraryArtist?.artist?.isLocal == true
     }
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier.fillMaxSize(),
     ) {
+        val embeddedPaneWidth = maxWidth
         LazyColumn(
             state = lazyListState,
             contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues(),
@@ -206,7 +213,7 @@ fun ArtistScreen(
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
-                                    .aspectRatio(1.1f),
+                                    .aspectRatio(if (embeddedInPlayer) 1.45f else 1.1f),
                         ) {
                             Spacer(
                                 modifier =
@@ -296,7 +303,7 @@ fun ArtistScreen(
                                 modifier =
                                     Modifier
                                         .fillMaxWidth()
-                                        .aspectRatio(1f)
+                                        .aspectRatio(artistHeaderAspectRatio)
                                         .offset {
                                             IntOffset(x = 0, y = headerOffset)
                                         },
@@ -324,13 +331,12 @@ fun ArtistScreen(
                                     .padding(
                                         top =
                                             if (thumbnail != null) {
-                                                // Position content at the bottom part of the image
-                                                // Using screen width to calculate aspect ratio height minus overlap
-                                                LocalResources.current.displayMetrics.widthPixels.let { screenWidth ->
-                                                    with(density) {
-                                                        ((screenWidth / 1.2f) - 144).toDp()
-                                                    }
-                                                }
+                                                // BoxWithConstraints reports the real right-pane width.
+                                                // The previous full-screen displayMetrics value pushed all
+                                                // controls below the visible embedded area.
+                                                (embeddedPaneWidth / artistHeaderAspectRatio -
+                                                    if (embeddedInPlayer) 88.dp else 144.dp)
+                                                    .coerceAtLeast(if (embeddedInPlayer) 180.dp else 240.dp)
                                             } else {
                                                 16.dp
                                             },
@@ -391,23 +397,74 @@ fun ArtistScreen(
                                         // Radio Button
                                         if (!showLocal && !isGuest) {
                                             artistPage?.artist?.radioEndpoint?.let { radioEndpoint ->
-                                                OutlinedButton(
-                                                    onClick = {
-                                                        playerConnection.playQueue(YouTubeQueue(radioEndpoint))
-                                                    },
-                                                    shape = RoundedCornerShape(50),
-                                                    modifier = Modifier.height(40.dp),
-                                                ) {
-                                                    Icon(
-                                                        painter = painterResource(R.drawable.radio),
-                                                        contentDescription = null,
-                                                        modifier = Modifier.size(20.dp),
+                                                val playArtistRadio: () -> Unit = {
+                                                    timber.log.Timber.tag("Dudu7ArtistAction").e(
+                                                        "Radio clicked embedded=%s callback=%s",
+                                                        embeddedInPlayer,
+                                                        playerConnection.onUserSongSelection != null,
                                                     )
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    Text(
-                                                        text = stringResource(R.string.radio),
-                                                        fontSize = 14.sp,
+                                                    if (embeddedInPlayer) {
+                                                        playerConnection.notifyUserSongSelection()
+                                                    }
+                                                    playerConnection.playQueue(
+                                                        YouTubeQueue(radioEndpoint),
+                                                        notifyUserSelection = !embeddedInPlayer,
                                                     )
+                                                }
+                                                if (embeddedInPlayer) {
+                                                    Row(
+                                                        modifier =
+                                                            Modifier
+                                                                .height(40.dp)
+                                                                .clip(RoundedCornerShape(50))
+                                                                .border(
+                                                                    width = 1.dp,
+                                                                    color = MaterialTheme.colorScheme.outline,
+                                                                    shape = RoundedCornerShape(50),
+                                                                ).pointerInput(radioEndpoint) {
+                                                                    awaitPointerEventScope {
+                                                                        while (true) {
+                                                                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                                                                            if (event.changes.any { it.previousPressed && !it.pressed }) {
+                                                                                event.changes.forEach { it.consume() }
+                                                                                playArtistRadio()
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }.combinedClickable(
+                                                                    onClick = playArtistRadio,
+                                                                    onLongClick = {},
+                                                                ).padding(horizontal = 16.dp),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                    ) {
+                                                        Icon(
+                                                            painter = painterResource(R.drawable.radio),
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(20.dp),
+                                                        )
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text(
+                                                            text = stringResource(R.string.radio),
+                                                            fontSize = 14.sp,
+                                                        )
+                                                    }
+                                                } else {
+                                                    OutlinedButton(
+                                                        onClick = playArtistRadio,
+                                                        shape = RoundedCornerShape(50),
+                                                        modifier = Modifier.height(40.dp),
+                                                    ) {
+                                                        Icon(
+                                                            painter = painterResource(R.drawable.radio),
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(20.dp),
+                                                        )
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text(
+                                                            text = stringResource(R.string.radio),
+                                                            fontSize = 14.sp,
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
@@ -415,24 +472,68 @@ fun ArtistScreen(
                                         // Shuffle Button
                                         if (!showLocal && !isGuest) {
                                             artistPage?.artist?.shuffleEndpoint?.let { shuffleEndpoint ->
-                                                IconButton(
-                                                    onClick = {
-                                                        playerConnection.playQueue(YouTubeQueue(shuffleEndpoint))
-                                                    },
-                                                    modifier =
-                                                        Modifier
-                                                            .size(48.dp)
-                                                            .background(
-                                                                MaterialTheme.colorScheme.primary,
-                                                                RoundedCornerShape(24.dp),
-                                                            ),
-                                                ) {
-                                                    Icon(
-                                                        painter = painterResource(R.drawable.shuffle),
-                                                        contentDescription = "Shuffle",
-                                                        tint = MaterialTheme.colorScheme.onPrimary,
-                                                        modifier = Modifier.size(20.dp),
+                                                val playArtistShuffle: () -> Unit = {
+                                                    timber.log.Timber.tag("Dudu7ArtistAction").e(
+                                                        "Shuffle clicked embedded=%s callback=%s",
+                                                        embeddedInPlayer,
+                                                        playerConnection.onUserSongSelection != null,
                                                     )
+                                                    if (embeddedInPlayer) {
+                                                        playerConnection.notifyUserSongSelection()
+                                                    }
+                                                    playerConnection.playQueue(
+                                                        YouTubeQueue(shuffleEndpoint),
+                                                        notifyUserSelection = !embeddedInPlayer,
+                                                    )
+                                                }
+                                                if (embeddedInPlayer) {
+                                                    Box(
+                                                        contentAlignment = Alignment.Center,
+                                                        modifier =
+                                                            Modifier
+                                                                .size(48.dp)
+                                                                .clip(RoundedCornerShape(24.dp))
+                                                                .background(MaterialTheme.colorScheme.primary)
+                                                                .pointerInput(shuffleEndpoint) {
+                                                                    awaitPointerEventScope {
+                                                                        while (true) {
+                                                                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                                                                            if (event.changes.any { it.previousPressed && !it.pressed }) {
+                                                                                event.changes.forEach { it.consume() }
+                                                                                playArtistShuffle()
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }.combinedClickable(
+                                                                    onClick = playArtistShuffle,
+                                                                    onLongClick = {},
+                                                                ),
+                                                    ) {
+                                                        Icon(
+                                                            painter = painterResource(R.drawable.shuffle),
+                                                            contentDescription = "Shuffle",
+                                                            tint = MaterialTheme.colorScheme.onPrimary,
+                                                            modifier = Modifier.size(20.dp),
+                                                        )
+                                                    }
+                                                } else {
+                                                    IconButton(
+                                                        onClick = playArtistShuffle,
+                                                        modifier =
+                                                            Modifier
+                                                                .size(48.dp)
+                                                                .background(
+                                                                    MaterialTheme.colorScheme.primary,
+                                                                    RoundedCornerShape(24.dp),
+                                                                ),
+                                                    ) {
+                                                        Icon(
+                                                            painter = painterResource(R.drawable.shuffle),
+                                                            contentDescription = "Shuffle",
+                                                            tint = MaterialTheme.colorScheme.onPrimary,
+                                                            modifier = Modifier.size(20.dp),
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
@@ -1009,7 +1110,9 @@ fun ArtistScreen(
         navigationIcon = {
             IconButton(
                 onClick = navController::navigateUp,
-                onLongClick = navController::backToMain,
+                onLongClick = {
+                    if (embeddedInPlayer) navController.navigateUp() else navController.backToMain()
+                },
             ) {
                 Icon(
                     painterResource(R.drawable.arrow_back),

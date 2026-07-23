@@ -24,8 +24,19 @@ capture() {
 }
 
 dump_ui() {
-    timeout 15s adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1
-    adb pull /sdcard/window.xml "$RESULTS_DIR/current-window.xml" >/dev/null 2>&1
+    local attempt
+    for attempt in 1 2 3; do
+        rm -f "$RESULTS_DIR/current-window.xml"
+        if timeout 15s adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1             && adb pull /sdcard/window.xml "$RESULTS_DIR/current-window.xml" >/dev/null 2>&1             && test -s "$RESULTS_DIR/current-window.xml"             && python3 - "$RESULTS_DIR/current-window.xml" <<'PY'
+import sys, xml.etree.ElementTree as ET
+ET.parse(sys.argv[1])
+PY
+        then
+            return 0
+        fi
+        sleep 2
+    done
+    return 1
 }
 
 find_coords() {
@@ -72,11 +83,75 @@ tap_text() {
 
 assert_text() {
     local label="$1"; local right="$2"; shift 2
-    if find_coords "$right" "$@" >/dev/null; then
+    local attempt
+    for attempt in 1 2 3; do
+        if find_coords "$right" "$@" >/dev/null; then
+            echo "PASS: $label"
+            return 0
+        fi
+        sleep 2
+    done
+    echo "FAIL: $label" >&2
+    capture "assertion-failure"
+    return 1
+}
+
+assert_selected_tab() {
+    local label="$1"; shift
+    dump_ui || return 1
+    if python3 - "$RESULTS_DIR/current-window.xml" "$@" <<'PY'
+import sys, xml.etree.ElementTree as ET
+path, *needles = sys.argv[1:]
+needles = [n.casefold() for n in needles]
+root = ET.parse(path).getroot()
+parent = {child: node for node in root.iter() for child in node}
+for node in root.iter('node'):
+    values = [node.attrib.get('text','').strip(), node.attrib.get('content-desc','').strip()]
+    hay = ' '.join(v for v in values if v).casefold()
+    if not hay or not any(n in hay for n in needles):
+        continue
+    cur = node
+    while cur is not None:
+        if cur.attrib.get('selected') == 'true':
+            raise SystemExit(0)
+        cur = parent.get(cur)
+raise SystemExit(1)
+PY
+    then
         echo "PASS: $label"
     else
         echo "FAIL: $label" >&2
-        capture "assertion-failure"
+        capture "selected-tab-failure"
+        return 1
+    fi
+}
+
+assert_station_active() {
+    local label="$1"; local station="$2"
+    dump_ui || return 1
+    if python3 - "$RESULTS_DIR/current-window.xml" "$station" <<'PY'
+import sys, xml.etree.ElementTree as ET
+path, station = sys.argv[1:]
+root = ET.parse(path).getroot()
+parent = {child: node for node in root.iter() for child in node}
+station_node = next((n for n in root.iter('node') if n.attrib.get('text','').strip() == station), None)
+if station_node is None:
+    raise SystemExit(1)
+row = station_node
+while row is not None and row.attrib.get('clickable') != 'true':
+    row = parent.get(row)
+if row is None:
+    raise SystemExit(1)
+for node in row.iter('node'):
+    if 'LÄUFT' in node.attrib.get('text',''):
+        raise SystemExit(0)
+raise SystemExit(1)
+PY
+    then
+        echo "PASS: $label"
+    else
+        echo "FAIL: $label" >&2
+        capture "active-station-failure"
         return 1
     fi
 }
@@ -126,6 +201,7 @@ stations = [
  {"uuid":"test-radio-one","name":"Test Radio One","streamUrl":"http://10.0.2.2:8000/station1","homepage":"","favicon":"http://10.0.2.2:8000/logo1.png","country":"Austria","language":"German","tags":"Test,Rock","codec":"MP3","bitrate":96},
  {"uuid":"test-radio-two","name":"Test Radio Two","streamUrl":"http://10.0.2.2:8000/station2","homepage":"","favicon":"http://10.0.2.2:8000/logo2.png","country":"Austria","language":"German","tags":"Test,Pop","codec":"MP3","bitrate":96},
  {"uuid":"test-radio-three","name":"Test Radio Three","streamUrl":"http://10.0.2.2:8000/station3","homepage":"http://10.0.2.2:8000/station3-home","favicon":"","country":"Austria","language":"German","tags":"Test,Indie","codec":"MP3","bitrate":96},
+ {"uuid":"test-radio-four","name":"kronehit","streamUrl":"http://10.0.2.2:8000/station4","homepage":"http://10.0.2.2:8000/kronehit-home","favicon":"http://10.0.2.2:8000/kronehit.svg","country":"Austria","language":"German","tags":"Hits,Austria","codec":"MP3","bitrate":96},
  {"uuid":"9608a2aa-0601-11e8-ae97-52543be04c81","name":"Antenne Steiermark","streamUrl":"http://live.antenne.at/as","homepage":"http://www.antenne.at/","favicon":"https://upload.wikimedia.org/wikipedia/commons/6/63/Antenne_Logo.svg","country":"Austria","language":"German","tags":"Pop,Austria","codec":"MP3","bitrate":128}
 ]
 raw=json.dumps(stations,separators=(',',':'))
@@ -158,6 +234,23 @@ sleep 12
 try_dialogs
 capture "launch"
 
+if [[ "${FOCUSED_ARTIST_ACTION:-0}" == "1" ]]; then
+    tap_tab "WebRadio" "=WebRadio"
+    tap_text "focused station one" 1 "=Test Radio One"
+    sleep 12
+    tap_text "focused radio artist" 0 "=Rick Astley"
+    sleep 12
+    tap_text "focused artist Radio action" 1 "=Radio"
+    sleep 8
+    adb logcat -d -v threadtime > "$RESULTS_DIR/focused-artist-action-logcat.txt" 2>&1 || true
+    capture "focused-artist-action-result"
+    grep -E 'Dudu7ArtistAction|FATAL EXCEPTION|IllegalStateException|IllegalArgumentException|NavController'         "$RESULTS_DIR/focused-artist-action-logcat.txt" || true
+    assert_selected_tab "focused artist action selected queue" "Warteschlange" "Queue"
+    assert_absent_anywhere "focused LIVE after artist action" "=LIVE"
+    echo "Focused embedded artist action passed"
+    exit 0
+fi
+
 # Verify original local history behavior by finishing one normal music playback session.
 echo "Opening normal music test item"
 adb shell am start -W -a android.intent.action.VIEW -d "$TEST_URL" "$PACKAGE_NAME" | tee "$RESULTS_DIR/deep-link.txt" || true
@@ -180,6 +273,7 @@ assert_text "saved radio section" 1 "=Gespeichert"
 assert_text "first saved station" 1 "=Test Radio One"
 assert_text "second saved station" 1 "=Test Radio Two"
 assert_text "third saved station" 1 "=Test Radio Three"
+assert_text "kronehit saved station" 1 "=kronehit"
 assert_text "Antenne Steiermark saved station" 1 "=Antenne Steiermark"
 sleep 35
 adb shell run-as "$PACKAGE_NAME" cat shared_prefs/metrolist_webradio.xml > "$RESULTS_DIR/radio-prefs-after-logo.xml"
@@ -191,7 +285,36 @@ if grep -q 'Antenne_Logo.svg' "$RESULTS_DIR/radio-prefs-after-logo.xml"; then
     exit 1
 fi
 echo "PASS: Antenne Steiermark received a persisted raster station logo"
-capture "webradio-three-favorites"
+python3 - "$RESULTS_DIR/radio-prefs-after-logo.xml" > "$RESULTS_DIR/kronehit-logo-before.txt" <<'PY'
+import html, json, sys, xml.etree.ElementTree as ET
+root=ET.parse(sys.argv[1]).getroot()
+raw=html.unescape(root.find("string").text or "[]")
+station=next(x for x in json.loads(raw) if x["uuid"] == "test-radio-four")
+print(station["favicon"])
+PY
+if grep -q 'kronehit.svg' "$RESULTS_DIR/kronehit-logo-before.txt"; then
+    echo "FAIL: kronehit still uses SVG artwork" >&2
+    exit 1
+fi
+capture "webradio-five-favorites"
+
+# The cleaned favorites view has no edit/delete/up/down buttons. Actions live
+# behind a long press, while the view switch mirrors the library control.
+assert_absent_right "old edit icon" "Bearbeiten"
+assert_absent_right "old delete icon" "Löschen"
+assert_absent_right "old move up icon" "Nach oben"
+assert_absent_right "old move down icon" "Nach unten"
+tap_text "switch to radio grid" 1 "Kachelansicht"
+assert_text "radio grid switch became list switch" 1 "Listenansicht"
+tap_text "switch back to radio list" 1 "Listenansicht"
+# Long press on the text area (not the logo drag handle) opens the station menu.
+coords=$(find_coords 1 "=Test Radio One")
+adb shell input swipe $coords $coords 900
+sleep 2
+assert_text "station long-click edit action" 1 "=Bearbeiten"
+assert_text "station long-click delete action" 1 "=Löschen"
+adb shell input keyevent KEYCODE_BACK || true
+sleep 2
 
 # Start favorite two, then replace it directly with favorite one.
 tap_text "station two favorite" 1 "=Test Radio Two"
@@ -199,7 +322,8 @@ sleep 10
 assert_text "favorite two title" 0 "Test Track Two"
 assert_text "favorite two artist" 0 "Test Artist Two"
 assert_text "favorite two live" 0 "LIVE"
-assert_text "WebRadio tab remains open after favorite start" 1 "=Gespeichert"
+assert_selected_tab "WebRadio tab remains selected after favorite start" "WebRadio"
+assert_station_active "favorite two row shows active playback" "Test Radio Two"
 
 tap_tab "WebRadio" "=WebRadio"
 tap_text "station one favorite" 1 "=Test Radio One"
@@ -207,17 +331,35 @@ sleep 14
 assert_text "favorite one title" 0 "=Never Gonna Give You Up"
 assert_text "favorite one artist" 0 "=Rick Astley"
 assert_text "favorite one live" 0 "LIVE"
+assert_text "matched radio song exposes like action" 0 "Song gefällt mir"
 adb logcat -d -v threadtime > "$RESULTS_DIR/cover-log.txt" 2>&1 || true
-grep -E 'Applied high-resolution radio cover.*Rick Astley.*Never Gonna Give You Up.*1200' "$RESULTS_DIR/cover-log.txt"
-echo "PASS: clear artist/title received a strongly matched 1200px cover"
-assert_text "WebRadio tab remains open after second favorite" 1 "=Gespeichert"
+grep -E 'Resolved radio song to YouTube Music: Never Gonna Give You Up' "$RESULTS_DIR/cover-log.txt"
+echo "PASS: clear artist/title resolved to a reliable YouTube Music song"
+assert_selected_tab "WebRadio tab remains selected after second favorite" "WebRadio"
+assert_station_active "favorite one row shows active playback" "Test Radio One"
 tap_text "radio artist link" 0 "=Rick Astley"
 sleep 12
-assert_text "radio artist page loaded inside right pane" 1 "Play All" "Alle wiedergeben"
+assert_text "radio artist name visible in compact pane" 1 "=Rick Astley"
+adb shell input swipe 1100 620 1100 230 500
+sleep 3
+assert_text "radio artist page scrolls and exposes content" 1 "Songs" "Alben" "Albums" "Never Gonna Give You Up"
 adb logcat -d -v threadtime > "$RESULTS_DIR/radio-artist-navigation-log.txt" 2>&1 || true
 grep -E 'Resolved radio artist navigation: Rick Astley -> Rick Astley' "$RESULTS_DIR/radio-artist-navigation-log.txt"
-echo "PASS: radio artist resolved to Rick Astley and opened inside the right pane"
+echo "PASS: radio artist resolved, rendered at pane width and scrolled inside the right pane"
 capture "radio-artist-right-pane"
+adb shell input keyevent KEYCODE_BACK
+sleep 3
+assert_text "back from artist returns to WebRadio favorites" 1 "=Gespeichert"
+# Open it once more and exercise a real artist action. This must use the
+# embedded navigator and normal music selection must return to the queue tab.
+tap_text "station one favorite after artist back" 1 "=Test Radio One"
+sleep 8
+tap_text "radio artist link functional test" 0 "=Rick Astley"
+sleep 10
+tap_text "artist Radio action" 1 "=Radio"
+sleep 15
+assert_selected_tab "artist action selected normal music queue" "Warteschlange" "Queue"
+assert_absent_anywhere "LIVE after artist radio action" "=LIVE"
 tap_tab "WebRadio" "=WebRadio"
 
 # Start a third favorite with ambiguous metadata. It must play, but must not run cover search.
@@ -227,19 +369,48 @@ sleep 10
 assert_text "favorite three ambiguous title" 0 "=Station identification"
 assert_text "favorite three station artist" 0 "=Test Radio Three"
 adb logcat -d -v threadtime > "$RESULTS_DIR/ambiguous-cover-log.txt" 2>&1 || true
-grep -q 'Skipping radio cover lookup for ambiguous metadata: Station identification' "$RESULTS_DIR/ambiguous-cover-log.txt"
-echo "PASS: ambiguous metadata skipped cover lookup"
+grep -q 'Skipping radio song lookup for ambiguous metadata: Station identification' "$RESULTS_DIR/ambiguous-cover-log.txt"
+echo "PASS: ambiguous metadata skipped YouTube Music matching"
+assert_text "music recognition offered without metadata" 0 "Musik erkennen"
 
-# Exercise the rotated three-favorite queue in both directions.
-adb shell input keyevent KEYCODE_MEDIA_NEXT || true
-sleep 10
-assert_text "next from third reaches first" 0 "=Never Gonna Give You Up"
-adb shell input keyevent KEYCODE_MEDIA_NEXT || true
-sleep 10
-assert_text "next reaches second" 0 "=Test Track Two"
+# Start favorite 3 at its real saved-list index and exercise the unchanged
+# order in both directions. The active indicator must follow every player skip.
+assert_station_active "third favorite active indicator" "Test Radio Three"
 adb shell input keyevent KEYCODE_MEDIA_PREVIOUS || true
 sleep 8
-assert_text "previous returns to first" 0 "=Never Gonna Give You Up"
+assert_text "previous from favorite three reaches favorite two" 0 "=Test Track Two"
+assert_station_active "favorite two active indicator" "Test Radio Two"
+adb shell input keyevent KEYCODE_MEDIA_PREVIOUS || true
+sleep 8
+assert_text "previous again reaches favorite one" 0 "=Never Gonna Give You Up"
+adb shell input keyevent KEYCODE_MEDIA_NEXT || true
+sleep 8
+assert_text "next returns to favorite two" 0 "=Test Track Two"
+adb shell input keyevent KEYCODE_MEDIA_NEXT || true
+sleep 8
+assert_text "next returns to favorite three" 0 "=Station identification"
+adb shell input keyevent KEYCODE_MEDIA_NEXT || true
+sleep 8
+assert_text "next from favorite three reaches following kronehit favorite" 0 "=Kronehit Track"
+assert_station_active "kronehit active indicator" "kronehit"
+# Recreate the WebRadio screen repeatedly. The persisted kronehit raster logo
+# must remain byte-for-byte the same and its alternating homepage must not be
+# requested again.
+for i in 1 2 3; do
+    tap_tab "Warteschlange" "=Warteschlange" "=Queue"
+    tap_tab "WebRadio" "=WebRadio"
+done
+sleep 8
+adb shell run-as "$PACKAGE_NAME" cat shared_prefs/metrolist_webradio.xml > "$RESULTS_DIR/radio-prefs-after-reopen.xml"
+python3 - "$RESULTS_DIR/radio-prefs-after-reopen.xml" > "$RESULTS_DIR/kronehit-logo-after.txt" <<'PY'
+import html, json, sys, xml.etree.ElementTree as ET
+root=ET.parse(sys.argv[1]).getroot()
+raw=html.unescape(root.find("string").text or "[]")
+station=next(x for x in json.loads(raw) if x["uuid"] == "test-radio-four")
+print(station["favicon"])
+PY
+cmp "$RESULTS_DIR/kronehit-logo-before.txt" "$RESULTS_DIR/kronehit-logo-after.txt"
+echo "PASS: kronehit logo stayed stable across repeated pane recreation"
 
 # Switch radio -> YouTube. LIVE must disappear and normal song playback must be active.
 echo "Switching from radio to YouTube"
@@ -288,7 +459,10 @@ sleep 2
 
 # Verify search UI and attempt a real Radio Browser query. Network result is recorded, not hard-required.
 tap_text "radio search" 1 "=Sender suchen"
-tap_text "radio search field" 1 "Sender, Land oder Genre"
+assert_text "country filter available" 1 "=Land"
+assert_text "genre filter available" 1 "=Genre"
+assert_text "language filter available" 1 "=Sprache"
+tap_text "radio search field" 1 "Sender oder freier Suchbegriff"
 adb shell input text "ORF"
 adb shell input keyevent KEYCODE_ENTER
 sleep 12
@@ -297,7 +471,7 @@ capture "radio-browser-search"
 # Radio playback must not pollute the normal music history.
 tap_tab "Hörverlauf" "=Hörverlauf" "=History"
 assert_text "local history remains available" 1 "Lokal" "Local"
-assert_absent_right "radio station absent from music history" "Test Radio One" "Test Radio Two" "Test Radio Three" "Test Track Two" "Station identification"
+assert_absent_right "radio station absent from music history" "Test Radio One" "Test Radio Two" "Test Radio Three" "kronehit" "Antenne Steiermark" "Test Track Two" "Station identification" "Kronehit Track"
 capture "history-after-radio"
 
 adb logcat -d -v threadtime > "$RESULTS_DIR/logcat.txt" 2>&1 || true
@@ -320,13 +494,21 @@ cat > "$RESULTS_DIR/summary.md" <<'EOF'
 
 - Original local history chip visible
 - Normal YouTube Music item visible in original history
-- Three saved stations repeatedly started and replaced
+- Five saved stations repeatedly started and replaced
+- WebRadio stays open while radio playback and player skip controls are used
+- Favorite 3 starts at queue index 3 with favorites 1/2 before and the rest after
+- Active play indicator follows the currently playing favorite
 - Radio -> YouTube -> Radio -> YouTube -> Radio transitions passed
 - ICY artist/title metadata visible in the left player
-- Previous/next switches the three-station saved queue
+- Radio always uses artwork rather than an empty lyrics panel
+- Artist page renders at right-pane width, scrolls, navigates and plays content
 - Missing station logo discovered from homepage and persisted
+- kronehit logo remains stable instead of alternating
 - Ambiguous metadata skipped cover search
-- Clear metadata received a strongly matched 1200px cover
+- Clear metadata resolved to a reliable YouTube Music song and exposes song-like behavior
+- Ambiguous/no metadata exposes the existing music-recognition action
+- Favorites support persisted list/grid switching and long-click actions without old edit/delete/arrows
+- Country, genre and language filters are available for Radio Browser search
 - Direct URL / M3U / PLS editor available
 - Radio Browser search exercised
 - Radio stations excluded from normal music history

@@ -41,6 +41,17 @@ class RadioStationStore private constructor(context: Context) {
         persist(list)
     }
 
+    /** Persist an arbitrary drag-and-drop order while retaining every station once. */
+    @Synchronized
+    fun reorder(orderedUuids: List<String>) {
+        if (orderedUuids.isEmpty()) return
+        val byId = _stations.value.associateBy { it.uuid }
+        val ordered = orderedUuids.mapNotNull(byId::get).distinctBy { it.uuid }
+        val missing = _stations.value.filterNot { station -> ordered.any { it.uuid == station.uuid } }
+        val result = ordered + missing
+        if (result.map { it.uuid } != _stations.value.map { it.uuid }) persist(result)
+    }
+
     fun contains(uuid: String): Boolean = _stations.value.any { it.uuid == uuid }
 
     private fun persist(stations: List<RadioStation>) {

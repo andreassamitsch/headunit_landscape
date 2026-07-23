@@ -39,8 +39,16 @@ object RadioStationLogoResolver {
             val pageQueue = ArrayDeque<String>()
             val visitedPages = linkedSetOf<String>()
             val homepage = station.homepage.trim().takeIf(::isHttpUrl)
+            val existingArtwork = station.favicon.trim().takeIf(::isHttpUrl)
 
-            station.favicon.trim().takeIf(::isHttpUrl)?.let {
+            // Once a usable raster image has been persisted, keep it stable.
+            // This prevents stations such as kronehit from alternating between
+            // multiple equally valid logos discovered on the same homepage.
+            if (existingArtwork != null && !isVectorUrl(existingArtwork)) {
+                resolveUsableImage(existingArtwork)?.let { return@withContext it }
+            }
+
+            existingArtwork?.let {
                 candidates += Candidate(it, priority = if (isVectorUrl(it)) 120 else 520)
             }
 

@@ -173,6 +173,12 @@ fun VehicleLandscapeLayout(
                 }
             }
         }
+        val openRouteInRightPane: (String) -> Unit = { route ->
+            selectedTab = VehicleRightPaneTab.SEARCH
+            paneNavController.navigate(route) {
+                launchSingleTop = true
+            }
+        }
         val openRadioArtistInRightPane: (String) -> Unit = { artistName ->
             rightPaneScope.launch {
                 selectedTab = VehicleRightPaneTab.SEARCH
@@ -198,22 +204,25 @@ fun VehicleLandscapeLayout(
                     bestMatch?.title ?: "search results",
                     bestMatch?.id ?: "no exact artist",
                 )
+                // Keep WebRadio in the pane back stack. Back from the artist
+                // page now returns to the station list instead of the queue root.
                 paneNavController.navigate(route) {
-                    popUpTo(VEHICLE_QUEUE_ROUTE) {
-                        saveState = true
-                    }
                     launchSingleTop = true
                 }
             }
         }
         activeConnection?.onUserSongSelection = returnToQueue
         activeConnection?.onRadioArtistSelection = openRadioArtistInRightPane
+        activeConnection?.onRightPaneNavigation = openRouteInRightPane
         onDispose {
             if (activeConnection?.onUserSongSelection === returnToQueue) {
                 activeConnection.onUserSongSelection = null
             }
             if (activeConnection?.onRadioArtistSelection === openRadioArtistInRightPane) {
                 activeConnection.onRadioArtistSelection = null
+            }
+            if (activeConnection?.onRightPaneNavigation === openRouteInRightPane) {
+                activeConnection.onRightPaneNavigation = null
             }
         }
     }

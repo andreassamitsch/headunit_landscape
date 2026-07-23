@@ -36,6 +36,7 @@ import com.metrolist.music.extensions.togglePlayPause
 import com.metrolist.music.playback.MusicService.MusicBinder
 import com.metrolist.music.playback.queues.Queue
 import com.metrolist.music.radio.isRadioMediaId
+import com.metrolist.shazamkit.models.RecognitionResult
 import com.metrolist.music.utils.dataStore
 import com.metrolist.music.utils.get
 import com.metrolist.music.utils.reportException
@@ -165,8 +166,12 @@ class PlayerConnection(
         )
 
     val mediaMetadata = MutableStateFlow(getPlayerOrNull()?.currentMetadata)
-    private var radioCoverLookupJob: Job? = null
-    private val radioCoverCache = mutableMapOf<String, String?>()
+    private var radioSongLookupJob: Job? = null
+    private val radioSongCache = mutableMapOf<String, SongItem?>()
+    /** Reliable YouTube Music match for the current radio metadata. */
+    val radioResolvedSong = MutableStateFlow<SongItem?>(null)
+    /** True only when the stream or manual recognition supplied artist + title. */
+    val radioHasTrackMetadata = MutableStateFlow(false)
     // stateIn so the latest DB result is cached and shared: on resume / re-subscription the value
     // is available immediately instead of re-running the Room query (which delayed now-playing
     // details, format and like-state on every foreground). Lazily keeps it hot across lifecycle
@@ -174,6 +179,10 @@ class PlayerConnection(
     val currentSong =
         mediaMetadata.flatMapLatest {
             database.song(it?.id)
+        }.stateIn(scope, SharingStarted.Lazily, null)
+    val resolvedRadioLibrarySong =
+        radioResolvedSong.flatMapLatest { song ->
+            database.song(song?.id)
         }.stateIn(scope, SharingStarted.Lazily, null)
     val currentLyrics =
         mediaMetadata.flatMapLatest { mediaMetadata ->
@@ -213,6 +222,7 @@ class PlayerConnection(
 
     var onUserSongSelection: (() -> Unit)? = null
     var onRadioArtistSelection: ((String) -> Unit)? = null
+    var onRightPaneNavigation: ((String) -> Unit)? = null
 
     fun notifyUserSongSelection() {
         onUserSongSelection?.invoke()
@@ -221,6 +231,13 @@ class PlayerConnection(
     fun requestRadioArtistNavigation(artistName: String): Boolean {
         val callback = onRadioArtistSelection ?: return false
         callback(artistName)
+        return true
+    }
+
+    /** Route player-originated details into the embedded Dudu7 NavHost. */
+    fun requestRightPaneNavigation(route: String): Boolean {
+        val callback = onRightPaneNavigation ?: return false
+        callback(route)
         return true
     }
 
@@ -640,7 +657,9 @@ class PlayerConnection(
         mediaItem: MediaItem?,
         reason: Int,
     ) {
-        radioCoverLookupJob?.cancel()
+        radioSongLookupJob?.cancel()
+        radioResolvedSong.value = null
+        radioHasTrackMetadata.value = false
         mediaMetadata.value = mediaItem?.metadata
         currentMediaItemIndex.value = player.currentMediaItemIndex
         currentWindowIndex.value = player.getCurrentQueueIndex()
@@ -706,10 +725,32 @@ class PlayerConnection(
         mediaMetadata.value = dynamic
 
         val artist = parsed.first
-        if (isClearRadioTrackMetadata(artist, parsed.second, stationName)) {
-            lookupRadioCover(base, artist!!, parsed.second)
+        val isClear = isClearRadioTrackMetadata(artist, parsed.second, stationName)
+        radioHasTrackMetadata.value = isClear
+        if (isClear) {
+            lookupRadioSong(base, artist!!, parsed.second)
         } else {
-            Timber.tag(TAG).d("Skipping radio cover lookup for ambiguous metadata: %s", rawTitle)
+            radioSongLookupJob?.cancel()
+            radioResolvedSong.value = null
+            Timber.tag(TAG).d("Skipping radio song lookup for ambiguous metadata: %s", rawTitle)
+        }
+    }
+
+    /** Apply a manual Shazam result to the current radio item and resolve its YTM identity. */
+    fun applyRecognizedRadioTrack(result: RecognitionResult) {
+        val currentItem = getPlayerOrNull()?.currentMediaItem ?: return
+        val base = currentItem.metadata ?: return
+        if (!isRadioMediaId(base.id)) return
+        val preferredCover = result.coverArtHqUrl ?: result.coverArtUrl
+        mediaMetadata.value =
+            base.copy(
+                title = result.title,
+                artists = listOf(com.metrolist.music.models.MediaMetadata.Artist(id = null, name = result.artist)),
+                thumbnailUrl = preferredCover ?: base.thumbnailUrl,
+            )
+        radioHasTrackMetadata.value = result.artist.isNotBlank() && result.title.isNotBlank()
+        if (radioHasTrackMetadata.value) {
+            lookupRadioSong(base, result.artist, result.title, preferredCover)
         }
     }
 
@@ -788,49 +829,59 @@ class PlayerConnection(
             tokenCoverage(expectedArtist, actualArtist) >= 0.70
     }
 
-    private fun lookupRadioCover(
+    private fun lookupRadioSong(
         base: com.metrolist.music.models.MediaMetadata,
         artist: String,
         title: String,
+        preferredCover: String? = null,
     ) {
         val key = "${normalizeTrackText(artist)}|${normalizeTrackText(title)}"
-        if (radioCoverCache.containsKey(key)) {
-            radioCoverCache[key]?.let { url ->
-                val current = mediaMetadata.value
-                if (current?.id == base.id && current.title == title) {
-                    mediaMetadata.value = current.copy(thumbnailUrl = url)
-                }
-            }
+        if (radioSongCache.containsKey(key)) {
+            applyResolvedRadioSong(base, title, radioSongCache[key], preferredCover)
             return
         }
 
-        radioCoverLookupJob?.cancel()
-        radioCoverLookupJob =
+        radioSongLookupJob?.cancel()
+        radioResolvedSong.value = null
+        radioSongLookupJob =
             scope.launch {
-                val cover =
+                val song =
                     runCatching {
                         YouTube.search("$artist - $title", YouTube.SearchFilter.FILTER_SONG)
                             .getOrNull()
                             ?.items
                             ?.filterIsInstance<SongItem>()
                             ?.firstOrNull { candidate -> isStrongRadioCoverMatch(candidate, artist, title) }
-                            ?.thumbnail
-                            ?.resize(1200, 1200)
                     }.getOrNull()
-                radioCoverCache[key] = cover
-                val current = mediaMetadata.value
-                if (!cover.isNullOrBlank() && current?.id == base.id && current.title == title) {
-                    Timber.tag(TAG).d(
-                        "Applied high-resolution radio cover for %s - %s: %s",
-                        artist,
-                        title,
-                        cover,
-                    )
-                    mediaMetadata.value = current.copy(thumbnailUrl = cover)
-                } else if (cover.isNullOrBlank()) {
-                    Timber.tag(TAG).d("No sufficiently matching radio cover for %s - %s", artist, title)
-                }
+                radioSongCache[key] = song
+                applyResolvedRadioSong(base, title, song, preferredCover)
             }
+    }
+
+    private fun applyResolvedRadioSong(
+        base: com.metrolist.music.models.MediaMetadata,
+        expectedTitle: String,
+        song: SongItem?,
+        preferredCover: String?,
+    ) {
+        val current = mediaMetadata.value
+        if (current?.id != base.id || current.title != expectedTitle) return
+        radioResolvedSong.value = song
+        val cover = preferredCover ?: song?.thumbnail?.resize(1200, 1200)
+        if (song != null) {
+            Timber.tag(TAG).d("Resolved radio song to YouTube Music: %s (%s)", song.title, song.id)
+            mediaMetadata.value =
+                current.copy(
+                    title = song.title,
+                    artists = song.artists.map { com.metrolist.music.models.MediaMetadata.Artist(it.id, it.name) },
+                    thumbnailUrl = cover ?: current.thumbnailUrl,
+                    album = song.album?.let { com.metrolist.music.models.MediaMetadata.Album(it.id, it.name) },
+                )
+        } else if (!cover.isNullOrBlank()) {
+            mediaMetadata.value = current.copy(thumbnailUrl = cover)
+        } else {
+            Timber.tag(TAG).d("No sufficiently matching radio song for expected title %s", expectedTitle)
+        }
     }
 
     override fun onTimelineChanged(

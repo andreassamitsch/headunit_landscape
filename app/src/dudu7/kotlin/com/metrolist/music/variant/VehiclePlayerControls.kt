@@ -50,6 +50,9 @@ fun ColumnScope.VehiclePlayerControls(
     duration: Long,
     canSeek: Boolean,
     isFavorite: Boolean,
+    likeEnabled: Boolean,
+    showRecognition: Boolean,
+    recognitionInProgress: Boolean,
     shuffleModeEnabled: Boolean,
     repeatMode: Int,
     textColor: Color,
@@ -65,6 +68,7 @@ fun ColumnScope.VehiclePlayerControls(
     onSliderValueChangeFinished: () -> Unit,
     onStartRadio: () -> Unit,
     onToggleLike: () -> Unit,
+    onRecognize: () -> Unit,
     onTitleClick: () -> Unit,
     onArtistClick: () -> Unit,
     fallbackContent: @Composable ColumnScope.() -> Unit,
@@ -251,14 +255,27 @@ fun ColumnScope.VehiclePlayerControls(
                 }
             }
 
-            VehicleAction(
-                icon = if (isFavorite) R.drawable.favorite else R.drawable.favorite_border,
-                description = "Gefällt mir",
-                color = if (isFavorite) activeControlColor else textColor,
-                onClick = onToggleLike,
-                buttonSize = 46.dp,
-                iconSize = 28.dp,
-            )
+            if (showRecognition) {
+                VehicleAction(
+                    icon = if (recognitionInProgress) R.drawable.graphic_eq else R.drawable.manage_search,
+                    description = if (recognitionInProgress) "Musik wird erkannt" else "Musik erkennen",
+                    color = if (recognitionInProgress) activeControlColor else textColor,
+                    onClick = onRecognize,
+                    buttonSize = 46.dp,
+                    iconSize = 28.dp,
+                    enabled = !recognitionInProgress,
+                )
+            } else {
+                VehicleAction(
+                    icon = if (isFavorite) R.drawable.favorite else R.drawable.favorite_border,
+                    description = if (likeEnabled) "Song gefällt mir" else "Kein eindeutiger YouTube-Music-Treffer",
+                    color = if (isFavorite) activeControlColor else textColor.copy(alpha = if (likeEnabled) 1f else 0.35f),
+                    onClick = onToggleLike,
+                    buttonSize = 46.dp,
+                    iconSize = 28.dp,
+                    enabled = likeEnabled,
+                )
+            }
         }
     }
 }

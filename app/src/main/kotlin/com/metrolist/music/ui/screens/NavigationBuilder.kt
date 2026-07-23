@@ -211,7 +211,11 @@ fun NavGraphBuilder.navigationBuilder(
                 },
             ),
     ) {
-        ArtistScreen(navController)
+        if (embeddedInPlayer) {
+            com.metrolist.music.ui.screens.artist.EmbeddedArtistScreen(navController)
+        } else {
+            ArtistScreen(navController)
+        }
     }
 
     composable(

@@ -45,6 +45,23 @@ class Handler(BaseHTTPRequestHandler):
                 "text/html; charset=utf-8",
             )
             return
+        if self.path == "/kronehit.svg":
+            self._bytes(
+                200,
+                b'<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#111"/><text x="20" y="140" fill="white">KRONEHIT</text></svg>',
+                "image/svg+xml",
+            )
+            return
+        if self.path == "/kronehit-home":
+            count = getattr(self.server, "kronehit_home_requests", 0) + 1
+            self.server.kronehit_home_requests = count
+            logos = ("/logo1.png", "/logo2.png") if count % 2 else ("/logo2.png", "/logo1.png")
+            body = (
+                '<html><body><img class="station-logo" alt="kronehit logo" src="%s">'
+                '<img class="station-logo" alt="kronehit logo" src="%s"></body></html>'
+            ) % logos
+            self._bytes(200, body.encode(), "text/html; charset=utf-8")
+            return
         if self.path == "/playlist.m3u":
             host = self.headers.get("Host", "10.0.2.2:8000")
             self._bytes(200, f"#EXTM3U\nhttp://{host}/station1\n".encode(), "audio/x-mpegurl")
@@ -57,6 +74,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/station3":
             self._stream("Test Radio Three", "Station identification", self.server.audio3)
+            return
+        if self.path == "/station4":
+            self._stream("kronehit", "Kronehit Artist - Kronehit Track", self.server.audio2)
             return
         self.send_error(404)
 

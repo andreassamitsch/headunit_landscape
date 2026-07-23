@@ -48,7 +48,9 @@ import com.metrolist.music.R
 import com.metrolist.music.constants.GridItemSize
 import com.metrolist.music.constants.GridItemsSizeKey
 import com.metrolist.music.constants.GridThumbnailHeight
+import com.metrolist.music.extensions.toMediaItem
 import com.metrolist.music.models.toMediaMetadata
+import com.metrolist.music.playback.queues.ListQueue
 import com.metrolist.music.playback.queues.YouTubeQueue
 import com.metrolist.music.ui.component.IconButton
 import com.metrolist.music.ui.component.LocalMenuState
@@ -84,6 +86,34 @@ fun ArtistItemsScreen(
 
     val title by viewModel.title.collectAsStateWithLifecycle()
     val itemsPage by viewModel.itemsPage.collectAsStateWithLifecycle()
+
+    fun playCategoryFrom(item: com.metrolist.innertube.models.YTItem) {
+        coroutineScope.launch {
+            val completeItems = viewModel.loadAllItems()
+            val playable = completeItems.mapNotNull { candidate ->
+                when (candidate) {
+                    is SongItem -> candidate.toMediaItem()
+                    is EpisodeItem -> candidate.asSongItem().toMediaItem()
+                    else -> null
+                }
+            }
+            val startIndex = completeItems
+                .filter { it is SongItem || it is EpisodeItem }
+                .indexOfFirst { it.id == item.id }
+                .coerceAtLeast(0)
+            if (playable.isNotEmpty()) {
+                playerConnection.notifyUserSongSelection()
+                playerConnection.playQueue(
+                    ListQueue(
+                        title = title.ifBlank { "Künstler" },
+                        items = playable,
+                        startIndex = startIndex,
+                    ),
+                    notifyUserSelection = false,
+                )
+            }
+        }
+    }
 
     LaunchedEffect(lazyListState) {
         snapshotFlow {
@@ -193,18 +223,7 @@ fun ArtistItemsScreen(
                         Modifier
                             .clickable {
                                 when (item) {
-                                    is SongItem -> {
-                                        if (item.id == mediaMetadata?.id) {
-                                            playerConnection.togglePlayPause()
-                                        } else {
-                                            playerConnection.playQueue(
-                                                YouTubeQueue(
-                                                    item.endpoint ?: WatchEndpoint(videoId = item.id),
-                                                    item.toMediaMetadata(),
-                                                ),
-                                            )
-                                        }
-                                    }
+                                    is SongItem -> playCategoryFrom(item)
 
                                     is AlbumItem -> {
                                         navController.navigate("album/${item.id}")
@@ -222,18 +241,7 @@ fun ArtistItemsScreen(
                                         navController.navigate("online_podcast/${item.id}")
                                     }
 
-                                    is EpisodeItem -> {
-                                        if (item.id == mediaMetadata?.id) {
-                                            playerConnection.togglePlayPause()
-                                        } else {
-                                            playerConnection.playQueue(
-                                                YouTubeQueue(
-                                                    item.endpoint ?: WatchEndpoint(videoId = item.id),
-                                                    item.toMediaMetadata(),
-                                                ),
-                                            )
-                                        }
-                                    }
+                                    is EpisodeItem -> playCategoryFrom(item)
                                 }
                             },
                 )
@@ -275,14 +283,7 @@ fun ArtistItemsScreen(
                             .combinedClickable(
                                 onClick = {
                                     when (item) {
-                                        is SongItem -> {
-                                            playerConnection.playQueue(
-                                                YouTubeQueue(
-                                                    item.endpoint ?: WatchEndpoint(videoId = item.id),
-                                                    item.toMediaMetadata(),
-                                                ),
-                                            )
-                                        }
+                                        is SongItem -> playCategoryFrom(item)
 
                                         is AlbumItem -> {
                                             navController.navigate("album/${item.id}")
@@ -300,14 +301,7 @@ fun ArtistItemsScreen(
                                             navController.navigate("online_podcast/${item.id}")
                                         }
 
-                                        is EpisodeItem -> {
-                                            playerConnection.playQueue(
-                                                YouTubeQueue(
-                                                    item.endpoint ?: WatchEndpoint(videoId = item.id),
-                                                    item.toMediaMetadata(),
-                                                ),
-                                            )
-                                        }
+                                        is EpisodeItem -> playCategoryFrom(item)
                                     }
                                 },
                                 onLongClick = {

@@ -6,6 +6,9 @@
 package com.metrolist.music.ui.player
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -137,6 +140,7 @@ import com.metrolist.music.LocalDatabase
 import com.metrolist.music.LocalDownloadUtil
 import com.metrolist.music.LocalListenTogetherManager
 import com.metrolist.music.LocalPlayerConnection
+import com.metrolist.music.LocalSyncUtils
 import com.metrolist.music.R
 import com.metrolist.music.constants.CropAlbumArtKey
 import com.metrolist.music.constants.DarkModeKey
@@ -160,14 +164,18 @@ import com.metrolist.music.constants.SquigglySliderKey
 import com.metrolist.music.constants.ThumbnailCornerRadius
 import com.metrolist.music.constants.UseNewPlayerDesignKey
 import com.metrolist.music.db.entities.LyricsEntity
+import com.metrolist.music.db.entities.SongEntity
 import com.metrolist.music.extensions.metadata
 import com.metrolist.music.extensions.togglePlayPause
 import com.metrolist.music.extensions.toggleRepeatMode
 import com.metrolist.music.listentogether.RoomRole
 import com.metrolist.music.models.MediaMetadata
+import com.metrolist.music.models.toMediaMetadata
 import com.metrolist.music.radio.RadioStationStore
 import com.metrolist.music.radio.isRadioMediaId
 import com.metrolist.music.radio.toRadioStationOrNull
+import com.metrolist.music.recognition.MusicRecognitionService
+import com.metrolist.shazamkit.models.RecognitionStatus
 import com.metrolist.music.ui.component.BottomSheet
 import com.metrolist.music.ui.component.BottomSheetState
 import com.metrolist.music.ui.component.LocalBottomSheetPageState
@@ -228,6 +236,8 @@ fun BottomSheetPlayer(
     val copiedArtistStr = stringResource(R.string.copied_artist)
     val bottomSheetPageState = LocalBottomSheetPageState.current
     val playerConnection = LocalPlayerConnection.current ?: return
+    val database = LocalDatabase.current
+    val syncUtils = LocalSyncUtils.current
 
     val (useNewPlayerDesign, onUseNewPlayerDesignChange) =
         rememberPreference(
@@ -344,6 +354,10 @@ fun BottomSheetPlayer(
             runCatching { playerConnection.player.currentMediaItem?.toRadioStationOrNull() }.getOrNull()
         }
     val currentSong by playerConnection.currentSong.collectAsStateWithLifecycle(initialValue = null)
+    val resolvedRadioSong by playerConnection.radioResolvedSong.collectAsStateWithLifecycle()
+    val resolvedRadioLibrarySong by playerConnection.resolvedRadioLibrarySong.collectAsStateWithLifecycle()
+    val radioHasTrackMetadata by playerConnection.radioHasTrackMetadata.collectAsStateWithLifecycle()
+    val recognitionStatus by MusicRecognitionService.recognitionStatus.collectAsStateWithLifecycle()
     val automix by playerConnection.service.automixItems.collectAsStateWithLifecycle()
     val repeatMode by playerConnection.repeatMode.collectAsStateWithLifecycle()
     val shuffleModeEnabled by playerConnection.shuffleModeEnabled.collectAsStateWithLifecycle()
@@ -642,6 +656,55 @@ fun BottomSheetPlayer(
     }
 
     val scope = rememberCoroutineScope()
+    var recognitionRequestedForRadio by remember { mutableStateOf(false) }
+    val recordPermissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                scope.launch { MusicRecognitionService.recognize(context) }
+            } else {
+                recognitionRequestedForRadio = false
+                Toast.makeText(context, "Mikrofonzugriff ist für die Musikerkennung erforderlich", Toast.LENGTH_SHORT).show()
+            }
+        }
+    val recognitionInProgress =
+        recognitionRequestedForRadio &&
+            (recognitionStatus is RecognitionStatus.Listening || recognitionStatus is RecognitionStatus.Processing)
+
+    fun startRadioRecognition() {
+        recognitionRequestedForRadio = true
+        MusicRecognitionService.reset()
+        if (MusicRecognitionService.hasRecordPermission(context)) {
+            scope.launch { MusicRecognitionService.recognize(context) }
+        } else {
+            recordPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    LaunchedEffect(recognitionStatus, recognitionRequestedForRadio, isWebRadio) {
+        if (!recognitionRequestedForRadio || !isWebRadio) return@LaunchedEffect
+        when (val status = recognitionStatus) {
+            is RecognitionStatus.Success -> {
+                playerConnection.applyRecognizedRadioTrack(status.result)
+                val query = "${status.result.artist} ${status.result.title}".trim()
+                val route = SearchRoutes.resultRoute(query)
+                if (!playerConnection.requestRightPaneNavigation(route)) navController.navigate(route)
+                recognitionRequestedForRadio = false
+                MusicRecognitionService.reset()
+            }
+            is RecognitionStatus.NoMatch -> {
+                Toast.makeText(context, "Titel konnte nicht erkannt werden", Toast.LENGTH_SHORT).show()
+                recognitionRequestedForRadio = false
+                MusicRecognitionService.reset()
+            }
+            is RecognitionStatus.Error -> {
+                Toast.makeText(context, status.message, Toast.LENGTH_SHORT).show()
+                recognitionRequestedForRadio = false
+                MusicRecognitionService.reset()
+            }
+            else -> Unit
+        }
+    }
+
     var showSleepTimerDialog by remember {
         mutableStateOf(false)
     }
@@ -1873,13 +1936,13 @@ fun BottomSheetPlayer(
                     state = state,
                     showInlineLyrics = showInlineLyrics,
                     playerPaneWeight = dudu7PlayerPaneWeight,
-                    onToggleLyrics = { showInlineLyrics = !showInlineLyrics },
+                    onToggleLyrics = { if (!isWebRadio) showInlineLyrics = !showInlineLyrics },
                     thumbnailContent = {
                         val currentSliderPosition by rememberUpdatedState(sliderPosition)
                         val sliderPositionProvider = remember { { currentSliderPosition } }
                         val isExpandedProvider = remember(state) { { state.isExpanded } }
                         AnimatedContent(
-                            targetState = showInlineLyrics,
+                            targetState = showInlineLyrics && !isWebRadio,
                             label = "Lyrics",
                             transitionSpec = { fadeIn() togetherWith fadeOut() },
                         ) { showLyrics ->
@@ -1907,14 +1970,14 @@ fun BottomSheetPlayer(
                             val isEpisode = currentSong?.song?.isEpisode == true
                             val isFavorite =
                                 if (isWebRadio) {
-                                    currentRadioStation?.let { station ->
-                                        savedRadioStations.any { it.uuid == station.uuid }
-                                    } == true
+                                    resolvedRadioLibrarySong?.song?.liked == true
                                 } else if (isEpisode) {
                                     currentSong?.song?.inLibrary != null
                                 } else {
                                     currentSong?.song?.liked == true
                                 }
+                            val likeEnabled = !isWebRadio || resolvedRadioSong != null
+                            val showRadioRecognition = isWebRadio && !radioHasTrackMetadata
                             VehiclePlayerControls(
                                 title = currentMediaMetadata.title,
                                 artists = currentMediaMetadata.artists.joinToString(", ") { it.name },
@@ -1929,6 +1992,9 @@ fun BottomSheetPlayer(
                                 duration = if (isWebRadio) 0L else duration,
                                 canSeek = !isListenTogetherGuest && !isWebRadio,
                                 isFavorite = isFavorite,
+                                likeEnabled = likeEnabled,
+                                showRecognition = showRadioRecognition,
+                                recognitionInProgress = recognitionInProgress,
                                 shuffleModeEnabled = shuffleModeEnabled,
                                 repeatMode = repeatMode,
                                 textColor = TextBackgroundColor,
@@ -1983,52 +2049,63 @@ fun BottomSheetPlayer(
                                 },
                                 onToggleLike = {
                                     if (isWebRadio) {
-                                        currentRadioStation?.let { station ->
-                                            if (savedRadioStations.any { it.uuid == station.uuid }) {
-                                                radioStationStore.remove(station.uuid)
+                                        val matchedSong = resolvedRadioSong ?: return@VehiclePlayerControls
+                                        val currentLibrarySong = resolvedRadioLibrarySong
+                                        database.transaction {
+                                            val updated: SongEntity
+                                            if (currentLibrarySong == null) {
+                                                insert(matchedSong.toMediaMetadata(), SongEntity::toggleLike)
+                                                updated = matchedSong.toMediaMetadata().toSongEntity().toggleLike()
                                             } else {
-                                                radioStationStore.addOrUpdate(station)
+                                                updated = currentLibrarySong.song.toggleLike()
+                                                update(updated)
                                             }
+                                            syncUtils.likeSong(updated)
                                         }
                                     } else {
                                         playerConnection.toggleLike()
                                     }
                                 },
+                                onRecognize = ::startRadioRecognition,
                                 onTitleClick = {
-                                    if (isWebRadio) return@VehiclePlayerControls
-                                    val albumId = currentMediaMetadata.album?.id
-                                        ?: currentSong?.album?.id
-                                        ?: currentSong?.song?.albumId
-                                    if (albumId != null) {
-                                        navController.navigate("album/$albumId")
-                                        state.collapseSoft()
-                                    }
+                                    val route =
+                                        if (isWebRadio) {
+                                            if (!radioHasTrackMetadata) return@VehiclePlayerControls
+                                            val matched = resolvedRadioSong
+                                            val artist = matched?.artists?.joinToString(" ") { it.name }
+                                                ?: currentMediaMetadata.artists.joinToString(" ") { it.name }
+                                            SearchRoutes.resultRoute("$artist ${currentMediaMetadata.title}".trim())
+                                        } else {
+                                            val albumId = currentMediaMetadata.album?.id
+                                                ?: currentSong?.album?.id
+                                                ?: currentSong?.song?.albumId
+                                            albumId?.let { "album/$it" }
+                                                ?: SearchRoutes.resultRoute(
+                                                    "${currentMediaMetadata.artists.joinToString(" ") { it.name }} ${currentMediaMetadata.title}".trim(),
+                                                )
+                                        }
+                                    if (!playerConnection.requestRightPaneNavigation(route)) navController.navigate(route)
                                 },
                                 onArtistClick = {
                                     if (isWebRadio) {
-                                        val artistName =
-                                            currentMediaMetadata.artists
-                                                .firstOrNull { it.name.isNotBlank() }
-                                                ?.name
-                                                ?.trim()
-                                        val stationName = currentRadioStation?.name?.trim()
-                                        if (
-                                            !artistName.isNullOrBlank() &&
-                                            !artistName.equals(stationName, ignoreCase = true)
-                                        ) {
-                                            val handledInRightPane =
-                                                playerConnection.requestRadioArtistNavigation(artistName)
-                                            if (!handledInRightPane) {
-                                                navController.navigate(SearchRoutes.resultRoute(artistName))
-                                                state.collapseSoft()
-                                            }
+                                        if (!radioHasTrackMetadata) return@VehiclePlayerControls
+                                        val matchedArtist = resolvedRadioSong?.artists?.firstOrNull()
+                                        val artistName = matchedArtist?.name
+                                            ?: currentMediaMetadata.artists.firstOrNull { it.name.isNotBlank() }?.name
+                                        val route = matchedArtist?.id?.let { "artist/$it" }
+                                        if (route != null) {
+                                            if (!playerConnection.requestRightPaneNavigation(route)) navController.navigate(route)
+                                        } else if (!artistName.isNullOrBlank()) {
+                                            val handled = playerConnection.requestRadioArtistNavigation(artistName)
+                                            if (!handled) navController.navigate(SearchRoutes.resultRoute(artistName))
                                         }
                                         return@VehiclePlayerControls
                                     }
-                                    currentMediaMetadata.artists.firstOrNull { !it.id.isNullOrBlank() }?.id?.let {
-                                        navController.navigate("artist/$it")
-                                        state.collapseSoft()
-                                    }
+                                    val artist = currentMediaMetadata.artists.firstOrNull { it.name.isNotBlank() }
+                                    val route = artist?.id?.let { "artist/$it" }
+                                        ?: artist?.name?.let(SearchRoutes::resultRoute)
+                                        ?: return@VehiclePlayerControls
+                                    if (!playerConnection.requestRightPaneNavigation(route)) navController.navigate(route)
                                 },
                                 fallbackContent = { controlsContent(currentMediaMetadata) },
                             )

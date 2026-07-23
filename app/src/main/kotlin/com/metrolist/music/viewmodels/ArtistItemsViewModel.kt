@@ -12,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import com.metrolist.innertube.YouTube
 import com.metrolist.innertube.models.BrowseEndpoint
 import com.metrolist.innertube.models.filterExplicit
+import com.metrolist.innertube.models.YTItem
 import com.metrolist.innertube.models.filterVideoSongs
 import com.metrolist.music.constants.HideExplicitKey
 import com.metrolist.music.constants.HideVideoSongsKey
@@ -91,4 +92,21 @@ constructor(
                 }
         }
     }
+    /** Load every continuation before a category is handed to the player queue. */
+    suspend fun loadAllItems(): List<YTItem> {
+        var page = itemsPage.value ?: return emptyList()
+        val all = page.items.toMutableList()
+        var continuation = page.continuation
+        while (continuation != null) {
+            val next = YouTube.artistItemsContinuation(continuation).getOrNull() ?: break
+            all += YouTube.resolveArtistIds(next.items)
+            continuation = next.continuation
+        }
+        val hideExplicit = context.dataStore.get(HideExplicitKey, false)
+        val hideVideoSongs = context.dataStore.get(HideVideoSongsKey, false)
+        val filtered = all.distinctBy { it.id }.filterExplicit(hideExplicit).filterVideoSongs(hideVideoSongs)
+        itemsPage.value = ItemsPage(items = filtered, continuation = null)
+        return filtered
+    }
+
 }

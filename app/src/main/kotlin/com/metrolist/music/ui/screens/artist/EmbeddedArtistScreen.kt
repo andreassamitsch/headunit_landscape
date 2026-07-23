@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,6 +42,7 @@ import com.metrolist.innertube.models.EpisodeItem
 import com.metrolist.innertube.models.PlaylistItem
 import com.metrolist.innertube.models.PodcastItem
 import com.metrolist.innertube.models.SongItem
+import com.metrolist.innertube.YouTube
 import com.metrolist.innertube.models.YTItem
 import com.metrolist.music.LocalPlayerConnection
 import com.metrolist.music.R
@@ -48,6 +50,7 @@ import com.metrolist.music.extensions.toMediaItem
 import com.metrolist.music.playback.queues.ListQueue
 import com.metrolist.music.playback.queues.YouTubeQueue
 import com.metrolist.music.viewmodels.ArtistViewModel
+import kotlinx.coroutines.launch
 
 /**
  * Touch-safe artist page for the vehicle player's embedded right pane.
@@ -64,6 +67,7 @@ fun EmbeddedArtistScreen(
     viewModel: ArtistViewModel = hiltViewModel(),
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
+    val coroutineScope = rememberCoroutineScope()
     val page = viewModel.artistPage
     val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
     val isPlaying by playerConnection.isEffectivelyPlaying.collectAsStateWithLifecycle()
@@ -203,7 +207,19 @@ fun EmbeddedArtistScreen(
                         text = section.title,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(start = 18.dp, top = 18.dp, end = 18.dp, bottom = 8.dp),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .then(
+                                    section.moreEndpoint?.let { endpoint ->
+                                        Modifier.clickable {
+                                            navController.navigate(
+                                                "artist/${viewModel.artistId}/items?browseId=${endpoint.browseId}?params=${endpoint.params}",
+                                            )
+                                        }
+                                    } ?: Modifier,
+                                )
+                                .padding(start = 18.dp, top = 18.dp, end = 18.dp, bottom = 8.dp),
                     )
                 }
 
@@ -216,16 +232,31 @@ fun EmbeddedArtistScreen(
                         onClick = {
                             when (item) {
                                 is SongItem -> {
-                                    val startIndex = songs.indexOfFirst { it.id == item.id }.coerceAtLeast(0)
-                                    playerConnection.notifyUserSongSelection()
-                                    playerConnection.playQueue(
-                                        ListQueue(
-                                            title = section.title.ifBlank { page.artist.title },
-                                            items = songs.map { it.toMediaItem() },
-                                            startIndex = startIndex,
-                                        ),
-                                        notifyUserSelection = false,
-                                    )
+                                    coroutineScope.launch {
+                                        val complete = section.moreEndpoint?.let { endpoint ->
+                                            val first = YouTube.artistItems(endpoint).getOrNull()
+                                            if (first == null) emptyList() else {
+                                                val all = first.items.toMutableList()
+                                                var continuation = first.continuation
+                                                while (continuation != null) {
+                                                    val next = YouTube.artistItemsContinuation(continuation).getOrNull() ?: break
+                                                    all += next.items
+                                                    continuation = next.continuation
+                                                }
+                                                all.filterIsInstance<SongItem>().distinctBy { it.id }
+                                            }
+                                        }.orEmpty().ifEmpty { songs }
+                                        val startIndex = complete.indexOfFirst { it.id == item.id }.coerceAtLeast(0)
+                                        playerConnection.notifyUserSongSelection()
+                                        playerConnection.playQueue(
+                                            ListQueue(
+                                                title = section.title.ifBlank { page.artist.title },
+                                                items = complete.map { it.toMediaItem() },
+                                                startIndex = startIndex,
+                                            ),
+                                            notifyUserSelection = false,
+                                        )
+                                    }
                                 }
 
                                 is EpisodeItem -> {
