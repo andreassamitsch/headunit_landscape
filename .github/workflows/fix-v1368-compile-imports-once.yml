@@ -26,10 +26,10 @@ jobs:
           artist = Path('app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistItemsScreen.kt')
           text = artist.read_text(encoding='utf-8')
           if 'import kotlinx.coroutines.launch\n' not in text:
-              marker = 'import javax.inject.Inject\n'
+              marker = 'import com.metrolist.music.viewmodels.ArtistItemsViewModel\n'
               if marker not in text:
                   raise SystemExit('ArtistItemsScreen import marker missing')
-              text = text.replace(marker, 'import kotlinx.coroutines.launch\n' + marker, 1)
+              text = text.replace(marker, marker + 'import kotlinx.coroutines.launch\n', 1)
               artist.write_text(text, encoding='utf-8')
 
           radio = Path('app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt')
