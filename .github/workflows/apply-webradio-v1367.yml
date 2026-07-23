@@ -40,11 +40,16 @@ jobs:
       - name: Apply final WebRadio patch
         run: python3 .assistant/patch_webradio_v1367.py
 
+      - name: Harden validation and embedded artist actions
+        run: python3 .assistant/harden_webradio_v1367_validation.py
+
       - name: Verify version and test executables
         run: |
           set -euxo pipefail
           grep -q 'versionCode = 156' app/build.gradle.kts
           grep -q 'versionName = "13.6.7"' app/build.gradle.kts
+          grep -q 'navController.navigate("vehicle_queue")' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'for attempt in 1 2 3; do' scripts/dudu7_webradio_reliability_smoke.sh
           chmod +x gradlew scripts/run_dudu7_emulator_ci.sh scripts/dudu7_webradio_reliability_smoke.sh
 
       - uses: actions/setup-java@v4
@@ -149,4 +154,4 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-# compiler-and-emulator-source-of-truth
+# validation-retry-9
