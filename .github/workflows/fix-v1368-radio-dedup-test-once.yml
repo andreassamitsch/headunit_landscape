@@ -126,3 +126,5 @@ echo "PASS: radio artist rendered at pane width and scrolled inside the right pa
           git commit -m 'Deduplicate radio metadata and harden regression checks [skip ci]'
           git pull --rebase origin main
           git push
+
+# registered-trigger
