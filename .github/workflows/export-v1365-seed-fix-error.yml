@@ -1,0 +1,37 @@
+name: Export WebRadio 13.6.5 seed-fix error
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/export-v1365-seed-fix-error.yml'
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Export exact error
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p _assistant
+          curl -fsSL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/jobs/89131865262/logs" \
+            -o /tmp/log
+          grep -n -E 'Missing patch text|SystemExit|Traceback|error|Error' /tmp/log | tail -n 80 > _assistant/v1365_seed_fix_error.txt || true
+          tail -n 60 /tmp/log >> _assistant/v1365_seed_fix_error.txt
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -f _assistant/v1365_seed_fix_error.txt
+          git commit -m 'Record 13.6.5 seed-fix failure [skip ci]'
+          git push
