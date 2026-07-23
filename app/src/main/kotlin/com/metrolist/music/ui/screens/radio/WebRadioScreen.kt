@@ -83,13 +83,17 @@ fun WebRadioScreen() {
     var showAddDialog by remember { mutableStateOf(false) }
 
     fun playSaved(station: RadioStation) {
+        // ListQueue playback is most reliable from index 0. Rotate the saved list so
+        // the explicitly selected favorite starts immediately while previous/next
+        // can still switch through all saved stations.
         val stations = savedStations.ifEmpty { listOf(station) }
-        val startIndex = stations.indexOfFirst { it.uuid == station.uuid }.coerceAtLeast(0)
+        val selected = stations.firstOrNull { it.uuid == station.uuid } ?: station
+        val orderedStations = listOf(selected) + stations.filterNot { it.uuid == selected.uuid }
         playerConnection.playQueue(
             ListQueue(
                 title = "WebRadio",
-                items = stations.map { it.toMediaItem() },
-                startIndex = startIndex,
+                items = orderedStations.map { it.toMediaItem() },
+                startIndex = 0,
             ),
         )
     }

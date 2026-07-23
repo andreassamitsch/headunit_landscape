@@ -147,6 +147,10 @@ fun HistoryScreen(
         remember(innerTubeCookie) {
             "SAPISID" in parseCookieString(innerTubeCookie)
         }
+    // Keep the user's original Local/Online choice. Without an account only the
+    // local source is usable, but the saved Online preference is not overwritten.
+    val displayedHistorySource =
+        if (isLoggedIn) historySource else HistorySource.LOCAL
 
     @Composable
     fun dateAgoToString(dateAgo: DateAgo): String =
@@ -271,17 +275,12 @@ fun HistoryScreen(
                         } else {
                             listOf(HistorySource.LOCAL to stringResource(R.string.local_history))
                         },
-                    currentValue = historySource,
-                    onValueUpdate = {
-                        viewModel.historySource.value = it
-                        if (it == HistorySource.REMOTE) {
-                            viewModel.fetchRemoteHistory()
-                        }
-                    },
+                    currentValue = displayedHistorySource,
+                    onValueUpdate = viewModel::setHistorySource,
                 )
             }
 
-            if (historySource == HistorySource.REMOTE && isLoggedIn) {
+            if (displayedHistorySource == HistorySource.REMOTE && isLoggedIn) {
                 filteredRemoteContent?.forEach { section ->
                     stickyHeader {
                         NavigationTitle(
@@ -443,7 +442,7 @@ fun HistoryScreen(
 
         HideOnScrollFAB(
             visible =
-                if (historySource == HistorySource.REMOTE) {
+                if (displayedHistorySource == HistorySource.REMOTE) {
                     filteredRemoteContent?.any { it.songs.isNotEmpty() } == true
                 } else {
                     allEvents.isNotEmpty()
@@ -451,7 +450,7 @@ fun HistoryScreen(
             lazyListState = lazyListState,
             icon = R.drawable.shuffle,
             onClick = {
-                if (historySource == HistorySource.REMOTE && historyPage != null) {
+                if (displayedHistorySource == HistorySource.REMOTE && historyPage != null) {
                     val songs = filteredRemoteContent?.flatMap { it.songs } ?: emptyList()
                     if (songs.isNotEmpty()) {
                         playerConnection.playQueue(

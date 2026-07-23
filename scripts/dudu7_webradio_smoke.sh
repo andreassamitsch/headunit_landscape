@@ -170,32 +170,34 @@ assert_text "first saved station" 1 "=Test Radio One"
 assert_text "second saved station" 1 "=Test Radio Two"
 capture "webradio-saved"
 
-# Play station one and wait for ICY StreamTitle metadata on the left player.
-tap_text "station one" 1 "=Test Radio One"
+# Start the SECOND saved favorite first. This explicitly covers the former
+# non-zero start-index failure that did not occur when testing the first favorite.
+tap_text "station two favorite" 1 "=Test Radio Two"
 sleep 12
-capture "radio-one-playing"
-assert_text "station one stream title" 0 "Test Track One"
-assert_text "station one artist" 0 "Test Artist One"
+capture "radio-two-favorite-playing"
+assert_text "second favorite stream title" 0 "Test Track Two"
+assert_text "second favorite artist" 0 "Test Artist Two"
 assert_text "live indicator" 0 "LIVE"
+assert_text "queue opened for favorite" 1 "=Test Radio Two"
 
-# Player next must move through the saved station queue.
+# Player next must move through the rotated saved-station queue.
 adb shell input keyevent KEYCODE_MEDIA_NEXT || true
 sleep 12
-capture "radio-two-playing"
-assert_text "station two stream title" 0 "Test Track Two"
-assert_text "station two artist" 0 "Test Artist Two"
+capture "radio-one-after-next"
+assert_text "next reaches first favorite" 0 "Test Track One"
+assert_text "first favorite artist" 0 "Test Artist One"
 
-# Previous returns to station one.
+# Previous returns to the originally selected second favorite.
 adb shell input keyevent KEYCODE_MEDIA_PREVIOUS || true
 sleep 10
-assert_text "previous returns to station one" 0 "Test Track One"
-capture "radio-previous"
+assert_text "previous returns to selected favorite" 0 "Test Track Two"
+capture "radio-favorite-previous"
 
 # Verify URL/M3U editor exists.
 tap_tab "WebRadio" "=WebRadio"
 tap_text "add station" 1 "Sender per URL hinzufügen"
 sleep 2
-assert_text "URL and playlist editor" 1 "M3U" "PLS"
+assert_text "URL and playlist editor" 0 "M3U" "PLS"
 capture "radio-url-editor"
 adb shell input keyevent KEYCODE_BACK || true
 sleep 2

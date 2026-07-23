@@ -39,7 +39,15 @@ constructor(
     @ApplicationContext private val context: Context,
     val database: MusicDatabase,
 ) : ViewModel() {
-    var historySource = MutableStateFlow(HistorySource.LOCAL)
+    private val historyPreferences =
+        context.getSharedPreferences("metrolist_history", Context.MODE_PRIVATE)
+
+    val historySource =
+        MutableStateFlow(
+            historyPreferences.getString(KEY_HISTORY_SOURCE, null)
+                ?.let { stored -> runCatching { HistorySource.valueOf(stored) }.getOrNull() }
+                ?: HistorySource.REMOTE,
+        )
 
     private val today = LocalDate.now()
     private val thisMonday = today.with(DayOfWeek.MONDAY)
@@ -87,6 +95,14 @@ constructor(
         fetchRemoteHistory()
     }
 
+    fun setHistorySource(source: HistorySource) {
+        historySource.value = source
+        historyPreferences.edit().putString(KEY_HISTORY_SOURCE, source.name).apply()
+        if (source == HistorySource.REMOTE && historyPage.value == null) {
+            fetchRemoteHistory()
+        }
+    }
+
     fun fetchRemoteHistory() {
         viewModelScope.launch(Dispatchers.IO) {
             YouTube.musicHistory().onSuccess {
@@ -95,6 +111,10 @@ constructor(
                 reportException(it)
             }
         }
+    }
+
+    private companion object {
+        const val KEY_HISTORY_SOURCE = "history_source"
     }
 }
 
