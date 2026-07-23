@@ -106,11 +106,13 @@ fun WebRadioScreen() {
         val selected = stations.firstOrNull { it.uuid == station.uuid } ?: station
         val orderedStations = listOf(selected) + stations.filterNot { it.uuid == selected.uuid }
         playerConnection.playQueue(
-            ListQueue(
-                title = "WebRadio",
-                items = orderedStations.map { it.toMediaItem() },
-                startIndex = 0,
-            ),
+            queue =
+                ListQueue(
+                    title = "WebRadio",
+                    items = orderedStations.map { it.toMediaItem() },
+                    startIndex = 0,
+                ),
+            notifyUserSelection = false,
         )
     }
 
@@ -228,7 +230,8 @@ fun WebRadioScreen() {
                                     isSaved = savedStations.any { it.uuid == station.uuid },
                                     onPlay = {
                                         playerConnection.playQueue(
-                                            ListQueue(title = station.name, items = listOf(station.toMediaItem())),
+                                            queue = ListQueue(title = station.name, items = listOf(station.toMediaItem())),
+                                            notifyUserSelection = false,
                                         )
                                     },
                                     onSave = {

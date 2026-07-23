@@ -194,6 +194,7 @@ import com.metrolist.music.variant.VehicleVariantConfig
 import com.metrolist.music.utils.dataStore
 import com.metrolist.music.utils.makeTimeString
 import com.metrolist.music.utils.rememberEnumPreference
+import com.metrolist.music.utils.SearchRoutes
 import com.metrolist.music.utils.rememberPreference
 import com.metrolist.music.utils.safeDataStoreEdit
 import dagger.hilt.android.EntryPointAccessors
@@ -2004,7 +2005,26 @@ fun BottomSheetPlayer(
                                     }
                                 },
                                 onArtistClick = {
-                                    if (isWebRadio) return@VehiclePlayerControls
+                                    if (isWebRadio) {
+                                        val artistName =
+                                            currentMediaMetadata.artists
+                                                .firstOrNull { it.name.isNotBlank() }
+                                                ?.name
+                                                ?.trim()
+                                        val stationName = currentRadioStation?.name?.trim()
+                                        if (
+                                            !artistName.isNullOrBlank() &&
+                                            !artistName.equals(stationName, ignoreCase = true)
+                                        ) {
+                                            val handledInRightPane =
+                                                playerConnection.requestRadioArtistNavigation(artistName)
+                                            if (!handledInRightPane) {
+                                                navController.navigate(SearchRoutes.resultRoute(artistName))
+                                                state.collapseSoft()
+                                            }
+                                        }
+                                        return@VehiclePlayerControls
+                                    }
                                     currentMediaMetadata.artists.firstOrNull { !it.id.isNullOrBlank() }?.id?.let {
                                         navController.navigate("artist/$it")
                                         state.collapseSoft()

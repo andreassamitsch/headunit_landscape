@@ -37,6 +37,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -50,6 +51,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.metrolist.innertube.YouTube
+import com.metrolist.innertube.models.ArtistItem
 import com.metrolist.music.BuildConfig
 import com.metrolist.music.LocalNavController
 import com.metrolist.music.LocalPlayerAwareWindowInsets
@@ -59,6 +62,11 @@ import com.metrolist.music.ui.component.BottomSheetState
 import com.metrolist.music.ui.screens.Screens
 import com.metrolist.music.ui.screens.navigationBuilder
 import com.metrolist.music.ui.screens.radio.WebRadioScreen
+import com.metrolist.music.utils.SearchRoutes
+import kotlinx.coroutines.launch
+import java.text.Normalizer
+import java.util.Locale
+import timber.log.Timber
 import kotlin.math.max
 
 private const val VEHICLE_QUEUE_ROUTE = "vehicle_queue"
@@ -75,6 +83,29 @@ private enum class VehicleRightPaneTab(
     HISTORY("Hörverlauf", R.drawable.history, "history"),
     WEBRADIO("WebRadio", R.drawable.radio, VEHICLE_WEBRADIO_ROUTE),
     HOME("Startseite", R.drawable.home_outlined, Screens.Home.route),
+}
+
+private fun normalizeArtistName(value: String): String =
+    Normalizer
+        .normalize(value, Normalizer.Form.NFD)
+        .replace(Regex("\\p{Mn}+"), "")
+        .lowercase(Locale.ROOT)
+        .replace("&", " and ")
+        .replace(Regex("[^a-z0-9]+"), " ")
+        .trim()
+
+private fun radioArtistMatchScore(requested: String, candidate: String): Int {
+    val expected = normalizeArtistName(requested)
+    val actual = normalizeArtistName(candidate)
+    if (expected.isBlank() || actual.isBlank()) return 0
+    if (expected == actual) return 100
+    if (actual.startsWith(expected) || expected.startsWith(actual)) return 88
+    if (actual.contains(expected) || expected.contains(actual)) return 82
+    val expectedTokens = expected.split(' ').filter { it.length >= 2 }.toSet()
+    val actualTokens = actual.split(' ').filter { it.length >= 2 }.toSet()
+    if (expectedTokens.isEmpty() || actualTokens.isEmpty()) return 0
+    val overlap = expectedTokens.intersect(actualTokens).size
+    return ((overlap * 100.0) / max(expectedTokens.size, actualTokens.size)).toInt()
 }
 
 private tailrec fun Context.findActivity(): Activity? =
@@ -114,6 +145,7 @@ fun VehicleLandscapeLayout(
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val playerConnection = LocalPlayerConnection.current
+    val rightPaneScope = rememberCoroutineScope()
 
     LaunchedEffect(currentPaneRoute) {
         VehicleRightPaneTab.entries
@@ -141,10 +173,47 @@ fun VehicleLandscapeLayout(
                 }
             }
         }
+        val openRadioArtistInRightPane: (String) -> Unit = { artistName ->
+            rightPaneScope.launch {
+                selectedTab = VehicleRightPaneTab.SEARCH
+                val artists =
+                    YouTube
+                        .search(artistName, YouTube.SearchFilter.FILTER_ARTIST)
+                        .getOrNull()
+                        ?.items
+                        ?.filterIsInstance<ArtistItem>()
+                        .orEmpty()
+                val bestMatch =
+                    artists
+                        .map { it to radioArtistMatchScore(artistName, it.title) }
+                        .filter { (artist, score) -> !artist.id.isNullOrBlank() && score >= 70 }
+                        .maxByOrNull { (_, score) -> score }
+                        ?.first
+                val route =
+                    bestMatch?.id?.let { "artist/$it" }
+                        ?: SearchRoutes.resultRoute(artistName)
+                Timber.tag("Dudu7RadioArtist").d(
+                    "Resolved radio artist navigation: %s -> %s (%s)",
+                    artistName,
+                    bestMatch?.title ?: "search results",
+                    bestMatch?.id ?: "no exact artist",
+                )
+                paneNavController.navigate(route) {
+                    popUpTo(VEHICLE_QUEUE_ROUTE) {
+                        saveState = true
+                    }
+                    launchSingleTop = true
+                }
+            }
+        }
         activeConnection?.onUserSongSelection = returnToQueue
+        activeConnection?.onRadioArtistSelection = openRadioArtistInRightPane
         onDispose {
             if (activeConnection?.onUserSongSelection === returnToQueue) {
                 activeConnection.onUserSongSelection = null
+            }
+            if (activeConnection?.onRadioArtistSelection === openRadioArtistInRightPane) {
+                activeConnection.onRadioArtistSelection = null
             }
         }
     }

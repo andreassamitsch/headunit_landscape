@@ -125,7 +125,8 @@ import html, json
 stations = [
  {"uuid":"test-radio-one","name":"Test Radio One","streamUrl":"http://10.0.2.2:8000/station1","homepage":"","favicon":"http://10.0.2.2:8000/logo1.png","country":"Austria","language":"German","tags":"Test,Rock","codec":"MP3","bitrate":96},
  {"uuid":"test-radio-two","name":"Test Radio Two","streamUrl":"http://10.0.2.2:8000/station2","homepage":"","favicon":"http://10.0.2.2:8000/logo2.png","country":"Austria","language":"German","tags":"Test,Pop","codec":"MP3","bitrate":96},
- {"uuid":"test-radio-three","name":"Test Radio Three","streamUrl":"http://10.0.2.2:8000/station3","homepage":"http://10.0.2.2:8000/station3-home","favicon":"","country":"Austria","language":"German","tags":"Test,Indie","codec":"MP3","bitrate":96}
+ {"uuid":"test-radio-three","name":"Test Radio Three","streamUrl":"http://10.0.2.2:8000/station3","homepage":"http://10.0.2.2:8000/station3-home","favicon":"","country":"Austria","language":"German","tags":"Test,Indie","codec":"MP3","bitrate":96},
+ {"uuid":"9608a2aa-0601-11e8-ae97-52543be04c81","name":"Antenne Steiermark","streamUrl":"http://live.antenne.at/as","homepage":"http://www.antenne.at/","favicon":"https://upload.wikimedia.org/wikipedia/commons/6/63/Antenne_Logo.svg","country":"Austria","language":"German","tags":"Pop,Austria","codec":"MP3","bitrate":128}
 ]
 raw=json.dumps(stations,separators=(',',':'))
 print('<?xml version="1.0" encoding="utf-8" standalone="yes" ?>')
@@ -179,10 +180,17 @@ assert_text "saved radio section" 1 "=Gespeichert"
 assert_text "first saved station" 1 "=Test Radio One"
 assert_text "second saved station" 1 "=Test Radio Two"
 assert_text "third saved station" 1 "=Test Radio Three"
-sleep 10
+assert_text "Antenne Steiermark saved station" 1 "=Antenne Steiermark"
+sleep 35
 adb shell run-as "$PACKAGE_NAME" cat shared_prefs/metrolist_webradio.xml > "$RESULTS_DIR/radio-prefs-after-logo.xml"
 grep -q 'logo3.png' "$RESULTS_DIR/radio-prefs-after-logo.xml"
 echo "PASS: missing sender logo discovered from station homepage and persisted"
+grep -Eq 'AS-Logo-Button|cover-stmk-live|1024-QBE62OCK|android-chrome-[0-9]+x[0-9]+\.png' "$RESULTS_DIR/radio-prefs-after-logo.xml"
+if grep -q 'Antenne_Logo.svg' "$RESULTS_DIR/radio-prefs-after-logo.xml"; then
+    echo "FAIL: Antenne Steiermark still uses the unsupported SVG logo" >&2
+    exit 1
+fi
+echo "PASS: Antenne Steiermark received a persisted raster station logo"
 capture "webradio-three-favorites"
 
 # Start favorite two, then replace it directly with favorite one.
@@ -191,7 +199,7 @@ sleep 10
 assert_text "favorite two title" 0 "Test Track Two"
 assert_text "favorite two artist" 0 "Test Artist Two"
 assert_text "favorite two live" 0 "LIVE"
-assert_text "favorite two queue" 1 "=Test Radio Two"
+assert_text "WebRadio tab remains open after favorite start" 1 "=Gespeichert"
 
 tap_tab "WebRadio" "=WebRadio"
 tap_text "station one favorite" 1 "=Test Radio One"
@@ -202,6 +210,15 @@ assert_text "favorite one live" 0 "LIVE"
 adb logcat -d -v threadtime > "$RESULTS_DIR/cover-log.txt" 2>&1 || true
 grep -E 'Applied high-resolution radio cover.*Rick Astley.*Never Gonna Give You Up.*1200' "$RESULTS_DIR/cover-log.txt"
 echo "PASS: clear artist/title received a strongly matched 1200px cover"
+assert_text "WebRadio tab remains open after second favorite" 1 "=Gespeichert"
+tap_text "radio artist link" 0 "=Rick Astley"
+sleep 12
+assert_text "radio artist page loaded inside right pane" 1 "Play All" "Alle wiedergeben"
+adb logcat -d -v threadtime > "$RESULTS_DIR/radio-artist-navigation-log.txt" 2>&1 || true
+grep -E 'Resolved radio artist navigation: Rick Astley -> Rick Astley' "$RESULTS_DIR/radio-artist-navigation-log.txt"
+echo "PASS: radio artist resolved to Rick Astley and opened inside the right pane"
+capture "radio-artist-right-pane"
+tap_tab "WebRadio" "=WebRadio"
 
 # Start a third favorite with ambiguous metadata. It must play, but must not run cover search.
 tap_tab "WebRadio" "=WebRadio"
@@ -239,6 +256,7 @@ tap_text "favorite two after YouTube" 1 "=Test Radio Two"
 sleep 10
 assert_text "radio after YouTube title" 0 "=Test Track Two"
 assert_text "radio after YouTube live" 0 "LIVE"
+assert_text "WebRadio remains open after YouTube to radio" 1 "=Gespeichert"
 
 tap_tab "WebRadio" "=WebRadio"
 tap_text "restart same favorite two" 1 "=Test Radio Two"

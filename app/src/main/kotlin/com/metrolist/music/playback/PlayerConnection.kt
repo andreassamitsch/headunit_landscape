@@ -212,9 +212,16 @@ class PlayerConnection(
     var onSkipNext: (() -> Unit)? = null
 
     var onUserSongSelection: (() -> Unit)? = null
+    var onRadioArtistSelection: ((String) -> Unit)? = null
 
     fun notifyUserSongSelection() {
         onUserSongSelection?.invoke()
+    }
+
+    fun requestRadioArtistNavigation(artistName: String): Boolean {
+        val callback = onRadioArtistSelection ?: return false
+        callback(artistName)
+        return true
     }
 
     private var attachedPlayer: Player? = null
@@ -252,7 +259,10 @@ class PlayerConnection(
         Timber.tag(TAG).d("Attached to new player instance: $newPlayer")
     }
 
-    fun playQueue(queue: Queue) {
+    fun playQueue(
+        queue: Queue,
+        notifyUserSelection: Boolean = true,
+    ) {
         // Block if Listen Together guest (unless internal sync)
         if (!allowInternalSync && shouldBlockPlaybackChanges?.invoke() == true) {
             Timber.tag("PlayerConnection").d("playQueue blocked - Listen Together guest")
@@ -261,7 +271,7 @@ class PlayerConnection(
         if (!playerReadinessFlow.value) {
             Timber.tag(TAG).w("playQueue called before player ready; delegating to service")
         }
-        if (!allowInternalSync) {
+        if (!allowInternalSync && notifyUserSelection) {
             notifyUserSongSelection()
         }
         try {
