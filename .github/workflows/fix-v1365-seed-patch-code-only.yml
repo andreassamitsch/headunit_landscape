@@ -1,0 +1,45 @@
+name: Fix WebRadio 13.6.5 seed patch code only
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-v1365-seed-patch-code-only.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Correct station seed indentation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          patch = Path('.assistant/patch_webradio_reliability_logos_cover.py')
+          text = patch.read_text(encoding='utf-8')
+          replacements = [
+              ("'''  {\"uuid\":\"test-radio-one\"", "''' {\"uuid\":\"test-radio-one\""),
+              ('\n  {"uuid":"test-radio-two"', '\n {"uuid":"test-radio-two"'),
+              ('\n  {"uuid":"test-radio-three"', '\n {"uuid":"test-radio-three"'),
+          ]
+          changed = False
+          for old, new in replacements:
+              if old in text:
+                  text = text.replace(old, new)
+                  changed = True
+          if not changed:
+              raise SystemExit('No seed indentation changes were applicable')
+          patch.write_text(text, encoding='utf-8')
+          PY
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .assistant/patch_webradio_reliability_logos_cover.py
+          git commit -m 'Fix 13.6.5 reliability test station seeds'
+          git pull --rebase origin main
+          git push
