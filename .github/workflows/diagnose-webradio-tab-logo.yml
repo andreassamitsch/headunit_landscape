@@ -20,15 +20,23 @@ jobs:
           set -euo pipefail
           mkdir -p _assistant
           {
-            echo '=== WebRadioScreen references ==='
-            grep -RIn --include='*.kt' 'WebRadioScreen' app/src/main/kotlin || true
-            echo '=== queue/tab state candidates ==='
-            grep -RIn --include='*.kt' -E 'selected(Tab|Section)|current(Tab|Section)|QueueScreen|queue.*tab|tab.*queue|Warteschlange|WebRadio' app/src/main/kotlin/com/metrolist/music/ui | head -n 500 || true
-            echo '=== playQueue callers around Dudu/player ==='
-            grep -RIn --include='*.kt' -E 'playQueue\(|mediaMetadata|currentMediaItem|queueTitle' app/src/main/kotlin/com/metrolist/music/ui | head -n 500 || true
+            echo '=== VehicleLandscapeLayout definition ==='
+            grep -RIn --include='*.kt' 'fun VehicleLandscapeLayout' app/src || true
+            echo '=== all VehicleLandscapeLayout references ==='
+            grep -RIn --include='*.kt' 'VehicleLandscapeLayout' app/src || true
+            echo '=== all WebRadioScreen references ==='
+            grep -RIn --include='*.kt' 'WebRadioScreen' app/src || true
+            echo '=== tab enums and selected state ==='
+            grep -RIn --include='*.kt' -E 'enum class .*Tab|selectedTab|activeTab|currentTab|rememberSaveable.*Tab|Queue.*WebRadio|WebRadio.*Queue' app/src | head -n 1000 || true
+            echo '=== relevant source excerpts ==='
+            while IFS=: read -r file line rest; do
+              start=$((line > 80 ? line - 80 : 1)); end=$((line + 180));
+              echo "--- $file:$start-$end ---"
+              sed -n "${start},${end}p" "$file"
+            done < <(grep -RIn --include='*.kt' 'fun VehicleLandscapeLayout' app/src || true)
           } > _assistant/webradio_tab_logo_diagnosis.txt
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -f _assistant/webradio_tab_logo_diagnosis.txt
-          git commit -m 'Record WebRadio tab and logo diagnosis [skip ci]'
+          git commit -m 'Record expanded WebRadio tab diagnosis [skip ci]'
           git push
