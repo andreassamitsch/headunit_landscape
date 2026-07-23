@@ -56,6 +56,7 @@ import androidx.media3.common.Timeline
 import androidx.media3.common.audio.SonicAudioProcessor
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
@@ -1761,6 +1762,57 @@ class MusicService :
         }
     }
 
+    private fun resetForExplicitQueueReplacement(items: List<MediaItem>) {
+        val currentWasRadio = isRadioMediaId(player.currentMediaItem?.mediaId)
+        val nextContainsRadio = items.any { isRadioMediaId(it.mediaId) }
+
+        // A manual queue change must cancel every pending operation associated
+        // with the previous stream. This is especially important when crossing
+        // the YouTube/live-radio boundary or replacing one live stream by another.
+        crossfadeTriggerJob?.cancel()
+        crossfadeTriggerJob = null
+        crossfadeJob?.cancel()
+        crossfadeJob = null
+
+        secondaryPlayer?.let { secondary ->
+            secondary.removeListener(secondaryPlayerListener)
+            playerNormalizationProcessors.remove(secondary)
+            runCatching { secondary.stop() }
+            runCatching { secondary.clearMediaItems() }
+            runCatching { secondary.release() }
+        }
+        secondaryPlayer = null
+        if (fadingPlayer != null || isCrossfading) {
+            cleanupCrossfade()
+        }
+
+        retryJob?.cancel()
+        retryJob = null
+        waitingForNetworkConnection.value = false
+        pausedDueToNetworkError = false
+        retryCount = 0
+        consecutivePlaybackErr = 0
+
+        items.forEach { item ->
+            currentMediaIdRetryCount.remove(item.mediaId)
+            recentlyFailedSongs.remove(item.mediaId)
+            if (isRadioMediaId(item.mediaId)) {
+                songUrlCache.remove(item.mediaId)
+                // Remove cache fragments created by older builds. Live streams
+                // are endless and must never be reused from the normal song cache.
+                runCatching { playerCache.removeResource(item.mediaId) }
+            }
+        }
+
+        if (nextContainsRadio) {
+            currentStreamClient.value = null
+        }
+
+        if (currentWasRadio || nextContainsRadio || player.playerError != null) {
+            player.stop()
+        }
+    }
+
     fun playQueue(
         queue: Queue,
         playWhenReady: Boolean = true,
@@ -1800,6 +1852,7 @@ class MusicService :
                 queueTitle = initialStatus.title
             }
             if (initialStatus.items.isEmpty()) return@launch
+            resetForExplicitQueueReplacement(initialStatus.items)
             // Track original queue size for shuffle playlist first feature
             originalQueueSize = initialStatus.items.size
             if (queue.preloadItem != null) {
@@ -3648,13 +3701,22 @@ class MusicService :
             val mediaId = dataSpec.key ?: error("No media id")
 
             if (isRadioMediaId(mediaId)) {
-                return@Factory dataSpec.withRequestHeaders(
-                    dataSpec.httpRequestHeaders +
-                        mapOf(
-                            "Icy-MetaData" to "1",
-                            "User-Agent" to "MetrolistHU/13.6.2",
-                        ),
-                )
+                // Keep the mediaId only long enough to identify this as radio.
+                // The upstream DataSpec deliberately has no cache key and carries
+                // FLAG_DONT_CACHE_IF_LENGTH_UNKNOWN, preventing an endless live
+                // stream from poisoning the finite-song cache after the first play.
+                return@Factory dataSpec
+                    .withRequestHeaders(
+                        dataSpec.httpRequestHeaders +
+                            mapOf(
+                                "Icy-MetaData" to "1",
+                                "User-Agent" to "MetrolistHU/13.6.5",
+                                "Cache-Control" to "no-cache",
+                            ),
+                    ).buildUpon()
+                    .setKey(null)
+                    .setFlags(dataSpec.flags or DataSpec.FLAG_DONT_CACHE_IF_LENGTH_UNKNOWN)
+                    .build()
             }
 
             val shouldBypassCache = bypassCacheForQualityChange.contains(mediaId)

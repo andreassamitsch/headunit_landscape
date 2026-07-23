@@ -20,7 +20,7 @@ LOGO_2 = base64.b64decode(
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "MetrolistRadioTest/1.0"
+    server_version = "MetrolistRadioTest/2.0"
 
     def log_message(self, fmt: str, *args: object) -> None:
         print(f"{self.address_string()} - {fmt % args}", flush=True)
@@ -35,15 +35,28 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/logo2.png":
             self._bytes(200, LOGO_2, "image/png")
             return
+        if self.path == "/logo3.png":
+            self._bytes(200, self.server.logo3, "image/png")
+            return
+        if self.path == "/station3-home":
+            self._bytes(
+                200,
+                b'<html><head><link rel="apple-touch-icon" sizes="512x512" href="/logo3.png"></head><body>Test Radio Three</body></html>',
+                "text/html; charset=utf-8",
+            )
+            return
         if self.path == "/playlist.m3u":
             host = self.headers.get("Host", "10.0.2.2:8000")
             self._bytes(200, f"#EXTM3U\nhttp://{host}/station1\n".encode(), "audio/x-mpegurl")
             return
         if self.path == "/station1":
-            self._stream("Test Radio One", "Test Artist One - Test Track One", self.server.audio1)
+            self._stream("Test Radio One", "Rick Astley - Never Gonna Give You Up", self.server.audio1)
             return
         if self.path == "/station2":
             self._stream("Test Radio Two", "Test Artist Two - Test Track Two", self.server.audio2)
+            return
+        if self.path == "/station3":
+            self._stream("Test Radio Three", "Station identification", self.server.audio3)
             return
         self.send_error(404)
 
@@ -88,10 +101,14 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--audio1", type=Path, required=True)
     parser.add_argument("--audio2", type=Path, required=True)
+    parser.add_argument("--audio3", type=Path, required=True)
+    parser.add_argument("--logo3", type=Path, required=True)
     args = parser.parse_args()
     server = ThreadingHTTPServer(("0.0.0.0", args.port), Handler)
     server.audio1 = args.audio1.read_bytes()
     server.audio2 = args.audio2.read_bytes()
+    server.audio3 = args.audio3.read_bytes()
+    server.logo3 = args.logo3.read_bytes()
     print(f"ICY test server listening on {args.port}", flush=True)
     server.serve_forever()
 

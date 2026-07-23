@@ -15,7 +15,7 @@ import java.nio.charset.StandardCharsets
 import java.util.UUID
 
 object RadioBrowserClient {
-    private const val USER_AGENT = "MetrolistHU/13.6.4 (Android WebRadio)"
+    private const val USER_AGENT = "MetrolistHU/13.6.5 (Android WebRadio)"
     private const val SEARCH_ENDPOINT = "https://all.api.radio-browser.info/json/stations/search"
 
     suspend fun search(query: String): Result<List<RadioStation>> =

@@ -39,6 +39,7 @@ import com.metrolist.music.radio.isRadioMediaId
 import com.metrolist.music.utils.dataStore
 import com.metrolist.music.utils.get
 import com.metrolist.music.utils.reportException
+import com.metrolist.music.ui.utils.resize
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -694,8 +695,11 @@ class PlayerConnection(
             )
         mediaMetadata.value = dynamic
 
-        parsed.first?.takeIf { it.isNotBlank() }?.let { artist ->
-            lookupRadioCover(base, artist, parsed.second)
+        val artist = parsed.first
+        if (isClearRadioTrackMetadata(artist, parsed.second, stationName)) {
+            lookupRadioCover(base, artist!!, parsed.second)
+        } else {
+            Timber.tag(TAG).d("Skipping radio cover lookup for ambiguous metadata: %s", rawTitle)
         }
     }
 
@@ -708,12 +712,78 @@ class PlayerConnection(
         return artist to title
     }
 
+    private fun isClearRadioTrackMetadata(
+        artist: String?,
+        title: String,
+        stationName: String,
+    ): Boolean {
+        if (artist.isNullOrBlank() || title.isBlank()) return false
+        val normalizedArtist = normalizeTrackText(artist)
+        val normalizedTitle = normalizeTrackText(title)
+        val normalizedStation = normalizeTrackText(stationName)
+        if (normalizedArtist.length < 2 || normalizedTitle.length < 2) return false
+        if (normalizedArtist == normalizedStation || normalizedTitle == normalizedStation) return false
+        if ("http" in normalizedArtist || "http" in normalizedTitle || "www" in normalizedArtist || "www" in normalizedTitle) return false
+
+        val generic =
+            setOf(
+                "radio",
+                "webradio",
+                "live",
+                "stream",
+                "unknown",
+                "unbekannt",
+                "station identification",
+                "jingle",
+                "promo",
+                "advertisement",
+                "commercial",
+                "werbung",
+                "news",
+                "nachrichten",
+            )
+        return normalizedArtist !in generic && normalizedTitle !in generic
+    }
+
+    private fun normalizeTrackText(value: String): String =
+        value
+            .lowercase()
+            .replace(
+                Regex("""[\(\[][^(\[]*(official|music video|video|audio|lyrics?|remaster(?:ed)?|live)[^\)\]]*[\)\]]"""),
+                " ",
+            ).replace(Regex("""\b(feat|ft)\.?\b.*"""), " ")
+            .replace(Regex("""[^\p{L}\p{N}]+"""), " ")
+            .trim()
+            .replace(Regex("""\s+"""), " ")
+
+    private fun tokenCoverage(expected: String, actual: String): Double {
+        if (expected.isBlank() || actual.isBlank()) return 0.0
+        if (actual.contains(expected) || expected.contains(actual)) return 1.0
+        val expectedTokens = expected.split(' ').filter { it.length > 1 }.toSet()
+        val actualTokens = actual.split(' ').filter { it.length > 1 }.toSet()
+        if (expectedTokens.isEmpty()) return 0.0
+        return expectedTokens.intersect(actualTokens).size.toDouble() / expectedTokens.size
+    }
+
+    private fun isStrongRadioCoverMatch(
+        song: SongItem,
+        artist: String,
+        title: String,
+    ): Boolean {
+        val expectedTitle = normalizeTrackText(title)
+        val actualTitle = normalizeTrackText(song.title)
+        val expectedArtist = normalizeTrackText(artist)
+        val actualArtist = normalizeTrackText(song.artists.joinToString(" ") { it.name })
+        return tokenCoverage(expectedTitle, actualTitle) >= 0.80 &&
+            tokenCoverage(expectedArtist, actualArtist) >= 0.70
+    }
+
     private fun lookupRadioCover(
         base: com.metrolist.music.models.MediaMetadata,
         artist: String,
         title: String,
     ) {
-        val key = "$artist|$title".lowercase()
+        val key = "${normalizeTrackText(artist)}|${normalizeTrackText(title)}"
         if (radioCoverCache.containsKey(key)) {
             radioCoverCache[key]?.let { url ->
                 val current = mediaMetadata.value
@@ -729,17 +799,26 @@ class PlayerConnection(
             scope.launch {
                 val cover =
                     runCatching {
-                        YouTube.search("$artist $title", YouTube.SearchFilter.FILTER_SONG)
+                        YouTube.search("$artist - $title", YouTube.SearchFilter.FILTER_SONG)
                             .getOrNull()
                             ?.items
                             ?.filterIsInstance<SongItem>()
-                            ?.firstOrNull()
+                            ?.firstOrNull { candidate -> isStrongRadioCoverMatch(candidate, artist, title) }
                             ?.thumbnail
+                            ?.resize(1200, 1200)
                     }.getOrNull()
                 radioCoverCache[key] = cover
                 val current = mediaMetadata.value
                 if (!cover.isNullOrBlank() && current?.id == base.id && current.title == title) {
+                    Timber.tag(TAG).d(
+                        "Applied high-resolution radio cover for %s - %s: %s",
+                        artist,
+                        title,
+                        cover,
+                    )
                     mediaMetadata.value = current.copy(thumbnailUrl = cover)
+                } else if (cover.isNullOrBlank()) {
+                    Timber.tag(TAG).d("No sufficiently matching radio cover for %s - %s", artist, title)
                 }
             }
     }

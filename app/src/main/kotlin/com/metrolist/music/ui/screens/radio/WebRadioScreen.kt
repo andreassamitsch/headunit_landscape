@@ -5,6 +5,7 @@
 package com.metrolist.music.ui.screens.radio
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +35,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,6 +58,7 @@ import com.metrolist.music.R
 import com.metrolist.music.playback.queues.ListQueue
 import com.metrolist.music.radio.RadioBrowserClient
 import com.metrolist.music.radio.RadioStation
+import com.metrolist.music.radio.RadioStationLogoResolver
 import com.metrolist.music.radio.RadioStationStore
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -81,6 +84,19 @@ fun WebRadioScreen() {
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var editingStation by remember { mutableStateOf<RadioStation?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
+
+    // Resolve missing or broken artwork in the background as soon as the saved
+    // station library is visible. The resolved URL is persisted, so later starts
+    // do not have to rediscover the logo.
+    LaunchedEffect(savedStations.map { Triple(it.uuid, it.favicon, it.homepage) }) {
+        savedStations.forEach { station ->
+            RadioStationLogoResolver.resolve(station)?.let { logo ->
+                if (logo != station.favicon) {
+                    store.addOrUpdate(station.copy(favicon = logo))
+                }
+            }
+        }
+    }
 
     fun playSaved(station: RadioStation) {
         // ListQueue playback is most reliable from index 0. Rotate the saved list so
@@ -168,6 +184,7 @@ fun WebRadioScreen() {
                                 onDelete = { store.remove(station.uuid) },
                                 onMoveUp = { store.move(station.uuid, -1) },
                                 onMoveDown = { store.move(station.uuid, 1) },
+                                onLogoResolved = store::addOrUpdate,
                             )
                         }
                     }
@@ -217,6 +234,14 @@ fun WebRadioScreen() {
                                     onSave = {
                                         store.addOrUpdate(station)
                                     },
+                                    onLogoResolved = { enriched ->
+                                        results = results.map { current ->
+                                            if (current.uuid == enriched.uuid) enriched else current
+                                        }
+                                        if (savedStations.any { it.uuid == enriched.uuid }) {
+                                            store.addOrUpdate(enriched)
+                                        }
+                                    },
                                 )
                             }
                         }
@@ -264,7 +289,19 @@ private fun RadioStationRow(
     onDelete: (() -> Unit)? = null,
     onMoveUp: (() -> Unit)? = null,
     onMoveDown: (() -> Unit)? = null,
+    onLogoResolved: (RadioStation) -> Unit = {},
 ) {
+    var artworkUrl by remember(station.uuid, station.favicon) { mutableStateOf(station.favicon) }
+
+    LaunchedEffect(station.uuid, station.favicon, station.homepage) {
+        RadioStationLogoResolver.resolve(station)?.let { resolved ->
+            artworkUrl = resolved
+            if (resolved != station.favicon) {
+                onLogoResolved(station.copy(favicon = resolved))
+            }
+        }
+    }
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier =
@@ -273,19 +310,34 @@ private fun RadioStationRow(
                 .combinedClickable(onClick = onPlay, onLongClick = { onEdit?.invoke() })
                 .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
-        if (station.favicon.isNotBlank()) {
+        if (artworkUrl.isNotBlank()) {
             AsyncImage(
-                model = station.favicon,
-                contentDescription = null,
+                model = artworkUrl,
+                contentDescription = "Senderlogo ${station.name}",
                 contentScale = ContentScale.Crop,
+                error = painterResource(R.drawable.radio),
+                fallback = painterResource(R.drawable.radio),
                 modifier = Modifier.size(54.dp).clip(RoundedCornerShape(10.dp)),
             )
         } else {
+            val initials =
+                remember(station.name) {
+                    station.name
+                        .trim()
+                        .split(' ')
+                        .filter { it.isNotBlank() }
+                        .take(2)
+                        .joinToString("") { it.first().uppercaseChar().toString() }
+                        .ifBlank { "R" }
+                }
             Box(
-                Modifier.size(54.dp).clip(RoundedCornerShape(10.dp)),
+                Modifier
+                    .size(54.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(painterResource(R.drawable.radio), contentDescription = null)
+                Text(initials, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
         }
 
