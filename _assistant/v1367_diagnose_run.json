@@ -1,28 +1,28 @@
 {
-  "total_count": 5,
+  "total_count": 6,
   "workflow_runs": [
     {
-      "id": 30020318497,
+      "id": 30021310199,
       "name": "Diagnose WebRadio artist action",
-      "node_id": "WFR_kwLOSW2IEs8AAAAG_Vm1IQ",
+      "node_id": "WFR_kwLOSW2IEs8AAAAG_WjW9w",
       "head_branch": "main",
-      "head_sha": "a35e323e8a58aa20a6414f0e135cb058f0ca30d7",
+      "head_sha": "c975f80fe8a7e4e4dcaba260f4a0ce3df0047aad",
       "path": ".github/workflows/diagnose-v1367-artist-action.yml",
-      "display_title": "Run normalized focused WebRadio artist test",
-      "run_number": 5,
+      "display_title": "Test initial-pass WebRadio artist actions",
+      "run_number": 6,
       "event": "push",
-      "status": "in_progress",
-      "conclusion": null,
+      "status": "completed",
+      "conclusion": "failure",
       "workflow_id": 318987550,
-      "check_suite_id": 81339474936,
-      "check_suite_node_id": "CS_kwDOSW2IEs8AAAAS8DXj-A",
-      "url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30020318497",
-      "html_url": "https://github.com/andreassamitsch/headunit_landscape/actions/runs/30020318497",
+      "check_suite_id": 81342487779,
+      "check_suite_node_id": "CS_kwDOSW2IEs8AAAAS8GPc4w",
+      "url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30021310199",
+      "html_url": "https://github.com/andreassamitsch/headunit_landscape/actions/runs/30021310199",
       "pull_requests": [
 
       ],
-      "created_at": "2026-07-23T15:23:31Z",
-      "updated_at": "2026-07-23T15:23:35Z",
+      "created_at": "2026-07-23T15:36:17Z",
+      "updated_at": "2026-07-23T15:36:30Z",
       "actor": {
         "login": "andreassamitsch",
         "id": 47712152,
@@ -48,7 +48,7 @@
       "referenced_workflows": [
 
       ],
-      "run_started_at": "2026-07-23T15:23:31Z",
+      "run_started_at": "2026-07-23T15:36:17Z",
       "triggering_actor": {
         "login": "andreassamitsch",
         "id": 47712152,
@@ -70,19 +70,19 @@
         "user_view_type": "public",
         "site_admin": false
       },
-      "jobs_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30020318497/jobs",
-      "logs_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30020318497/logs",
-      "check_suite_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/check-suites/81339474936",
-      "artifacts_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30020318497/artifacts",
-      "cancel_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30020318497/cancel",
-      "rerun_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30020318497/rerun",
+      "jobs_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30021310199/jobs",
+      "logs_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30021310199/logs",
+      "check_suite_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/check-suites/81342487779",
+      "artifacts_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30021310199/artifacts",
+      "cancel_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30021310199/cancel",
+      "rerun_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30021310199/rerun",
       "previous_attempt_url": null,
       "workflow_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/workflows/318987550",
       "head_commit": {
-        "id": "a35e323e8a58aa20a6414f0e135cb058f0ca30d7",
-        "tree_id": "2dacfc61cafada6b91f888bc344628a2348a7bd5",
-        "message": "Run normalized focused WebRadio artist test",
-        "timestamp": "2026-07-23T15:23:26Z",
+        "id": "c975f80fe8a7e4e4dcaba260f4a0ce3df0047aad",
+        "tree_id": "0a9711c688e0a28f3b4c3139ebc14854d6519e39",
+        "message": "Test initial-pass WebRadio artist actions",
+        "timestamp": "2026-07-23T15:36:12Z",
         "author": {
           "name": "asam",
           "email": "47712152+andreassamitsch@users.noreply.github.com"
