@@ -39,6 +39,7 @@ jobs:
       - name: Apply WebRadio sources and focused diagnostics
         run: |
           python3 .assistant/patch_webradio_v1367.py
+          python3 .assistant/route_embedded_artist_screen.py
           python3 .assistant/normalize_webradio_v1367_artist_source.py
           python3 .assistant/harden_webradio_v1367_validation.py
           python3 .assistant/force_webradio_artist_pointer_actions.py
@@ -118,4 +119,4 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-# retry-initial-pointer-pass-7
+# retry-touch-safe-embedded-screen-8
