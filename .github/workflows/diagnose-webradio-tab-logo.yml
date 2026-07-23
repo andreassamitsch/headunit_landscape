@@ -1,0 +1,34 @@
+name: Diagnose WebRadio tab and logo
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-webradio-tab-logo.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locate right-pane tab state and WebRadio selection hooks
+        run: |
+          set -euo pipefail
+          mkdir -p _assistant
+          {
+            echo '=== WebRadioScreen references ==='
+            grep -RIn --include='*.kt' 'WebRadioScreen' app/src/main/kotlin || true
+            echo '=== queue/tab state candidates ==='
+            grep -RIn --include='*.kt' -E 'selected(Tab|Section)|current(Tab|Section)|QueueScreen|queue.*tab|tab.*queue|Warteschlange|WebRadio' app/src/main/kotlin/com/metrolist/music/ui | head -n 500 || true
+            echo '=== playQueue callers around Dudu/player ==='
+            grep -RIn --include='*.kt' -E 'playQueue\(|mediaMetadata|currentMediaItem|queueTitle' app/src/main/kotlin/com/metrolist/music/ui | head -n 500 || true
+          } > _assistant/webradio_tab_logo_diagnosis.txt
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -f _assistant/webradio_tab_logo_diagnosis.txt
+          git commit -m 'Record WebRadio tab and logo diagnosis [skip ci]'
+          git push
