@@ -745,12 +745,12 @@ old_test_path = Path("scripts/dudu7_webradio_smoke.sh")
 test = old_test_path.read_text(encoding="utf-8")
 test = replace_once(
     test,
-    '''  {"uuid":"test-radio-one","name":"Test Radio One","streamUrl":"http://10.0.2.2:8000/station1","homepage":"","favicon":"http://10.0.2.2:8000/logo1.png","country":"Austria","language":"German","tags":"Test,Rock","codec":"MP3","bitrate":96},
-  {"uuid":"test-radio-two","name":"Test Radio Two","streamUrl":"http://10.0.2.2:8000/station2","homepage":"","favicon":"http://10.0.2.2:8000/logo2.png","country":"Austria","language":"German","tags":"Test,Pop","codec":"MP3","bitrate":96}
+    ''' {"uuid":"test-radio-one","name":"Test Radio One","streamUrl":"http://10.0.2.2:8000/station1","homepage":"","favicon":"http://10.0.2.2:8000/logo1.png","country":"Austria","language":"German","tags":"Test,Rock","codec":"MP3","bitrate":96},
+ {"uuid":"test-radio-two","name":"Test Radio Two","streamUrl":"http://10.0.2.2:8000/station2","homepage":"","favicon":"http://10.0.2.2:8000/logo2.png","country":"Austria","language":"German","tags":"Test,Pop","codec":"MP3","bitrate":96}
 ''',
-    '''  {"uuid":"test-radio-one","name":"Test Radio One","streamUrl":"http://10.0.2.2:8000/station1","homepage":"","favicon":"http://10.0.2.2:8000/logo1.png","country":"Austria","language":"German","tags":"Test,Rock","codec":"MP3","bitrate":96},
-  {"uuid":"test-radio-two","name":"Test Radio Two","streamUrl":"http://10.0.2.2:8000/station2","homepage":"","favicon":"http://10.0.2.2:8000/logo2.png","country":"Austria","language":"German","tags":"Test,Pop","codec":"MP3","bitrate":96},
-  {"uuid":"test-radio-three","name":"Test Radio Three","streamUrl":"http://10.0.2.2:8000/station3","homepage":"http://10.0.2.2:8000/station3-home","favicon":"","country":"Austria","language":"German","tags":"Test,Indie","codec":"MP3","bitrate":96}
+    ''' {"uuid":"test-radio-one","name":"Test Radio One","streamUrl":"http://10.0.2.2:8000/station1","homepage":"","favicon":"http://10.0.2.2:8000/logo1.png","country":"Austria","language":"German","tags":"Test,Rock","codec":"MP3","bitrate":96},
+ {"uuid":"test-radio-two","name":"Test Radio Two","streamUrl":"http://10.0.2.2:8000/station2","homepage":"","favicon":"http://10.0.2.2:8000/logo2.png","country":"Austria","language":"German","tags":"Test,Pop","codec":"MP3","bitrate":96},
+ {"uuid":"test-radio-three","name":"Test Radio Three","streamUrl":"http://10.0.2.2:8000/station3","homepage":"http://10.0.2.2:8000/station3-home","favicon":"","country":"Austria","language":"German","tags":"Test,Indie","codec":"MP3","bitrate":96}
 ''',
     "three radio seeds",
 )
