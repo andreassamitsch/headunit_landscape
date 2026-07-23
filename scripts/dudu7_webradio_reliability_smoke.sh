@@ -311,8 +311,8 @@ tap_text "switch back to radio list" 1 "Listenansicht"
 coords=$(find_coords 1 "=Test Radio One")
 adb shell input swipe $coords $coords 900
 sleep 2
-assert_text "station long-click edit action" 1 "=Bearbeiten"
-assert_text "station long-click delete action" 1 "=Löschen"
+assert_text "station long-click edit action" 0 "=Bearbeiten"
+assert_text "station long-click delete action" 0 "=Löschen"
 adb shell input keyevent KEYCODE_BACK || true
 sleep 2
 
