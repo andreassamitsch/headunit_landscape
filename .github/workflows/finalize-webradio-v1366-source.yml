@@ -1,0 +1,36 @@
+name: Finalize tested WebRadio 13.6.6 source
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/finalize-webradio-v1366-source.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply already tested source changes and commit
+        run: |
+          set -euxo pipefail
+          git pull --rebase origin main
+          python3 .assistant/patch_webradio_v1366.py
+          python3 .assistant/patch_webradio_v1366_testfix.py
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/build.gradle.kts \
+            app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt \
+            app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt \
+            app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt \
+            app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt \
+            app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoResolver.kt \
+            scripts/dudu7_webradio_reliability_smoke.sh
+          git commit -m 'Keep WebRadio open and improve station navigation artwork'
+          git push
