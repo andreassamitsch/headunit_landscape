@@ -1,0 +1,208 @@
+=== FILES ===
+app/src/main/kotlin/com/metrolist/music/constants/HistorySource.kt
+app/src/main/kotlin/com/metrolist/music/db/entities/RecognitionHistory.kt
+app/src/main/kotlin/com/metrolist/music/db/entities/SearchHistory.kt
+app/src/main/kotlin/com/metrolist/music/playback/queues/LocalAlbumRadio.kt
+app/src/main/kotlin/com/metrolist/music/playback/queues/YouTubeAlbumRadio.kt
+app/src/main/kotlin/com/metrolist/music/radio/RadioBrowserClient.kt
+app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt
+app/src/main/kotlin/com/metrolist/music/radio/RadioStationStore.kt
+app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
+app/src/main/kotlin/com/metrolist/music/ui/screens/recognition/RecognitionHistoryScreen.kt
+app/src/main/kotlin/com/metrolist/music/viewmodels/HistoryViewModel.kt
+app/src/main/res/drawable/delete_history.xml
+app/src/main/res/drawable/history.xml
+app/src/main/res/drawable/radio.xml
+app/src/main/res/drawable/radio_button_checked.xml
+app/src/main/res/drawable/radio_button_unchecked.xml
+
+=== HISTORY SOURCE REFERENCES ===
+app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt:68:import com.metrolist.music.constants.HistorySource
+app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt:139:    val historySource by viewModel.historySource.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt:268:                                HistorySource.LOCAL to stringResource(R.string.local_history),
+app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt:269:                                HistorySource.REMOTE to stringResource(R.string.remote_history),
+app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt:272:                            listOf(HistorySource.LOCAL to stringResource(R.string.local_history))
+app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt:274:                    currentValue = historySource,
+app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt:276:                        viewModel.historySource.value = it
+app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt:277:                        if (it == HistorySource.REMOTE) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt:284:            if (historySource == HistorySource.REMOTE && isLoggedIn) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt:446:                if (historySource == HistorySource.REMOTE) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt:454:                if (historySource == HistorySource.REMOTE && historyPage != null) {
+app/src/main/kotlin/com/metrolist/music/constants/HistorySource.kt:8:enum class HistorySource {
+app/src/main/kotlin/com/metrolist/music/viewmodels/HistoryViewModel.kt:14:import com.metrolist.music.constants.HistorySource
+app/src/main/kotlin/com/metrolist/music/viewmodels/HistoryViewModel.kt:42:    var historySource = MutableStateFlow(HistorySource.LOCAL)
+
+=== RADIO FAVORITE/SAVED/PLAY REFERENCES ===
+app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt:680:                painter = painterResource(R.drawable.favorite),
+app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt:969:                    stringResource(R.string.liked) -> R.drawable.favorite_border
+app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt:1069:                    stringResource(R.string.liked) -> R.drawable.favorite_border
+app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt:1912:            painter = painterResource(R.drawable.favorite),
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:1173:            painter = painterResource(if (isLiked) R.drawable.favorite else R.drawable.favorite_border),
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:168:import com.metrolist.music.radio.RadioStationStore
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:170:import com.metrolist.music.radio.toRadioStationOrNull
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:338:    val radioStationStore = remember(context) { RadioStationStore.get(context) }
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:339:    val savedRadioStations by radioStationStore.stations.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:340:    val isWebRadio = isRadioMediaId(mediaMetadata?.id)
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:341:    val currentRadioStation =
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:342:        remember(mediaMetadata?.id, savedRadioStations) {
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:343:            runCatching { playerConnection.player.currentMediaItem?.toRadioStationOrNull() }.getOrNull()
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1284:                                                    R.drawable.favorite
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1286:                                                    R.drawable.favorite_border
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1853:                                    icon = if (isFavorite) R.drawable.favorite else R.drawable.favorite_border,
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1908:                                if (isWebRadio) {
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1909:                                    currentRadioStation?.let { station ->
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1910:                                        savedRadioStations.any { it.uuid == station.uuid }
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1924:                                isWebRadio = isWebRadio,
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1928:                                duration = if (isWebRadio) 0L else duration,
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1929:                                canSeek = !isListenTogetherGuest && !isWebRadio,
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1974:                                    if (!isWebRadio) {
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1984:                                    if (isWebRadio) {
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1985:                                        currentRadioStation?.let { station ->
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1986:                                            if (savedRadioStations.any { it.uuid == station.uuid }) {
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1987:                                                radioStationStore.remove(station.uuid)
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1989:                                                radioStationStore.addOrUpdate(station)
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1997:                                    if (isWebRadio) return@VehiclePlayerControls
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:2007:                                    if (isWebRadio) return@VehiclePlayerControls
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlaylistMenu.kt:282:                                    R.drawable.favorite
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlaylistMenu.kt:284:                                    R.drawable.favorite_border
+app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubeSongMenu.kt:266:                    painter = painterResource(if (isFavorite) R.drawable.favorite else R.drawable.favorite_border),
+app/src/main/kotlin/com/metrolist/music/ui/menu/SongMenu.kt:486:                    painter = painterResource(if (isFavorite) R.drawable.favorite else R.drawable.favorite_border),
+app/src/main/kotlin/com/metrolist/music/ui/menu/AlbumMenu.kt:284:                    painter = painterResource(if (album.album.bookmarkedAt != null) R.drawable.favorite else R.drawable.favorite_border),
+app/src/main/kotlin/com/metrolist/music/ui/menu/AddToPlaylistDialogOnline.kt:419:                            painter = painterResource(id = R.drawable.favorite),
+app/src/main/kotlin/com/metrolist/music/ui/menu/SelectionSongsMenu.kt:596:                                                if (allLiked) R.drawable.favorite else R.drawable.favorite_border,
+app/src/main/kotlin/com/metrolist/music/ui/menu/SelectionSongsMenu.kt:905:                                                if (allLiked) R.drawable.favorite else R.drawable.favorite_border,
+app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubeAlbumMenu.kt:258:                    painter = painterResource(if (album?.album?.bookmarkedAt != null) R.drawable.favorite else R.drawable.favorite_border),
+app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubePlaylistMenu.kt:234:                                    R.drawable.favorite
+app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubePlaylistMenu.kt:236:                                    R.drawable.favorite_border
+app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubeSelectionSongMenu.kt:414:                                        if (allLiked) R.drawable.favorite else R.drawable.favorite_border,
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:245:                        if (isFavorite) R.drawable.favorite
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:246:                        else R.drawable.favorite_border
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:58:import com.metrolist.music.radio.RadioStation
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:59:import com.metrolist.music.radio.RadioStationStore
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:63:enum class WebRadioSection {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:70:fun WebRadioScreen() {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:73:    val store = remember(context) { RadioStationStore.get(context) }
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:74:    val savedStations by store.stations.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:77:    var section by remember { mutableStateOf(WebRadioSection.SAVED) }
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:79:    var results by remember { mutableStateOf<List<RadioStation>>(emptyList()) }
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:82:    var editingStation by remember { mutableStateOf<RadioStation?>(null) }
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:85:    fun playSaved(station: RadioStation) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:86:        val stations = savedStations.ifEmpty { listOf(station) }
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:90:                title = "WebRadio",
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:117:                selected = section == WebRadioSection.SAVED,
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:118:                onClick = { section = WebRadioSection.SAVED },
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:121:                    Icon(painterResource(R.drawable.favorite), contentDescription = null)
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:125:                selected = section == WebRadioSection.SEARCH,
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:126:                onClick = { section = WebRadioSection.SEARCH },
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:139:            WebRadioSection.SAVED -> {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:140:                if (savedStations.isEmpty()) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:150:                            TextButton(onClick = { section = WebRadioSection.SEARCH }) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:157:                        items(savedStations, key = { it.uuid }) { station ->
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:158:                            RadioStationRow(
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:173:            WebRadioSection.SEARCH -> {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:205:                                RadioStationRow(
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:207:                                    isSaved = savedStations.any { it.uuid == station.uuid },
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:226:        RadioStationEditorDialog(
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:241:                            section = WebRadioSection.SAVED
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:254:private fun RadioStationRow(
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:255:    station: RadioStation,
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:344:private fun RadioStationEditorDialog(
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:345:    initial: RadioStation?,
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:347:    onSave: (RadioStation) -> Unit,
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:386:                        (initial ?: RadioStation(UUID.randomUUID().toString(), name.trim(), streamUrl.trim()))
+app/src/main/kotlin/com/metrolist/music/ui/screens/AlbumScreen.kt:318:                                                R.drawable.favorite
+app/src/main/kotlin/com/metrolist/music/ui/screens/AlbumScreen.kt:320:                                                R.drawable.favorite_border
+app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AppearanceSettings.kt:1766:                        icon = painterResource(R.drawable.favorite),
+app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AboutScreen.kt:95:    val favoriteSongVideoId: String? = null
+app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AboutScreen.kt:110:    favoriteSongVideoId = "Mh2JWGWvy_Y"
+app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AboutScreen.kt:115:    Contributor(name = "Adriel O'Connel", roleRes = R.string.credits_collaborator, githubHandle = "adrielGGmotion", sponsorUrl = "https://github.com/sponsors/adrielGGmotion", polygon = MaterialShapes.Cookie4Sided, favoriteSongVideoId = "m2zUrruKjDQ"),
+app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AboutScreen.kt:116:    Contributor(name = "Nyx", roleRes = R.string.credits_collaborator, githubHandle = "nyxiereal", sponsorUrl = "https://github.com/sponsors/nyxiereal", polygon = MaterialShapes.Cookie12Sided, favoriteSongVideoId = "zselaN6zPXw"),
+app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AboutScreen.kt:128:    favoriteSongVideoId: String?,
+app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AboutScreen.kt:136:    if (favoriteSongVideoId != null) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AboutScreen.kt:148:                    playerConnection?.playQueue(YouTubeQueue(WatchEndpoint(videoId = favoriteSongVideoId)))
+app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AboutScreen.kt:223:    val wannaPlayStr = stringResource(R.string.wanna_play_favorite_song)
+app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AboutScreen.kt:358:                                favoriteSongVideoId = leadDeveloper.favoriteSongVideoId,
+app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AboutScreen.kt:428:                                    favoriteSongVideoId = contributor.favoriteSongVideoId,
+app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AndroidAutoSettings.kt:181:                                        AndroidAutoSection.LIKED -> R.drawable.favorite
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/OnlinePlaylistScreen.kt:672:                                if (dbPlaylist?.playlist?.bookmarkedAt != null) R.drawable.favorite else R.drawable.favorite_border,
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:189:    data object ForgottenFavorites : HomeSection("forgotten_favorites", 30)
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2076:                                item(key = "forgotten_favorites_title") {
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2077:                                    val forgottenFavoritesTitle = stringResource(R.string.forgotten_favorites)
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2096:                                item(key = "forgotten_favorites_list") {
+app/src/main/kotlin/com/metrolist/music/radio/RadioStationStore.kt:14:class RadioStationStore private constructor(context: Context) {
+app/src/main/kotlin/com/metrolist/music/radio/RadioStationStore.kt:18:    val stations: StateFlow<List<RadioStation>> = _stations.asStateFlow()
+app/src/main/kotlin/com/metrolist/music/radio/RadioStationStore.kt:21:    fun addOrUpdate(station: RadioStation) {
+app/src/main/kotlin/com/metrolist/music/radio/RadioStationStore.kt:46:    private fun persist(stations: List<RadioStation>) {
+app/src/main/kotlin/com/metrolist/music/radio/RadioStationStore.kt:51:    private fun loadStations(): List<RadioStation> =
+app/src/main/kotlin/com/metrolist/music/radio/RadioStationStore.kt:58:                    add(item.toRadioStation())
+app/src/main/kotlin/com/metrolist/music/radio/RadioStationStore.kt:63:    private fun List<RadioStation>.toJson() =
+app/src/main/kotlin/com/metrolist/music/radio/RadioStationStore.kt:83:    private fun JSONObject.toRadioStation() =
+app/src/main/kotlin/com/metrolist/music/radio/RadioStationStore.kt:84:        RadioStation(
+app/src/main/kotlin/com/metrolist/music/radio/RadioStationStore.kt:101:        private var instance: RadioStationStore? = null
+app/src/main/kotlin/com/metrolist/music/radio/RadioStationStore.kt:103:        fun get(context: Context): RadioStationStore =
+app/src/main/kotlin/com/metrolist/music/radio/RadioStationStore.kt:105:                instance ?: RadioStationStore(context).also { instance = it }
+app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt:17:data class RadioStation(
+app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt:36:                artists = listOf(MediaMetadata.Artist(id = null, name = "WebRadio")),
+app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt:51:                    .setArtist("WebRadio")
+app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt:70:fun MediaItem.toRadioStationOrNull(): RadioStation? {
+app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt:73:    return RadioStation(
+app/src/main/kotlin/com/metrolist/music/radio/RadioBrowserClient.kt:18:    private const val USER_AGENT = "MetrolistHU/13.6.2 (Android WebRadio)"
+app/src/main/kotlin/com/metrolist/music/radio/RadioBrowserClient.kt:21:    suspend fun search(query: String): Result<List<RadioStation>> =
+app/src/main/kotlin/com/metrolist/music/radio/RadioBrowserClient.kt:38:                            RadioStation(
+app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt:656:                .takeUnless { it.equals(stationName, ignoreCase = true) || it.equals("WebRadio", ignoreCase = true) }
+app/src/main/kotlin/com/metrolist/music/playback/MediaLibrarySessionCallback.kt:184:                                        drawableUri(R.drawable.favorite),
+app/src/main/kotlin/com/metrolist/music/playback/MediaLibrarySessionCallback.kt:271:                                drawableUri(R.drawable.favorite),
+app/src/main/kotlin/com/metrolist/music/viewmodels/ExploreViewModel.kt:41:                val favouriteArtists: MutableMap<Int, String> = mutableMapOf()
+app/src/main/kotlin/com/metrolist/music/viewmodels/ExploreViewModel.kt:47:                            favouriteArtists[favIndex] = artist.id
+app/src/main/kotlin/com/metrolist/music/viewmodels/ExploreViewModel.kt:60:                                        if (artistId in favouriteArtists.values) {
+app/src/main/kotlin/com/metrolist/music/viewmodels/ExploreViewModel.kt:61:                                            favouriteArtists.entries.firstOrNull { it.value == artistId }?.key
+app/src/main/kotlin/com/metrolist/music/viewmodels/NewReleaseViewModel.kt:43:                    val favouriteArtists: MutableMap<Int, String> = mutableMapOf()
+app/src/main/kotlin/com/metrolist/music/viewmodels/NewReleaseViewModel.kt:49:                                favouriteArtists[favIndex] = artist.id
+app/src/main/kotlin/com/metrolist/music/viewmodels/NewReleaseViewModel.kt:60:                                        if (artistId in favouriteArtists.values) {
+app/src/main/kotlin/com/metrolist/music/viewmodels/NewReleaseViewModel.kt:61:                                            favouriteArtists.entries.firstOrNull { it.value == artistId }?.key
+app/src/dudu7/kotlin/com/metrolist/music/variant/VehiclePlayerControls.kt:46:    isWebRadio: Boolean,
+app/src/dudu7/kotlin/com/metrolist/music/variant/VehiclePlayerControls.kt:204:                description = if (isWebRadio) "WebRadio läuft" else "Radio starten",
+app/src/dudu7/kotlin/com/metrolist/music/variant/VehiclePlayerControls.kt:205:                color = if (isWebRadio) activeControlColor else textColor,
+app/src/dudu7/kotlin/com/metrolist/music/variant/VehiclePlayerControls.kt:209:                enabled = !isWebRadio,
+app/src/dudu7/kotlin/com/metrolist/music/variant/VehiclePlayerControls.kt:212:            if (isWebRadio) {
+app/src/dudu7/kotlin/com/metrolist/music/variant/VehiclePlayerControls.kt:255:                icon = if (isFavorite) R.drawable.favorite else R.drawable.favorite_border,
+app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt:61:import com.metrolist.music.ui.screens.radio.WebRadioScreen
+app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt:76:    WEBRADIO("WebRadio", R.drawable.radio, VEHICLE_WEBRADIO_ROUTE),
+app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt:248:                                    WebRadioScreen()
+
+=== RADIO SCREEN CLICK REFERENCES ===
+app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt:899:                        playerConnection.playQueue(LocalAlbumRadio(it))
+app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt:1315:                            playerConnection.playQueue(LocalAlbumRadio(it))
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlaylistMenu.kt:421:                                                            playerConnection.playQueue(YouTubeQueue(radioEndpoint))
+app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubeSongMenu.kt:390:                                playerConnection.playQueue(YouTubeQueue.radio(song.toMediaMetadata()))
+app/src/main/kotlin/com/metrolist/music/ui/menu/SongMenu.kt:610:                                    playerConnection.playQueue(YouTubeQueue.radio(song.toMediaMetadata()))
+app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubeAlbumMenu.kt:301:                                            playerConnection.playQueue(YouTubeAlbumRadio(albumItem.playlistId))
+app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubeAlbumMenu.kt:320:                                            playerConnection.playQueue(YouTubeAlbumRadio(albumItem.playlistId))
+app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubePlaylistMenu.kt:465:                                            playerConnection.playQueue(YouTubeQueue(radioEndpoint))
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlaylistScreenMenus.kt:638:                RadioButton(selected = selected == "csv", onClick = null)
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlaylistScreenMenus.kt:652:                RadioButton(selected = selected == "m3u", onClick = null)
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:8:import androidx.compose.foundation.combinedClickable
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:88:        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:118:                onClick = { section = WebRadioSection.SAVED },
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:126:                onClick = { section = WebRadioSection.SEARCH },
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:133:            IconButton(onClick = { showAddDialog = true }) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:150:                            TextButton(onClick = { section = WebRadioSection.SEARCH }) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:184:                            IconButton(onClick = ::performSearch) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:209:                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:269:                .combinedClickable(onClick = onPlay, onLongClick = { onEdit?.invoke() })
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:316:            IconButton(onClick = onSave) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:321:            IconButton(onClick = it) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:326:            IconButton(onClick = it) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:331:            IconButton(onClick = it) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:336:            IconButton(onClick = it) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:384:                onClick = {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:395:            OutlinedButton(onClick = onDismiss) { Text("Abbrechen") }
+app/src/main/kotlin/com/metrolist/music/ui/screens/settings/PlayerSettings.kt:810:                    onClick = { onAutoRadioQueueChange(!autoRadioQueue) }
+app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AboutScreen.kt:148:                    playerConnection?.playQueue(YouTubeQueue(WatchEndpoint(videoId = favoriteSongVideoId)))
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:396:                                                        playerConnection.playQueue(YouTubeQueue(radioEndpoint))
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2541:                                        playerConnection.playQueue(YouTubeQueue.radio(luckyItem.toMediaMetadata()))
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2550:                                            playerConnection.playQueue(LocalAlbumRadio(it))
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2561:                                        playerConnection.playQueue(YouTubeQueue.radio(luckyItem.toMediaMetadata()))
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2565:                                        playerConnection.playQueue(YouTubeAlbumRadio(luckyItem.playlistId))
+app/src/dudu7/kotlin/com/metrolist/music/variant/VehiclePlayerControls.kt:206:                onClick = onStartRadio,
