@@ -1,0 +1,42 @@
+name: Fix positive LIVE assertions in WebRadio test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-v1365-live-assertion.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Make positive LIVE checks match the visible bullet label
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.assistant/patch_webradio_reliability_logos_cover.py')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              'assert_text "radio after YouTube live" 0 "=LIVE"': 'assert_text "radio after YouTube live" 0 "LIVE"',
+              'assert_text "same favorite remains live" 0 "=LIVE"': 'assert_text "same favorite remains live" 0 "LIVE"',
+              'assert_text "final radio restart live" 0 "=LIVE"': 'assert_text "final radio restart live" 0 "LIVE"',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'Missing LIVE assertion: {old}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .assistant/patch_webradio_reliability_logos_cover.py
+          git commit -m 'Fix positive LIVE assertions in reliability test'
+          git pull --rebase origin main
+          git push
