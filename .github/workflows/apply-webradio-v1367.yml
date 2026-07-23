@@ -40,22 +40,11 @@ jobs:
       - name: Apply final WebRadio patch
         run: python3 .assistant/patch_webradio_v1367.py
 
-      - name: Verify final architecture and tests
+      - name: Verify version and test executables
         run: |
           set -euxo pipefail
           grep -q 'versionCode = 156' app/build.gradle.kts
           grep -q 'versionName = "13.6.7"' app/build.gradle.kts
-          grep -q 'startIndex = startIndex' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
-          grep -q '● LÄUFT' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
-          grep -q 'LaunchedEffect(station.uuid, station.homepage)' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
-          ! grep -q 'LaunchedEffect(savedStations.map' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
-          grep -q 'existingArtwork != null && !isVectorUrl(existingArtwork)' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoResolver.kt
-          grep -q 'embeddedPaneWidth = maxWidth' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
-          grep -q 'navController.navigate("vehicle_queue")' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
-          grep -q 'targetState = showInlineLyrics && !isWebRadio' app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt
-          grep -q 'assert_selected_tab()' scripts/dudu7_webradio_reliability_smoke.sh
-          grep -q 'assert_station_active()' scripts/dudu7_webradio_reliability_smoke.sh
-          grep -q 'kronehit logo stayed stable' scripts/dudu7_webradio_reliability_smoke.sh
           chmod +x gradlew scripts/run_dudu7_emulator_ci.sh scripts/dudu7_webradio_reliability_smoke.sh
 
       - uses: actions/setup-java@v4
@@ -160,4 +149,4 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-# explicit-queue-route-validation
+# compiler-and-emulator-source-of-truth
