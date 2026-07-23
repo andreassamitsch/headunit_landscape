@@ -1,0 +1,102 @@
+from pathlib import Path
+
+
+def replace_once(path: str, old: str, new: str) -> None:
+    file = Path(path)
+    text = file.read_text(encoding="utf-8")
+    if old not in text:
+        raise SystemExit(f"Missing expected text in {path}: {old[:180]!r}")
+    file.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+
+# Make UIAutomator collection resilient. The previous strict run displayed the
+# correct Local history chip, but a transient dump failure made find_coords
+# return false before the XML could be parsed.
+test = "scripts/dudu7_webradio_reliability_smoke.sh"
+replace_once(
+    test,
+    '''dump_ui() {
+    timeout 15s adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1
+    adb pull /sdcard/window.xml "$RESULTS_DIR/current-window.xml" >/dev/null 2>&1
+}''',
+    '''dump_ui() {
+    local attempt
+    for attempt in 1 2 3; do
+        rm -f "$RESULTS_DIR/current-window.xml"
+        if timeout 15s adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 \
+            && adb pull /sdcard/window.xml "$RESULTS_DIR/current-window.xml" >/dev/null 2>&1 \
+            && test -s "$RESULTS_DIR/current-window.xml" \
+            && python3 - "$RESULTS_DIR/current-window.xml" <<'PY'
+import sys, xml.etree.ElementTree as ET
+ET.parse(sys.argv[1])
+PY
+        then
+            return 0
+        fi
+        sleep 2
+    done
+    return 1
+}''',
+)
+replace_once(
+    test,
+    '''assert_text() {
+    local label="$1"; local right="$2"; shift 2
+    if find_coords "$right" "$@" >/dev/null; then
+        echo "PASS: $label"
+    else
+        echo "FAIL: $label" >&2
+        capture "assertion-failure"
+        return 1
+    fi
+}''',
+    '''assert_text() {
+    local label="$1"; local right="$2"; shift 2
+    local attempt
+    for attempt in 1 2 3; do
+        if find_coords "$right" "$@" >/dev/null; then
+            echo "PASS: $label"
+            return 0
+        fi
+        sleep 2
+    done
+    echo "FAIL: $label" >&2
+    capture "assertion-failure"
+    return 1
+}''',
+)
+
+# Use an explicit queue-root route for actions inside the embedded artist page.
+# Saved-state restoration can make popBackStack(route) return false, leaving the
+# artist page visible while normal YouTube playback starts.
+artist = "app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt"
+replace_once(
+    artist,
+    '''                                                    if (embeddedInPlayer) {
+                                                        navController.popBackStack("vehicle_queue", inclusive = false)
+                                                    }
+                                                    playerConnection.playQueue(YouTubeQueue(radioEndpoint))''',
+    '''                                                    if (embeddedInPlayer) {
+                                                        navController.navigate("vehicle_queue") {
+                                                            popUpTo("vehicle_queue") { inclusive = true }
+                                                            launchSingleTop = true
+                                                        }
+                                                    }
+                                                    playerConnection.playQueue(YouTubeQueue(radioEndpoint))''',
+)
+replace_once(
+    artist,
+    '''                                                        if (embeddedInPlayer) {
+                                                            navController.popBackStack("vehicle_queue", inclusive = false)
+                                                        }
+                                                        playerConnection.playQueue(YouTubeQueue(shuffleEndpoint))''',
+    '''                                                        if (embeddedInPlayer) {
+                                                            navController.navigate("vehicle_queue") {
+                                                                popUpTo("vehicle_queue") { inclusive = true }
+                                                                launchSingleTop = true
+                                                            }
+                                                        }
+                                                        playerConnection.playQueue(YouTubeQueue(shuffleEndpoint))''',
+)
+
+print("WebRadio 13.6.7 validation hardened and embedded artist actions fixed")
