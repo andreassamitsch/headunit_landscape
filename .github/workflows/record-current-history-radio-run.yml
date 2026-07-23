@@ -31,3 +31,4 @@ jobs:
           git add -f _assistant/current_history_radio_runs.json
           git commit -m 'Record current history radio run status [skip ci]'
           git push
+          # refreshed after correcting the URL-dialog matcher
