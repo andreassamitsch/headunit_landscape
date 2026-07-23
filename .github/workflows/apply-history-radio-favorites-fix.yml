@@ -34,7 +34,10 @@ jobs:
           submodules: recursive
 
       - name: Apply source patch
-        run: python3 .assistant/patch_history_radio_favorites.py
+        run: |
+          python3 .assistant/patch_history_radio_favorites.py
+          # The editor dialog is centered across the full window, not confined to the right pane.
+          sed -i 's/assert_text "URL and playlist editor" 1/assert_text "URL and playlist editor" 0/' scripts/dudu7_webradio_smoke.sh
 
       - name: Verify source changes
         run: |
@@ -44,6 +47,7 @@ jobs:
           grep -q 'onValueUpdate = viewModel::setHistorySource' app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt
           grep -q 'val orderedStations = listOf(selected)' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
           grep -q 'startIndex = 0' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
+          grep -q 'assert_text "URL and playlist editor" 0' scripts/dudu7_webradio_smoke.sh
           grep -q 'versionCode = 153' app/build.gradle.kts
           grep -q 'versionName = "13.6.4"' app/build.gradle.kts
 
@@ -155,7 +159,9 @@ jobs:
           git rm -f .assistant/patch_history_radio_favorites.py \
             .github/workflows/apply-history-radio-favorites-fix.yml \
             .github/workflows/diagnose-history-radio-favorites.yml \
-            _assistant/history_radio_diagnosis.txt || true
+            .github/workflows/record-current-history-radio-run.yml \
+            _assistant/history_radio_diagnosis.txt \
+            _assistant/current_history_radio_runs.json || true
           git commit -m 'Persist history source and fix saved WebRadio playback'
           git push
 
