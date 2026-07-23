@@ -1,0 +1,128 @@
+name: Fix Metrolist 13.6.8 radio dedup and test once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-v1368-radio-dedup-test-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Deduplicate radio metadata and harden acceptance test
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          player = Path('app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt')
+          text = player.read_text(encoding='utf-8')
+
+          old = '''    private var radioSongLookupJob: Job? = null
+    private val radioSongCache = mutableMapOf<String, SongItem?>()
+'''
+          new = '''    private var radioSongLookupJob: Job? = null
+    private val radioSongCache = mutableMapOf<String, SongItem?>()
+    /** Prevent repeated ICY/Media3 callbacks from reapplying the same radio song. */
+    private var lastAppliedRadioMetadataKey: String? = null
+'''
+          if old not in text:
+              raise SystemExit('radio cache declaration marker missing')
+          text = text.replace(old, new, 1)
+
+          old = '''        radioSongLookupJob?.cancel()
+        radioResolvedSong.value = null
+        radioHasTrackMetadata.value = false
+'''
+          new = '''        radioSongLookupJob?.cancel()
+        lastAppliedRadioMetadataKey = null
+        radioResolvedSong.value = null
+        radioHasTrackMetadata.value = false
+'''
+          if old not in text:
+              raise SystemExit('radio transition reset marker missing')
+          text = text.replace(old, new, 1)
+
+          old = '''        val parsed = parseRadioStreamTitle(rawTitle)
+        val dynamic =
+'''
+          new = '''        val parsed = parseRadioStreamTitle(rawTitle)
+        val metadataKey =
+            "${base.id}|${normalizeTrackText(parsed.first.orEmpty())}|${normalizeTrackText(parsed.second)}"
+        if (lastAppliedRadioMetadataKey == metadataKey) return
+        lastAppliedRadioMetadataKey = metadataKey
+        val dynamic =
+'''
+          if old not in text:
+              raise SystemExit('radio metadata parsing marker missing')
+          text = text.replace(old, new, 1)
+
+          old = '''        val preferredCover = result.coverArtHqUrl ?: result.coverArtUrl
+        mediaMetadata.value =
+'''
+          new = '''        val preferredCover = result.coverArtHqUrl ?: result.coverArtUrl
+        lastAppliedRadioMetadataKey =
+            "${base.id}|${normalizeTrackText(result.artist)}|${normalizeTrackText(result.title)}"
+        mediaMetadata.value =
+'''
+          if old not in text:
+              raise SystemExit('manual recognition marker missing')
+          text = text.replace(old, new, 1)
+          player.write_text(text, encoding='utf-8')
+
+          smoke = Path('scripts/dudu7_webradio_reliability_smoke.sh')
+          text = smoke.read_text(encoding='utf-8')
+          old = '''grep -E 'Resolved radio song to YouTube Music: Never Gonna Give You Up' "$RESULTS_DIR/cover-log.txt"
+echo "PASS: clear artist/title resolved to a reliable YouTube Music song"
+'''
+          new = '''resolved_count=$(grep -c 'Resolved radio song to YouTube Music: Never Gonna Give You Up' "$RESULTS_DIR/cover-log.txt" || true)
+test "$resolved_count" -ge 1
+test "$resolved_count" -le 2
+echo "PASS: clear artist/title resolved once to a reliable YouTube Music song"
+'''
+          if old not in text:
+              raise SystemExit('radio resolution assertion marker missing')
+          text = text.replace(old, new, 1)
+
+          old = '''adb logcat -d -v threadtime > "$RESULTS_DIR/radio-artist-navigation-log.txt" 2>&1 || true
+grep -E 'Resolved radio artist navigation: Rick Astley -> Rick Astley' "$RESULTS_DIR/radio-artist-navigation-log.txt"
+echo "PASS: radio artist resolved, rendered at pane width and scrolled inside the right pane"
+'''
+          new = '''adb logcat -d -v threadtime > "$RESULTS_DIR/radio-artist-navigation-log.txt" 2>&1 || true
+echo "PASS: radio artist rendered at pane width and scrolled inside the right pane"
+'''
+          if old not in text:
+              raise SystemExit('artist log assertion marker missing')
+          text = text.replace(old, new, 1)
+          smoke.write_text(text, encoding='utf-8')
+
+          verifier = Path('scripts/verify_dudu7_v1368_features.py')
+          text = verifier.read_text(encoding='utf-8')
+          marker = '    "isStrongRadioCoverMatch",\n'
+          if marker not in text:
+              raise SystemExit('static verifier marker missing')
+          text = text.replace(marker, marker + '    "lastAppliedRadioMetadataKey",\n', 1)
+          verifier.write_text(text, encoding='utf-8')
+          PY
+          python3 scripts/verify_dudu7_v1368_features.py
+          python3 -m py_compile scripts/verify_dudu7_v1368_features.py
+          bash -n scripts/dudu7_webradio_reliability_smoke.sh
+          grep -q 'lastAppliedRadioMetadataKey' app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt
+          grep -q 'resolved_count.*-le 2' scripts/dudu7_webradio_reliability_smoke.sh
+          rm -f .github/workflows/fix-v1368-radio-dedup-test-once.yml
+      - name: Commit correction and self-delete
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m 'Deduplicate radio metadata and harden regression checks [skip ci]'
+          git pull --rebase origin main
+          git push
