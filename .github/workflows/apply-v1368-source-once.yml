@@ -32,14 +32,15 @@ jobs:
           echo '8f0c8ce3c14b8fbfc815134efdfd41c571e253f6ad9860e96fac290e63d26ec0  /tmp/v1368-source.patch.gz' | sha256sum -c -
           gzip -dc /tmp/v1368-source.patch.gz > /tmp/v1368-source.patch
           echo 'bf50d85fb636c7d567e7e4e952d1c241bbe546effbdf0c15607a94f9f8573762  /tmp/v1368-source.patch' | sha256sum -c -
-          git apply --check /tmp/v1368-source.patch
+          git apply --exclude=.github/workflows/snapshot-export-source.yml --check /tmp/v1368-source.patch
 
       - name: Apply and statically verify all nine changes
         run: |
           set -euo pipefail
-          git apply /tmp/v1368-source.patch
+          git apply --exclude=.github/workflows/snapshot-export-source.yml /tmp/v1368-source.patch
           rm -f .assistant/v1368_patch.part*
           rm -f .github/workflows/apply-v1368-source-once.yml
+          rm -f .github/workflows/snapshot-export-source.yml
           rm -f _assistant/export_source_run.json _assistant/export_source_artifacts.json
           python3 scripts/verify_dudu7_v1368_features.py
           python3 -m py_compile scripts/verify_dudu7_v1368_features.py
