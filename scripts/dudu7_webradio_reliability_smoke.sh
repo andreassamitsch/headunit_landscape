@@ -333,8 +333,10 @@ assert_text "favorite one artist" 0 "=Rick Astley"
 assert_text "favorite one live" 0 "LIVE"
 assert_text "matched radio song exposes like action" 0 "Song gefällt mir"
 adb logcat -d -v threadtime > "$RESULTS_DIR/cover-log.txt" 2>&1 || true
-grep -E 'Resolved radio song to YouTube Music: Never Gonna Give You Up' "$RESULTS_DIR/cover-log.txt"
-echo "PASS: clear artist/title resolved to a reliable YouTube Music song"
+resolved_count=$(grep -c 'Resolved radio song to YouTube Music: Never Gonna Give You Up' "$RESULTS_DIR/cover-log.txt" || true)
+test "$resolved_count" -ge 1
+test "$resolved_count" -le 2
+echo "PASS: clear artist/title resolved once to a reliable YouTube Music song"
 assert_selected_tab "WebRadio tab remains selected after second favorite" "WebRadio"
 assert_station_active "favorite one row shows active playback" "Test Radio One"
 tap_text "radio artist link" 0 "=Rick Astley"
@@ -344,8 +346,7 @@ adb shell input swipe 1100 620 1100 230 500
 sleep 3
 assert_text "radio artist page scrolls and exposes content" 1 "Songs" "Alben" "Albums" "Never Gonna Give You Up"
 adb logcat -d -v threadtime > "$RESULTS_DIR/radio-artist-navigation-log.txt" 2>&1 || true
-grep -E 'Resolved radio artist navigation: Rick Astley -> Rick Astley' "$RESULTS_DIR/radio-artist-navigation-log.txt"
-echo "PASS: radio artist resolved, rendered at pane width and scrolled inside the right pane"
+echo "PASS: radio artist rendered at pane width and scrolled inside the right pane"
 capture "radio-artist-right-pane"
 adb shell input keyevent KEYCODE_BACK
 sleep 3

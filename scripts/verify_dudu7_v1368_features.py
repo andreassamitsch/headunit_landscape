@@ -58,6 +58,7 @@ require(
     "applyRecognizedRadioTrack",
     "requestRightPaneNavigation",
     "isStrongRadioCoverMatch",
+    "lastAppliedRadioMetadataKey",
 )
 require(
     "app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt",

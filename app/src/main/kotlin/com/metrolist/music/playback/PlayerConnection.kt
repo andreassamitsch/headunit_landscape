@@ -168,6 +168,8 @@ class PlayerConnection(
     val mediaMetadata = MutableStateFlow(getPlayerOrNull()?.currentMetadata)
     private var radioSongLookupJob: Job? = null
     private val radioSongCache = mutableMapOf<String, SongItem?>()
+    /** Prevent repeated ICY/Media3 callbacks from reapplying the same radio song. */
+    private var lastAppliedRadioMetadataKey: String? = null
     /** Reliable YouTube Music match for the current radio metadata. */
     val radioResolvedSong = MutableStateFlow<SongItem?>(null)
     /** True only when the stream or manual recognition supplied artist + title. */
@@ -658,6 +660,7 @@ class PlayerConnection(
         reason: Int,
     ) {
         radioSongLookupJob?.cancel()
+        lastAppliedRadioMetadataKey = null
         radioResolvedSong.value = null
         radioHasTrackMetadata.value = false
         mediaMetadata.value = mediaItem?.metadata
@@ -711,6 +714,10 @@ class PlayerConnection(
                 ?.takeIf { it.isNotBlank() }
                 ?: base.title
         val parsed = parseRadioStreamTitle(rawTitle)
+        val metadataKey =
+            "${base.id}|${normalizeTrackText(parsed.first.orEmpty())}|${normalizeTrackText(parsed.second)}"
+        if (lastAppliedRadioMetadataKey == metadataKey) return
+        lastAppliedRadioMetadataKey = metadataKey
         val dynamic =
             base.copy(
                 title = parsed.second,
@@ -742,6 +749,8 @@ class PlayerConnection(
         val base = currentItem.metadata ?: return
         if (!isRadioMediaId(base.id)) return
         val preferredCover = result.coverArtHqUrl ?: result.coverArtUrl
+        lastAppliedRadioMetadataKey =
+            "${base.id}|${normalizeTrackText(result.artist)}|${normalizeTrackText(result.title)}"
         mediaMetadata.value =
             base.copy(
                 title = result.title,
