@@ -1,28 +1,28 @@
 {
-  "total_count": 7,
+  "total_count": 8,
   "workflow_runs": [
     {
-      "id": 30021564531,
+      "id": 30022705947,
       "name": "Diagnose WebRadio artist action",
-      "node_id": "WFR_kwLOSW2IEs8AAAAG_Wy4cw",
+      "node_id": "WFR_kwLOSW2IEs8AAAAG_X4jGw",
       "head_branch": "main",
-      "head_sha": "11a8615342a1539acae598ae8ad5708b73813697",
+      "head_sha": "18400875b191468bfabf4b6ba5714ff5c973ebc2",
       "path": ".github/workflows/diagnose-v1367-artist-action.yml",
-      "display_title": "Retry initial-pass WebRadio artist test",
-      "run_number": 7,
+      "display_title": "Test touch-safe embedded artist screen",
+      "run_number": 8,
       "event": "push",
       "status": "in_progress",
       "conclusion": null,
       "workflow_id": 318987550,
-      "check_suite_id": 81343260581,
-      "check_suite_node_id": "CS_kwDOSW2IEs8AAAAS8G-npQ",
-      "url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30021564531",
-      "html_url": "https://github.com/andreassamitsch/headunit_landscape/actions/runs/30021564531",
+      "check_suite_id": 81346677485,
+      "check_suite_node_id": "CS_kwDOSW2IEs8AAAAS8KPK7Q",
+      "url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30022705947",
+      "html_url": "https://github.com/andreassamitsch/headunit_landscape/actions/runs/30022705947",
       "pull_requests": [
 
       ],
-      "created_at": "2026-07-23T15:39:38Z",
-      "updated_at": "2026-07-23T15:39:41Z",
+      "created_at": "2026-07-23T15:54:35Z",
+      "updated_at": "2026-07-23T15:54:38Z",
       "actor": {
         "login": "andreassamitsch",
         "id": 47712152,
@@ -48,7 +48,7 @@
       "referenced_workflows": [
 
       ],
-      "run_started_at": "2026-07-23T15:39:38Z",
+      "run_started_at": "2026-07-23T15:54:35Z",
       "triggering_actor": {
         "login": "andreassamitsch",
         "id": 47712152,
@@ -70,19 +70,19 @@
         "user_view_type": "public",
         "site_admin": false
       },
-      "jobs_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30021564531/jobs",
-      "logs_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30021564531/logs",
-      "check_suite_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/check-suites/81343260581",
-      "artifacts_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30021564531/artifacts",
-      "cancel_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30021564531/cancel",
-      "rerun_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30021564531/rerun",
+      "jobs_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30022705947/jobs",
+      "logs_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30022705947/logs",
+      "check_suite_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/check-suites/81346677485",
+      "artifacts_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30022705947/artifacts",
+      "cancel_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30022705947/cancel",
+      "rerun_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/runs/30022705947/rerun",
       "previous_attempt_url": null,
       "workflow_url": "https://api.github.com/repos/andreassamitsch/headunit_landscape/actions/workflows/318987550",
       "head_commit": {
-        "id": "11a8615342a1539acae598ae8ad5708b73813697",
-        "tree_id": "33a4b59fa2a7de3d6a45ab03b312e3b47f683430",
-        "message": "Retry initial-pass WebRadio artist test",
-        "timestamp": "2026-07-23T15:39:30Z",
+        "id": "18400875b191468bfabf4b6ba5714ff5c973ebc2",
+        "tree_id": "6b6f6ff804e9c7d7bff764c3cd7cdc9139af1bfa",
+        "message": "Test touch-safe embedded artist screen",
+        "timestamp": "2026-07-23T15:54:31Z",
         "author": {
           "name": "asam",
           "email": "47712152+andreassamitsch@users.noreply.github.com"
