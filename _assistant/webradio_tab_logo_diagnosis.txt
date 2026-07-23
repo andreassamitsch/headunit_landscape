@@ -1,0 +1,453 @@
+=== WebRadioScreen references ===
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:73:fun WebRadioScreen() {
+=== queue/tab state candidates ===
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:340:    val isWebRadio = isRadioMediaId(mediaMetadata?.id)
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1908:                                if (isWebRadio) {
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1924:                                isWebRadio = isWebRadio,
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1928:                                duration = if (isWebRadio) 0L else duration,
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1929:                                canSeek = !isListenTogetherGuest && !isWebRadio,
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1974:                                    if (!isWebRadio) {
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1984:                                    if (isWebRadio) {
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1997:                                    if (isWebRadio) return@VehiclePlayerControls
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:2007:                                    if (isWebRadio) return@VehiclePlayerControls
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:66:enum class WebRadioSection {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:73:fun WebRadioScreen() {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:80:    var section by remember { mutableStateOf(WebRadioSection.SAVED) }
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:110:                title = "WebRadio",
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:137:                selected = section == WebRadioSection.SAVED,
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:138:                onClick = { section = WebRadioSection.SAVED },
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:145:                selected = section == WebRadioSection.SEARCH,
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:146:                onClick = { section = WebRadioSection.SEARCH },
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:159:            WebRadioSection.SAVED -> {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:170:                            TextButton(onClick = { section = WebRadioSection.SEARCH }) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:194:            WebRadioSection.SEARCH -> {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:270:                            section = WebRadioSection.SAVED
+=== playQueue callers around Dudu/player ===
+app/src/main/kotlin/com/metrolist/music/ui/component/LyricsImageCard.kt:155:    mediaMetadata: MediaMetadata,
+app/src/main/kotlin/com/metrolist/music/ui/component/LyricsImageCard.kt:178:            .data(mediaMetadata.thumbnailUrl)
+app/src/main/kotlin/com/metrolist/music/ui/component/LyricsImageCard.kt:187:        LaunchedEffect(mediaMetadata.thumbnailUrl) {
+app/src/main/kotlin/com/metrolist/music/ui/component/LyricsImageCard.kt:191:                    val req = ImageRequest.Builder(context).data(mediaMetadata.thumbnailUrl).allowHardware(false).build()
+app/src/main/kotlin/com/metrolist/music/ui/component/LyricsImageCard.kt:324:                            text = mediaMetadata.title,
+app/src/main/kotlin/com/metrolist/music/ui/component/LyricsImageCard.kt:333:                            text = mediaMetadata.artists.joinToString { it.name },
+app/src/main/kotlin/com/metrolist/music/ui/component/ExperimentalLyrics.kt:184:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/component/ExperimentalLyrics.kt:831:                    shareDialogData = Triple(text, mediaMetadata?.title ?: "", mediaMetadata?.artists?.joinToString { it.name } ?: "")
+app/src/main/kotlin/com/metrolist/music/ui/component/ExperimentalLyrics.kt:850:            txt = txt, title = title, arts = arts, songId = mediaMetadata?.id ?: "",
+app/src/main/kotlin/com/metrolist/music/ui/component/ExperimentalLyrics.kt:862:            txt = txt, title = title, arts = arts, thumbnailUrl = mediaMetadata?.thumbnailUrl,
+app/src/main/kotlin/com/metrolist/music/ui/component/ExperimentalLyrics.kt:871:                            context, mediaMetadata?.thumbnailUrl, title, arts, txt,
+app/src/main/kotlin/com/metrolist/music/ui/component/LyricsComponents.kt:366:                        mediaMetadata = MediaMetadata(
+app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt:899:                        playerConnection.playQueue(LocalAlbumRadio(it))
+app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt:1097:    mediaMetadata: MediaMetadata,
+app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt:1105:        title = mediaMetadata.title,
+app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt:1107:            if (mediaMetadata.explicit) Icon.Explicit()
+app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt:1111:                        mediaMetadata.artists.joinToArtistString(" ${stringResource(R.string.and)} ") { it.name },
+app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt:1112:                        makeTimeString(mediaMetadata.duration * 1000L)
+app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt:1115:                    if (mediaMetadata.suggestedBy != null && base.isNotEmpty()) {
+app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt:1118:                            append(mediaMetadata.suggestedBy)
+app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt:1129:                thumbnailUrl = mediaMetadata.thumbnailUrl,
+app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt:1315:                            playerConnection.playQueue(LocalAlbumRadio(it))
+app/src/main/kotlin/com/metrolist/music/ui/component/OriginalLyrics.kt:233:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/component/OriginalLyrics.kt:1783:                                            mediaMetadata?.title ?: "",
+app/src/main/kotlin/com/metrolist/music/ui/component/OriginalLyrics.kt:1784:                                            mediaMetadata?.artists?.joinToString { it.name } ?: "",
+app/src/main/kotlin/com/metrolist/music/ui/component/OriginalLyrics.kt:1857:                                                    "https://music.youtube.com/watch?v=${mediaMetadata?.id}"
+app/src/main/kotlin/com/metrolist/music/ui/component/OriginalLyrics.kt:1937:            val coverUrl = mediaMetadata?.thumbnailUrl
+app/src/main/kotlin/com/metrolist/music/ui/component/OriginalLyrics.kt:2065:                                mediaMetadata = mediaMetadata ?: return@Box,
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:202:    val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:252:    LaunchedEffect(mediaMetadata?.id, miniPlayerBackground) {
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:255:            val url = mediaMetadata?.thumbnailUrl
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:397:                        mediaMetadata?.thumbnailUrl?.let { url ->
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:442:                    mediaMetadata = mediaMetadata,
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:452:                    mediaMetadata = mediaMetadata,
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:472:                mediaMetadata?.artists?.firstOrNull()?.id?.let { artistId ->
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:475:                        metadata = mediaMetadata!!,
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:485:                mediaMetadata?.let { metadata ->
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:504:                mediaMetadata?.let { FavoriteButton(
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:527:    mediaMetadata: MediaMetadata?,
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:601:            mediaMetadata?.let { metadata ->
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:649:    mediaMetadata: MediaMetadata?,
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:660:        mediaMetadata?.let { metadata ->
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:714:    val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:865:                mediaMetadata?.let {
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:867:                        mediaMetadata = it,
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:962:    mediaMetadata: MediaMetadata,
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:988:                remember(mediaMetadata.thumbnailUrl) {
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:989:                    mediaMetadata.thumbnailUrl?.resize(144, 144)
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:1027:                text = mediaMetadata.title,
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:1036:             if (mediaMetadata.artists.any { it.name.isNotBlank() }) {
+app/src/main/kotlin/com/metrolist/music/ui/player/MiniPlayer.kt:1038:                     text = mediaMetadata.artists.joinToArtistString(" ${stringResource(R.string.and)} ") { it.name },
+app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt:149:    val currentIndex = player.currentMediaItemIndex
+app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt:152:    val currentMediaItem = try {
+app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt:153:        player.currentMediaItem
+app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt:178:    val items = listOfNotNull(previousMediaItem, currentMediaItem, nextMediaItem)
+app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt:179:    val currentMediaIndex = items.indexOf(currentMediaItem)
+app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt:213:    val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
+app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt:215:    val queueTitle by playerConnection.queueTitle.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt:238:        playerConnection.player.currentMediaItemIndex,
+app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt:241:        mediaMetadata
+app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt:278:    LaunchedEffect(mediaMetadata, canSkipPrevious, canSkipNext) {
+app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt:289:    LaunchedEffect(playerConnection.player.currentMediaItemIndex) {
+app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt:341:                        queueTitle = queueTitle,
+app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt:342:                        albumTitle = mediaMetadata?.album?.title,
+app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt:409:                                currentMediaId = mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt:410:                                currentMediaThumbnail = mediaMetadata?.thumbnailUrl
+app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt:442:    queueTitle: String?,
+app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt:475:            val playingFrom = queueTitle ?: albumTitle
+app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt:575:                    item.mediaMetadata.artworkUri?.toString()
+app/src/main/kotlin/com/metrolist/music/ui/player/Queue.kt:184:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/player/Queue.kt:405:                                            mediaMetadata = mediaMetadata,
+app/src/main/kotlin/com/metrolist/music/ui/player/Queue.kt:408:                                                mediaMetadata?.id?.let {
+app/src/main/kotlin/com/metrolist/music/ui/player/Queue.kt:667:        val queueTitle by playerConnection.queueTitle.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/player/Queue.kt:847:                                    mediaMetadata = window.mediaItem.metadata!!,
+app/src/main/kotlin/com/metrolist/music/ui/player/Queue.kt:863:                                                                mediaMetadata = window.mediaItem.metadata!!,
+app/src/main/kotlin/com/metrolist/music/ui/player/Queue.kt:979:                                mediaMetadata = item.metadata!!,
+app/src/main/kotlin/com/metrolist/music/ui/player/Queue.kt:1018:                                                        mediaMetadata = item.metadata!!,
+app/src/main/kotlin/com/metrolist/music/ui/player/Queue.kt:1069:                        text = queueTitle.orEmpty(),
+app/src/main/kotlin/com/metrolist/music/ui/player/Queue.kt:1225:                                if (playerConnection.player.shuffleModeEnabled) playerConnection.player.currentMediaItemIndex else 0,
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:337:    val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:340:    val isWebRadio = isRadioMediaId(mediaMetadata?.id)
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:342:        remember(mediaMetadata?.id, savedRadioStations) {
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:343:            runCatching { playerConnection.player.currentMediaItem?.toRadioStationOrNull() }.getOrNull()
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:402:            (mediaMetadata?.duration?.takeIf { it > 0 }?.toLong()?.times(1000L))
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:439:    LaunchedEffect(mediaMetadata?.id, playerBackground) {
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:441:            val currentMetadata = mediaMetadata
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:614:        .getDownload(mediaMetadata?.id ?: "")
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:788:    LaunchedEffect(playbackState, mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:794:            duration = (mediaMetadata?.duration?.takeIf { it > 0 }?.toLong()?.times(1000L))
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:802:    LaunchedEffect(playbackState, mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:803:        val currentId = mediaMetadata?.id
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:879:                            targetState = mediaMetadata?.thumbnailUrl,
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:971:        val controlsContent: @Composable ColumnScope.(MediaMetadata) -> Unit = { mediaMetadata ->
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1011:                                    model = mediaMetadata.thumbnailUrl,
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1030:                        targetState = mediaMetadata.title,
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1049:                                            val albumId = mediaMetadata.album?.id
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1072:                        if (mediaMetadata.explicit) MIcon.Explicit()
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1074:                        if (mediaMetadata.artists.any { it.name.isNotBlank() }) {
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1077:                                    mediaMetadata.artists.forEachIndexed { index, artist ->
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1084:                                        if (index != mediaMetadata.artists.lastIndex) append(", ")
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1209:                                                    "https://music.youtube.com/watch?v=${mediaMetadata.id}",
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1240:                                                mediaMetadataProvider = { mediaMetadata },
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1331:                                                        "https://music.youtube.com/watch?v=${mediaMetadata.id}",
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1366:                                                    mediaMetadataProvider = { mediaMetadata },
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1391:                                mediaMetadata = mediaMetadata,
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1887:                                    mediaMetadata = mediaMetadata,
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:1904:                        val currentMediaMetadata = mediaMetadata
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:2071:                                    mediaMetadata = mediaMetadata,
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:2086:                    mediaMetadata?.let {
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:2127:    mediaMetadata: MediaMetadata?,
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:2164:    LaunchedEffect(mediaMetadata?.id, currentLyrics) {
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:2165:        if (mediaMetadata != null && currentLyrics == null) {
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:2175:                    val fetchedLyricsWithProvider = lyricsHelper.getLyrics(mediaMetadata)
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:2177:                        upsert(LyricsEntity(mediaMetadata.id, fetchedLyricsWithProvider.lyrics, fetchedLyricsWithProvider.provider))
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:2193:        mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:2199:                mediaMetadata == null || lyrics.id == mediaMetadata.id
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:2201:        if (mediaMetadata != null && !loadedForCurrent) return@LaunchedEffect
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:2269:    mediaMetadata: MediaMetadata,
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:2287:                            mediaMetadata = mediaMetadata,
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:2290:                                mediaMetadata.id.let {
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:2311:    mediaMetadata: MediaMetadata,
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:2330:                            mediaMetadata = mediaMetadata,
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:2333:                                mediaMetadata.id.let {
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlaylistMenu.kt:336:                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlaylistMenu.kt:358:                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlaylistMenu.kt:421:                                                            playerConnection.playQueue(YouTubeQueue(radioEndpoint))
+app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubeSongMenu.kt:390:                                playerConnection.playQueue(YouTubeQueue.radio(song.toMediaMetadata()))
+app/src/main/kotlin/com/metrolist/music/ui/menu/SongMenu.kt:610:                                    playerConnection.playQueue(YouTubeQueue.radio(song.toMediaMetadata()))
+app/src/main/kotlin/com/metrolist/music/ui/menu/AlbumMenu.kt:326:                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/menu/AlbumMenu.kt:352:                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/menu/SelectionSongsMenu.kt:324:                                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/menu/SelectionSongsMenu.kt:349:                                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/menu/SelectionSongsMenu.kt:413:                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/menu/SelectionSongsMenu.kt:820:                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/menu/SelectionSongsMenu.kt:841:                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubeAlbumMenu.kt:301:                                            playerConnection.playQueue(YouTubeAlbumRadio(albumItem.playlistId))
+app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubeAlbumMenu.kt:320:                                            playerConnection.playQueue(YouTubeAlbumRadio(albumItem.playlistId))
+app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubeArtistMenu.kt:103:                                        playerConnection.playQueue(YouTubeQueue(watchEndpoint))
+app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubePlaylistMenu.kt:427:                                            playerConnection.playQueue(YouTubeQueue(playEndpoint))
+app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubePlaylistMenu.kt:446:                                            playerConnection.playQueue(YouTubeQueue(shuffleEndpoint))
+app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubePlaylistMenu.kt:465:                                            playerConnection.playQueue(YouTubeQueue(radioEndpoint))
+app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubeSelectionSongMenu.kt:233:                                playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/menu/YouTubeSelectionSongMenu.kt:251:                                playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/menu/ArtistMenu.kt:112:                                            playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/menu/ArtistMenu.kt:144:                                            playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/menu/LyricsMenu.kt:98:    mediaMetadataProvider: () -> MediaMetadata,
+app/src/main/kotlin/com/metrolist/music/ui/menu/LyricsMenu.kt:131:            title = { Text(text = mediaMetadataProvider().title) },
+app/src/main/kotlin/com/metrolist/music/ui/menu/LyricsMenu.kt:138:                            id = mediaMetadataProvider().id,
+app/src/main/kotlin/com/metrolist/music/ui/menu/LyricsMenu.kt:157:            mediaMetadataProvider()
+app/src/main/kotlin/com/metrolist/music/ui/menu/LyricsMenu.kt:163:                    text = mediaMetadataProvider().title,
+app/src/main/kotlin/com/metrolist/music/ui/menu/LyricsMenu.kt:171:                    text = mediaMetadataProvider().artists.joinToString { it.name },
+app/src/main/kotlin/com/metrolist/music/ui/menu/LyricsMenu.kt:424:                                viewModel.refetchLyrics(mediaMetadataProvider(), lyricsProvider())
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:112:    mediaMetadata: MediaMetadata?,
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:118:    mediaMetadata ?: return
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:140:    val librarySong by database.song(mediaMetadata.id).collectAsStateWithLifecycle(initialValue = null)
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:144:        .getDownload(mediaMetadata.id)
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:147:    val isPinned by database.speedDialDao.isPinned(mediaMetadata.id).collectAsStateWithLifecycle(initialValue = false)
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:150:        remember(mediaMetadata.artists) {
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:151:            mediaMetadata.artists.filter { it.id != null }
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:176:                insert(mediaMetadata)
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:179:                playlist.playlist.browseId?.let { YouTube.addToPlaylist(it, mediaMetadata.id) }
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:181:            listOf(mediaMetadata.id)
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:183:        onGetSongIds = { listOf(mediaMetadata.id) },
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:191:        mediaMetadata = mediaMetadata,
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:375:                                        "https://music.youtube.com/watch?v=${mediaMetadata.id}",
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:392:            val isPodcast = mediaMetadata.album?.let { !it.id.startsWith("MPREb_") } ?: false
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:404:                                            text = mediaMetadata.artists.joinToString { it.name },
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:417:                                        if (mediaMetadata.artists.size == 1) {
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:418:                                            navController.navigate("artist/${mediaMetadata.artists[0].id}")
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:428:                        if (mediaMetadata.album != null) {
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:434:                                            text = mediaMetadata.album.title,
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:448:                                            navController.navigate("online_podcast/${mediaMetadata.album.id}")
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:450:                                            navController.navigate("album/${mediaMetadata.album.id}")
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:511:                                            database.speedDialDao.delete(mediaMetadata.id)
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:513:                                            database.speedDialDao.insert(SpeedDialItem.fromYTItem(mediaMetadata.toYTItem()))
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:549:                                            mediaMetadata.id,
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:569:                                            mediaMetadata.id,
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:588:                                            insert(mediaMetadata)
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:592:                                                .Builder(mediaMetadata.id, mediaMetadata.id.toUri())
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:593:                                                .setCustomCacheKey(mediaMetadata.id)
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:594:                                                .setData(mediaMetadata.title.toByteArray())
+app/src/main/kotlin/com/metrolist/music/ui/menu/PlayerMenu.kt:942:    mediaMetadata: MediaMetadata?,
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:86:    mediaMetadata: MediaMetadata?,
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:91:    mediaMetadata ?: return
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:99:    val librarySong by database.song(mediaMetadata.id).collectAsStateWithLifecycle(initialValue = null)
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:100:    val download by LocalDownloadUtil.current.getDownload(mediaMetadata.id)
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:110:    val artists = remember(mediaMetadata.artists) {
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:111:        mediaMetadata.artists.filter { it.id != null }
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:122:                insert(mediaMetadata)
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:125:                playlist.playlist.browseId?.let { YouTube.addToPlaylist(it, mediaMetadata.id) }
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:127:            listOf(mediaMetadata.id)
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:129:        onGetSongIds = { listOf(mediaMetadata.id) },
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:184:    val isEpisode = librarySong?.song?.isEpisode == true || mediaMetadata.isEpisode
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:187:        mediaMetadata = mediaMetadata,
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:194:                                insert(mediaMetadata)
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:197:                        val dbSong = database.song(mediaMetadata.id).firstOrNull()
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:287:                            val currentMediaId = playerConnection.player.currentMediaItemIndex.let {
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:290:                            if (mediaMetadata.id == currentMediaId) {
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:293:                                playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:294:                                    YouTubeQueue.radio(mediaMetadata)
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:328:                                    "https://music.youtube.com/watch?v=${mediaMetadata.id}"
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:357:                                playerConnection.playNext(mediaMetadata.toMediaItem())
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:375:                                playerConnection.addToQueue(mediaMetadata.toMediaItem())
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:406:                                        mediaMetadata.id,
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:426:                                        mediaMetadata.id,
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:446:                                        insert(mediaMetadata)
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:450:                                            .Builder(mediaMetadata.id, mediaMetadata.id.toUri())
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:451:                                            .setCustomCacheKey(mediaMetadata.id)
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:452:                                            .setData(mediaMetadata.title.toByteArray())
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:480:                                        text = mediaMetadata.artists.joinToString { it.name },
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:493:                                    if (mediaMetadata.artists.size == 1) {
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:494:                                        navController.navigate("artist/${mediaMetadata.artists[0].id}")
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:504:                    if (mediaMetadata.album != null) {
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:510:                                        text = mediaMetadata.album.title,
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:523:                                    navController.navigate("album/${mediaMetadata.album.id}")
+app/src/main/kotlin/com/metrolist/music/ui/menu/QueueMenu.kt:554:                                    YouTube.queue(listOf(mediaMetadata.id)).onSuccess {
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:108:        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:230:                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/AlbumScreen.kt:118:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/AlbumScreen.kt:340:                                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/AlbumScreen.kt:411:                        isActive = song.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/AlbumScreen.kt:447:                                            if (song.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/AlbumScreen.kt:451:                                                playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/AlbumScreen.kt:486:                                isActive = mediaMetadata?.album?.id == item.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/BrowseScreen.kt:58:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibraryPodcastsScreen.kt:110:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibraryPodcastsScreen.kt:406:                            isActive = episode.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibraryPodcastsScreen.kt:432:                                        if (episode.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibraryPodcastsScreen.kt:435:                                            playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibraryPodcastsScreen.kt:471:                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibraryAlbumsScreen.kt:98:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibraryAlbumsScreen.kt:297:                                isActive = album.id == mediaMetadata?.album?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibraryAlbumsScreen.kt:356:                                isActive = album.id == mediaMetadata?.album?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibrarySongsScreen.kt:116:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibrarySongsScreen.kt:468:                    isActive = song.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibrarySongsScreen.kt:493:                                if (song.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibrarySongsScreen.kt:496:                                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibrarySongsScreen.kt:527:                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibraryMixScreen.kt:128:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibraryMixScreen.kt:627:                                    isActive = item.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibraryMixScreen.kt:651:                                                    if (item.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibraryMixScreen.kt:655:                                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibraryMixScreen.kt:723:                                    isActive = item.id == mediaMetadata?.album?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibraryMixScreen.kt:953:                                    isActive = item.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibraryMixScreen.kt:961:                                                    if (item.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibraryMixScreen.kt:965:                                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibraryMixScreen.kt:1016:                                    isActive = item.id == mediaMetadata?.album?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AboutScreen.kt:148:                    playerConnection?.playQueue(YouTubeQueue(WatchEndpoint(videoId = favoriteSongVideoId)))
+app/src/main/kotlin/com/metrolist/music/ui/screens/NewReleaseScreen.kt:56:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/NewReleaseScreen.kt:73:                isActive = mediaMetadata?.album?.id == album.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/wrapped/WrappedAudioService.kt:73:        if (player?.currentMediaItem?.mediaId == songId) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchScreen.kt:105:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchScreen.kt:158:                            is SongItem -> mediaMetadata?.id == item.id
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchScreen.kt:159:                            is AlbumItem -> mediaMetadata?.album?.id == item.id
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchScreen.kt:160:                            is EpisodeItem -> mediaMetadata?.id == item.id
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchScreen.kt:246:                                            if (item.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchScreen.kt:249:                                                playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchScreen.kt:284:                                            if (item.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchScreen.kt:287:                                                playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchScreen.kt:431:                        is SongItem -> mediaMetadata?.id == item.id
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchScreen.kt:432:                        is AlbumItem -> mediaMetadata?.album?.id == item.id
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchScreen.kt:433:                        is EpisodeItem -> mediaMetadata?.id == item.id
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchScreen.kt:519:                                        if (item.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchScreen.kt:522:                                            playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchScreen.kt:557:                                        if (item.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchScreen.kt:560:                                            playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchResult.kt:131:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchResult.kt:287:                    is SongItem -> mediaMetadata?.id == item.id
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchResult.kt:288:                    is AlbumItem -> mediaMetadata?.album?.id == item.id
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchResult.kt:289:                    is EpisodeItem -> mediaMetadata?.id == item.id
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchResult.kt:309:                                    if (item.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchResult.kt:312:                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchResult.kt:345:                                    if (item.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/OnlineSearchResult.kt:348:                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/SearchScreen.kt:144:                playerConnection?.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/LocalSearchScreen.kt:87:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/LocalSearchScreen.kt:191:                                isActive = item.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/LocalSearchScreen.kt:218:                                                if (item.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/LocalSearchScreen.kt:226:                                                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/search/LocalSearchScreen.kt:254:                                isActive = item.id == mediaMetadata?.album?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/ChartsScreen.kt:94:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/ChartsScreen.kt:267:                                            isActive = song.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/ChartsScreen.kt:292:                                                            if (song.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/ChartsScreen.kt:295:                                                                playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/ChartsScreen.kt:341:                                        isActive = video.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/ChartsScreen.kt:348:                                                        if (video.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/ChartsScreen.kt:351:                                                            playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/ExploreScreen.kt:93:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/ExploreScreen.kt:287:                                    isActive = song.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/ExploreScreen.kt:312:                                                    if (song.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/ExploreScreen.kt:315:                                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/ExploreScreen.kt:358:                                isActive = mediaMetadata?.album?.id == album.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/ExploreScreen.kt:398:                                isActive = video.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/ExploreScreen.kt:405:                                                if (video.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/ExploreScreen.kt:408:                                                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/AutoPlaylistScreen.kt:147:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/AutoPlaylistScreen.kt:603:                            isActive = song.song.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/AutoPlaylistScreen.kt:637:                                            } else if (song.song.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/AutoPlaylistScreen.kt:640:                                                playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/AutoPlaylistScreen.kt:952:                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/AutoPlaylistScreen.kt:978:                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/OnlinePlaylistScreen.kt:127:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/OnlinePlaylistScreen.kt:275:                            isActive = mediaMetadata?.id == songItem.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/OnlinePlaylistScreen.kt:285:                                            } else if (songItem.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/OnlinePlaylistScreen.kt:288:                                                playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/OnlinePlaylistScreen.kt:690:                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/CachePlaylistScreen.kt:116:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/CachePlaylistScreen.kt:267:                        isActive = song.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/CachePlaylistScreen.kt:300:                                    } else if (song.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/CachePlaylistScreen.kt:303:                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/CachePlaylistScreen.kt:539:                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/CachePlaylistScreen.kt:565:                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/LocalPlaylistScreen.kt:175:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/LocalPlaylistScreen.kt:619:                            isActive = song.song.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/LocalPlaylistScreen.kt:667:                                            } else if (song.song.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/LocalPlaylistScreen.kt:670:                                                playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/LocalPlaylistScreen.kt:1331:                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/LocalPlaylistScreen.kt:1357:                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/TopPlaylistScreen.kt:115:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/TopPlaylistScreen.kt:321:                            isActive = song.song.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/TopPlaylistScreen.kt:354:                                        } else if (song.song.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/TopPlaylistScreen.kt:357:                                            playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/TopPlaylistScreen.kt:606:                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/TopPlaylistScreen.kt:632:                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/podcast/OnlinePodcastScreen.kt:102:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/podcast/OnlinePodcastScreen.kt:194:                            isActive = mediaMetadata?.id == episode.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/podcast/OnlinePodcastScreen.kt:199:                                        if (episode.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/podcast/OnlinePodcastScreen.kt:205:                                            playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt:104:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt:301:                            isActive = song.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt:328:                                            if (song.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt:332:                                                playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt:379:                            isActive = event.song.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt:414:                                            } else if (event.song.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt:418:                                                playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt:456:                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt:464:                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistSongsScreen.kt:72:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistSongsScreen.kt:135:                    isActive = song.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistSongsScreen.kt:159:                                    if (song.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistSongsScreen.kt:162:                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistSongsScreen.kt:204:                playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistAlbumsScreen.kt:73:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistAlbumsScreen.kt:137:                    isActive = album.id == mediaMetadata?.album?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistItemsScreen.kt:78:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistItemsScreen.kt:129:                            is SongItem -> mediaMetadata?.id == item.id
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistItemsScreen.kt:130:                            is AlbumItem -> mediaMetadata?.album?.id == item.id
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistItemsScreen.kt:197:                                        if (item.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistItemsScreen.kt:200:                                            playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistItemsScreen.kt:226:                                        if (item.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistItemsScreen.kt:229:                                            playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistItemsScreen.kt:266:                            is SongItem -> mediaMetadata?.id == item.id
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistItemsScreen.kt:267:                            is AlbumItem -> mediaMetadata?.album?.id == item.id
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistItemsScreen.kt:279:                                            playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistItemsScreen.kt:304:                                            playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:148:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:396:                                                        playerConnection.playQueue(YouTubeQueue(radioEndpoint))
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:420:                                                        playerConnection.playQueue(YouTubeQueue(shuffleEndpoint))
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:556:                                isActive = song.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:581:                                                    if (song.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:584:                                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:635:                                        isActive = mediaMetadata?.album?.id == album.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:685:                                    isActive = mediaMetadata?.id == song.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:709:                                                        if (song.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:712:                                                            playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:746:                                                    is SongItem -> mediaMetadata?.id == item.id
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:747:                                                    is AlbumItem -> mediaMetadata?.album?.id == item.id
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:760:                                                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:787:                                                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:903:                                playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:923:                                            playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:933:                                                playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:946:                                playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt:966:                                    playerConnection.playQueue(YouTubeQueue(endpoint))
+app/src/main/kotlin/com/metrolist/music/ui/screens/YouTubeBrowseScreen.kt:66:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/YouTubeBrowseScreen.kt:95:                        is SongItem -> mediaMetadata?.id == item.id
+app/src/main/kotlin/com/metrolist/music/ui/screens/YouTubeBrowseScreen.kt:96:                        is AlbumItem -> mediaMetadata?.album?.id == item.id
+app/src/main/kotlin/com/metrolist/music/ui/screens/YouTubeBrowseScreen.kt:108:                                        if (item.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/YouTubeBrowseScreen.kt:111:                                            playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/YouTubeBrowseScreen.kt:134:                                        if (item.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/YouTubeBrowseScreen.kt:137:                                            playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:394:                                playerConnection?.playQueue(YouTubeQueue(it))
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:415:                                playerConnection?.playQueue(YouTubeQueue(it))
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:644:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:806:                                        if (it.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:809:                                            playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:834:                    isActive = it.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:842:                    isActive = it.id == mediaMetadata?.album?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:898:            isActive = item.id in listOf(mediaMetadata?.album?.id, mediaMetadata?.id),
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:909:                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:945:                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:1502:                                                                                                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:1545:                                                                                                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:1582:                                                                            item.id in listOf(mediaMetadata?.album?.id, mediaMetadata?.id),
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:1592:                                                                                                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:1645:                                                                                                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:1765:                                                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:1804:                                                isActive = song!!.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:1830:                                                                    if (song!!.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:1833:                                                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:1886:                                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:1914:                                                playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:1950:                                                        val mediaMetadata = song?.toMediaMetadata()
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:1951:                                                        if (mediaMetadata != null) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:1952:                                                            playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:1956:                                                                        mediaMetadata,
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2083:                                                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2126:                                                isActive = song!!.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2153:                                                                    if (song!!.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2156:                                                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2321:                                                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2355:                                                    isActive = song.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2381:                                                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2541:                                        playerConnection.playQueue(YouTubeQueue.radio(luckyItem.toMediaMetadata()))
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2550:                                            playerConnection.playQueue(LocalAlbumRadio(it))
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2561:                                        playerConnection.playQueue(YouTubeQueue.radio(luckyItem.toMediaMetadata()))
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2565:                                        playerConnection.playQueue(YouTubeAlbumRadio(luckyItem.playlistId))
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2570:                                            playerConnection.playQueue(YouTubeQueue(it))
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2576:                                            playerConnection.playQueue(YouTubeQueue(it))
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2582:                                            playerConnection.playQueue(YouTubeQueue(it))
+app/src/main/kotlin/com/metrolist/music/ui/screens/HomeScreen.kt:2587:                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/StatsScreen.kt:124:    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+app/src/main/kotlin/com/metrolist/music/ui/screens/StatsScreen.kt:439:                                    playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/StatsScreen.kt:471:                                isActive = song.id == mediaMetadata?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/StatsScreen.kt:478:                                                if (song.id == mediaMetadata?.id) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/StatsScreen.kt:483:                                                        playerConnection.playQueue(
+app/src/main/kotlin/com/metrolist/music/ui/screens/StatsScreen.kt:587:                                    isActive = album.id == mediaMetadata?.album?.id,
+app/src/main/kotlin/com/metrolist/music/ui/screens/StatsScreen.kt:663:                    playerConnection.playQueue(
