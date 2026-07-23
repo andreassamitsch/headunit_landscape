@@ -1,0 +1,124 @@
+628:2026-07-23T06:15:31.1389782Z e: file:///home/runner/work/headunit_landscape/headunit_landscape/app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt:327:39 Unsupported escape sequence.
+635:2026-07-23T06:15:31.3423489Z FAILURE: Build failed with an exception.
+642:2026-07-23T06:15:31.3471774Z    > Compilation error. See log for more details
+--- tail ---
+2026-07-23T06:15:31.8109197Z [36;1m  cp /tmp/build.gradle.arm.kts app/build.gradle.kts[0m
+2026-07-23T06:15:31.8109569Z [36;1mfi[0m
+2026-07-23T06:15:31.8167194Z shell: /usr/bin/bash -e {0}
+2026-07-23T06:15:31.8167508Z env:
+2026-07-23T06:15:31.8168038Z   METROLIST_APP_NAME: Metrolist
+2026-07-23T06:15:31.8168331Z   API_LEVEL: 33
+2026-07-23T06:15:31.8168579Z   SYSTEM_TARGET: google_apis
+2026-07-23T06:15:31.8168862Z   DATA_PARTITION_SIZE: 1536M
+2026-07-23T06:15:31.8169136Z   DUDU_WIDTH: 1280
+2026-07-23T06:15:31.8169399Z   DUDU_HEIGHT: 720
+2026-07-23T06:15:31.8169634Z   DUDU_DENSITY: 200
+2026-07-23T06:15:31.8169958Z   TEST_URL: https://music.youtube.com/watch?v=dQw4w9WgXcQ
+2026-07-23T06:15:31.8170383Z   PACKAGE_NAME: com.metrolist.music.dudu7.debug
+2026-07-23T06:15:31.8170781Z   ACTIVITY_NAME: com.metrolist.music.MainActivity
+2026-07-23T06:15:31.8171191Z   RESULTS_DIR: ui-test-results
+2026-07-23T06:15:31.8171534Z   APK_PATH: dist/Metrolist-Dudu7-13.6.5-emulator.apk
+2026-07-23T06:15:31.8172002Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.11-10/x64
+2026-07-23T06:15:31.8172873Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.11-10/x64
+2026-07-23T06:15:31.8173342Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-07-23T06:15:31.8173698Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-07-23T06:15:31.8174032Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-07-23T06:15:31.8174364Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-07-23T06:15:31.8174840Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-07-23T06:15:31.8175349Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-07-23T06:15:31.8175701Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-07-23T06:15:31.8176003Z ##[endgroup]
+2026-07-23T06:15:31.8343058Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-07-23T06:15:31.8344461Z ##[group]Run actions/upload-artifact@v4
+2026-07-23T06:15:31.8344781Z with:
+2026-07-23T06:15:31.8345023Z   name: Metrolist-Dudu7-13.6.5-29984319170
+2026-07-23T06:15:31.8345378Z   path: artifacts/
+ui-test-results/
+
+2026-07-23T06:15:31.8345693Z   if-no-files-found: error
+2026-07-23T06:15:31.8345959Z   retention-days: 14
+2026-07-23T06:15:31.8346209Z   compression-level: 6
+2026-07-23T06:15:31.8346458Z   overwrite: false
+2026-07-23T06:15:31.8346706Z   include-hidden-files: false
+2026-07-23T06:15:31.8346977Z env:
+2026-07-23T06:15:31.8347203Z   METROLIST_APP_NAME: Metrolist
+2026-07-23T06:15:31.8347479Z   API_LEVEL: 33
+2026-07-23T06:15:31.8347762Z   SYSTEM_TARGET: google_apis
+2026-07-23T06:15:31.8348048Z   DATA_PARTITION_SIZE: 1536M
+2026-07-23T06:15:31.8348318Z   DUDU_WIDTH: 1280
+2026-07-23T06:15:31.8348553Z   DUDU_HEIGHT: 720
+2026-07-23T06:15:31.8348784Z   DUDU_DENSITY: 200
+2026-07-23T06:15:31.8349091Z   TEST_URL: https://music.youtube.com/watch?v=dQw4w9WgXcQ
+2026-07-23T06:15:31.8349500Z   PACKAGE_NAME: com.metrolist.music.dudu7.debug
+2026-07-23T06:15:31.8349883Z   ACTIVITY_NAME: com.metrolist.music.MainActivity
+2026-07-23T06:15:31.8350267Z   RESULTS_DIR: ui-test-results
+2026-07-23T06:15:31.8350594Z   APK_PATH: dist/Metrolist-Dudu7-13.6.5-emulator.apk
+2026-07-23T06:15:31.8351057Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.11-10/x64
+2026-07-23T06:15:31.8351588Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.11-10/x64
+2026-07-23T06:15:31.8352045Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-07-23T06:15:31.8352629Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-07-23T06:15:31.8352990Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-07-23T06:15:31.8353323Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-07-23T06:15:31.8353796Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-07-23T06:15:31.8354312Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-07-23T06:15:31.8354662Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-07-23T06:15:31.8355209Z ##[endgroup]
+2026-07-23T06:15:32.0179777Z (node:2809) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-07-23T06:15:32.0181725Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-07-23T06:15:32.0232892Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-07-23T06:15:32.0236313Z The least common ancestor is /home/runner/work/headunit_landscape/headunit_landscape. This will be the root directory of the artifact
+2026-07-23T06:15:32.0251841Z ##[error]No files were found with the provided path: artifacts/
+ui-test-results/. No artifacts will be uploaded.
+2026-07-23T06:15:32.0489178Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-07-23T06:15:32.0490476Z Post job cleanup.
+2026-07-23T06:15:32.3191165Z In post-action step
+2026-07-23T06:15:32.3205587Z ##[group]Stopping Gradle daemons
+2026-07-23T06:15:32.3206847Z Stopping Gradle daemons for /home/runner/.gradle/wrapper/dists/gradle-9.6.1-bin/4ticwg1pgcbps2hj28r8so764/gradle-9.6.1
+2026-07-23T06:15:32.3226957Z [command]/home/runner/.gradle/wrapper/dists/gradle-9.6.1-bin/4ticwg1pgcbps2hj28r8so764/gradle-9.6.1/bin/gradle --stop
+2026-07-23T06:15:33.0923934Z Stopping Daemon(s)
+2026-07-23T06:15:33.0985487Z 1 Daemon stopped
+2026-07-23T06:15:33.1160322Z ##[endgroup]
+2026-07-23T06:15:33.1161793Z Not performing cache-cleanup due to build failure
+2026-07-23T06:15:33.1164050Z ##[group]Caching Gradle state
+2026-07-23T06:15:33.1298742Z Not saving configuration-cache state, as no encryption key was provided
+2026-07-23T06:15:33.6431423Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/headunit_landscape/headunit_landscape --files-from manifest.txt --use-compress-program zstdmt
+2026-07-23T06:15:34.5989238Z Sent 224661 of 224661 (100.0%), 0.4 MBs/sec
+2026-07-23T06:15:36.2930577Z Saved cache entry with key gradle-kotlin-dsl-v1-7e6ecba703e600fbb23bd7508b5d130c from /home/runner/.gradle/caches/*/kotlin-dsl/accessors/*/,/home/runner/.gradle/caches/*/kotlin-dsl/scripts/*/ in 2710ms
+2026-07-23T06:15:36.3735330Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/headunit_landscape/headunit_landscape --files-from manifest.txt --use-compress-program zstdmt
+2026-07-23T06:15:37.8039864Z Sent 131072 of 8012787 (1.6%), 0.1 MBs/sec
+2026-07-23T06:15:38.8046690Z Sent 131072 of 8012787 (1.6%), 0.1 MBs/sec
+2026-07-23T06:15:39.8059298Z Sent 131072 of 8012787 (1.6%), 0.0 MBs/sec
+2026-07-23T06:15:40.8063857Z Sent 131072 of 8012787 (1.6%), 0.0 MBs/sec
+2026-07-23T06:15:41.8067584Z Sent 131072 of 8012787 (1.6%), 0.0 MBs/sec
+2026-07-23T06:15:42.6896938Z Sent 8012787 of 8012787 (100.0%), 1.3 MBs/sec
+2026-07-23T06:15:42.9774332Z Saved cache entry with key gradle-home-v1|Linux-X64|build-test-commit[ad8bfa5a7a5817f834f940310be88b74]-d3190f0ecadcf22fee012eb150b64e7d7f805ee1 from /home/runner/.gradle/caches,/home/runner/.gradle/notifications,/home/runner/.gradle/.setup-gradle in 6617ms
+2026-07-23T06:15:42.9775730Z ##[endgroup]
+2026-07-23T06:15:42.9781374Z Generating Job Summary
+2026-07-23T06:15:42.9795127Z Completed post-action step
+2026-07-23T06:15:43.0018197Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-07-23T06:15:43.0019520Z Post job cleanup.
+2026-07-23T06:15:43.1364598Z (node:2895) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-07-23T06:15:43.1365611Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-07-23T06:15:43.1521498Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-07-23T06:15:43.1525494Z Post job cleanup.
+2026-07-23T06:15:43.2727568Z [command]/usr/bin/git version
+2026-07-23T06:15:43.2775158Z git version 2.54.0
+2026-07-23T06:15:43.2855733Z Temporarily overriding HOME='/home/runner/work/_temp/5c8c3888-29ea-40bb-9432-b1bff1f1924c' before making global git config changes
+2026-07-23T06:15:43.2857183Z Adding repository directory to the temporary git global config as a safe directory
+2026-07-23T06:15:43.2860827Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/headunit_landscape/headunit_landscape
+2026-07-23T06:15:43.2911426Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-07-23T06:15:43.2963467Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-07-23T06:15:43.3256219Z Entering 'metroproto'
+2026-07-23T06:15:43.3327317Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-07-23T06:15:43.3362899Z http.https://github.com/.extraheader
+2026-07-23T06:15:43.3387760Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-07-23T06:15:43.3422220Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-07-23T06:15:43.3717927Z Entering 'metroproto'
+2026-07-23T06:15:43.3749935Z http.https://github.com/.extraheader
+2026-07-23T06:15:43.3813394Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-07-23T06:15:43.3858527Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-07-23T06:15:43.4121564Z Entering 'metroproto'
+2026-07-23T06:15:43.4142113Z file:/home/runner/work/headunit_landscape/headunit_landscape/.git/modules/metroproto/config	remote.origin.url
+2026-07-23T06:15:43.4179883Z [command]/usr/bin/git config --file /home/runner/work/headunit_landscape/headunit_landscape/.git/modules/metroproto/config --name-only --get-regexp ^includeIf\.gitdir:
+2026-07-23T06:15:43.4368363Z Cleaning up orphan processes
+2026-07-23T06:15:43.4579688Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-java@v4, actions/upload-artifact@v4, gradle/actions/setup-gradle@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
