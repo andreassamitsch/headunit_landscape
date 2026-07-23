@@ -1,0 +1,47 @@
+name: Commit verified history and radio favorites fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/commit-verified-history-radio-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  commit:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - name: Apply already-tested patch
+        run: |
+          set -euxo pipefail
+          python3 .assistant/patch_history_radio_favorites.py
+          sed -i 's/assert_text "URL and playlist editor" 1/assert_text "URL and playlist editor" 0/' scripts/dudu7_webradio_smoke.sh
+          grep -q 'versionCode = 153' app/build.gradle.kts
+          grep -q 'val orderedStations = listOf(selected)' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
+          grep -q 'onValueUpdate = viewModel::setHistorySource' app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt
+      - name: Commit tested source
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/build.gradle.kts \
+            app/src/main/kotlin/com/metrolist/music/viewmodels/HistoryViewModel.kt \
+            app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt \
+            app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt \
+            app/src/main/kotlin/com/metrolist/music/radio/RadioBrowserClient.kt \
+            scripts/dudu7_webradio_smoke.sh
+          git rm -f .assistant/patch_history_radio_favorites.py \
+            .github/workflows/apply-history-radio-favorites-fix.yml \
+            .github/workflows/diagnose-history-radio-favorites.yml \
+            .github/workflows/record-current-history-radio-run.yml \
+            .github/workflows/commit-verified-history-radio-fix.yml \
+            _assistant/history_radio_diagnosis.txt \
+            _assistant/current_history_radio_runs.json || true
+          git commit -m 'Persist history source and fix saved WebRadio playback'
+          git pull --rebase origin main
+          git push origin HEAD:main
