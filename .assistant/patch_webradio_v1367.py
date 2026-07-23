@@ -562,3 +562,127 @@ replace_once(
 )
 
 print("WebRadio 13.6.7 patch applied")
+
+# Final embedded-artist and semantic test corrections -------------------------
+replace_once(
+    artist_screen,
+    "                                                    playerConnection.playQueue(YouTubeQueue(radioEndpoint))",
+    '''                                                    playerConnection.playQueue(YouTubeQueue(radioEndpoint))
+                                                    if (embeddedInPlayer) {
+                                                        navController.popBackStack("vehicle_queue", inclusive = false)
+                                                    }''',
+)
+replace_once(
+    artist_screen,
+    "                                                        playerConnection.playQueue(YouTubeQueue(shuffleEndpoint))",
+    '''                                                        playerConnection.playQueue(YouTubeQueue(shuffleEndpoint))
+                                                        if (embeddedInPlayer) {
+                                                            navController.popBackStack("vehicle_queue", inclusive = false)
+                                                        }''',
+)
+
+replace_once(
+    test,
+    '''}
+
+assert_absent_right() {''',
+    '''}
+
+assert_selected_tab() {
+    local label="$1"; shift
+    dump_ui || return 1
+    if python3 - "$RESULTS_DIR/current-window.xml" "$@" <<'PY'
+import sys, xml.etree.ElementTree as ET
+path, *needles = sys.argv[1:]
+needles = [n.casefold() for n in needles]
+root = ET.parse(path).getroot()
+parent = {child: node for node in root.iter() for child in node}
+for node in root.iter('node'):
+    values = [node.attrib.get('text','').strip(), node.attrib.get('content-desc','').strip()]
+    hay = ' '.join(v for v in values if v).casefold()
+    if not hay or not any(n in hay for n in needles):
+        continue
+    cur = node
+    while cur is not None:
+        if cur.attrib.get('selected') == 'true':
+            raise SystemExit(0)
+        cur = parent.get(cur)
+raise SystemExit(1)
+PY
+    then
+        echo "PASS: $label"
+    else
+        echo "FAIL: $label" >&2
+        capture "selected-tab-failure"
+        return 1
+    fi
+}
+
+assert_station_active() {
+    local label="$1"; local station="$2"
+    dump_ui || return 1
+    if python3 - "$RESULTS_DIR/current-window.xml" "$station" <<'PY'
+import sys, xml.etree.ElementTree as ET
+path, station = sys.argv[1:]
+root = ET.parse(path).getroot()
+parent = {child: node for node in root.iter() for child in node}
+station_node = next((n for n in root.iter('node') if n.attrib.get('text','').strip() == station), None)
+if station_node is None:
+    raise SystemExit(1)
+row = station_node
+while row is not None and row.attrib.get('clickable') != 'true':
+    row = parent.get(row)
+if row is None:
+    raise SystemExit(1)
+for node in row.iter('node'):
+    if 'LÄUFT' in node.attrib.get('text',''):
+        raise SystemExit(0)
+raise SystemExit(1)
+PY
+    then
+        echo "PASS: $label"
+    else
+        echo "FAIL: $label" >&2
+        capture "active-station-failure"
+        return 1
+    fi
+}
+
+assert_absent_right() {''',
+)
+
+replace_once(
+    test,
+    'assert_text "WebRadio tab remains open after favorite start" 1 "=Gespeichert"',
+    '''assert_selected_tab "WebRadio tab remains selected after favorite start" "WebRadio"
+assert_station_active "favorite two row shows active playback" "Test Radio Two"''',
+)
+replace_once(
+    test,
+    'assert_text "WebRadio tab remains open after second favorite" 1 "=Gespeichert"',
+    '''assert_selected_tab "WebRadio tab remains selected after second favorite" "WebRadio"
+assert_station_active "favorite one row shows active playback" "Test Radio One"''',
+)
+replace_once(
+    test,
+    'assert_text "artist action opened normal music queue" 1 "Warteschlange" "Queue"',
+    '''assert_selected_tab "artist action selected normal music queue" "Warteschlange" "Queue"
+assert_absent_anywhere "LIVE after artist radio action" "=LIVE"''',
+)
+replace_once(
+    test,
+    'assert_text "third favorite active indicator" 1 "● LÄUFT"',
+    'assert_station_active "third favorite active indicator" "Test Radio Three"',
+)
+replace_once(
+    test,
+    'assert_text "favorite two active indicator" 1 "● LÄUFT"',
+    'assert_station_active "favorite two active indicator" "Test Radio Two"',
+)
+replace_once(
+    test,
+    'assert_text "kronehit active indicator" 1 "● LÄUFT"',
+    'assert_station_active "kronehit active indicator" "kronehit"',
+)
+
+print("WebRadio 13.6.7 final artist/test corrections applied")
