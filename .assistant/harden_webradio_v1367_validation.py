@@ -66,20 +66,52 @@ replace_once(
 }''',
 )
 
-# The vehicle layout owns both the embedded pane navigator and the selected-tab
-# state. Ask that owner to return to the queue before starting normal YouTube
-# playback. A raw NavController route changes only the destination and can race
-# the independently saved tab state after Search/Artist restoration.
+# Material3 OutlinedButton/IconButton did not receive injected or physical taps
+# inside this nested embedded header although their semantics were clickable.
+# Use the same simple clipped + combinedClickable surfaces that are reliable in
+# the WebRadio favorite list. Keep the original controls outside vehicle mode.
 artist = "app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt"
 replace_once(
     artist,
-    '''                                                    if (embeddedInPlayer) {
-                                                        navController.popBackStack("vehicle_queue", inclusive = false)
-                                                    }
-                                                    playerConnection.playQueue(YouTubeQueue(radioEndpoint))''',
-    '''                                                    android.util.Log.d(
-                                                        "Dudu7ArtistAction",
-                                                        "Radio clicked embedded=$embeddedInPlayer callback=${playerConnection.onUserSongSelection != null}",
+    "import androidx.compose.foundation.background\n",
+    "import androidx.compose.foundation.background\nimport androidx.compose.foundation.border\n",
+)
+replace_once(
+    artist,
+    "import androidx.compose.ui.graphics.Color\n",
+    "import androidx.compose.ui.draw.clip\nimport androidx.compose.ui.graphics.Color\n",
+)
+replace_once(
+    artist,
+    '''                                            artistPage?.artist?.radioEndpoint?.let { radioEndpoint ->
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        if (embeddedInPlayer) {
+                                                            navController.popBackStack("vehicle_queue", inclusive = false)
+                                                        }
+                                                        playerConnection.playQueue(YouTubeQueue(radioEndpoint))
+                                                    },
+                                                    shape = RoundedCornerShape(50),
+                                                    modifier = Modifier.height(40.dp),
+                                                ) {
+                                                    Icon(
+                                                        painter = painterResource(R.drawable.radio),
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(20.dp),
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(
+                                                        text = stringResource(R.string.radio),
+                                                        fontSize = 14.sp,
+                                                    )
+                                                }
+                                            }''',
+    '''                                            artistPage?.artist?.radioEndpoint?.let { radioEndpoint ->
+                                                val playArtistRadio: () -> Unit = {
+                                                    timber.log.Timber.tag("Dudu7ArtistAction").e(
+                                                        "Radio clicked embedded=%s callback=%s",
+                                                        embeddedInPlayer,
+                                                        playerConnection.onUserSongSelection != null,
                                                     )
                                                     if (embeddedInPlayer) {
                                                         playerConnection.notifyUserSongSelection()
@@ -87,25 +119,136 @@ replace_once(
                                                     playerConnection.playQueue(
                                                         YouTubeQueue(radioEndpoint),
                                                         notifyUserSelection = !embeddedInPlayer,
-                                                    )''',
+                                                    )
+                                                }
+                                                if (embeddedInPlayer) {
+                                                    Row(
+                                                        modifier =
+                                                            Modifier
+                                                                .height(40.dp)
+                                                                .clip(RoundedCornerShape(50))
+                                                                .border(
+                                                                    width = 1.dp,
+                                                                    color = MaterialTheme.colorScheme.outline,
+                                                                    shape = RoundedCornerShape(50),
+                                                                ).combinedClickable(
+                                                                    onClick = playArtistRadio,
+                                                                    onLongClick = {},
+                                                                ).padding(horizontal = 16.dp),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                    ) {
+                                                        Icon(
+                                                            painter = painterResource(R.drawable.radio),
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(20.dp),
+                                                        )
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text(
+                                                            text = stringResource(R.string.radio),
+                                                            fontSize = 14.sp,
+                                                        )
+                                                    }
+                                                } else {
+                                                    OutlinedButton(
+                                                        onClick = playArtistRadio,
+                                                        shape = RoundedCornerShape(50),
+                                                        modifier = Modifier.height(40.dp),
+                                                    ) {
+                                                        Icon(
+                                                            painter = painterResource(R.drawable.radio),
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(20.dp),
+                                                        )
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text(
+                                                            text = stringResource(R.string.radio),
+                                                            fontSize = 14.sp,
+                                                        )
+                                                    }
+                                                }
+                                            }''',
 )
 replace_once(
     artist,
-    '''                                                        if (embeddedInPlayer) {
+    '''                                            artistPage?.artist?.shuffleEndpoint?.let { shuffleEndpoint ->
+                                                IconButton(
+                                                    onClick = {
+                                                        if (embeddedInPlayer) {
                                                             navController.popBackStack("vehicle_queue", inclusive = false)
                                                         }
-                                                        playerConnection.playQueue(YouTubeQueue(shuffleEndpoint))''',
-    '''                                                        android.util.Log.d(
-                                                            "Dudu7ArtistAction",
-                                                            "Shuffle clicked embedded=$embeddedInPlayer callback=${playerConnection.onUserSongSelection != null}",
+                                                        playerConnection.playQueue(YouTubeQueue(shuffleEndpoint))
+                                                    },
+                                                    modifier =
+                                                        Modifier
+                                                            .size(48.dp)
+                                                            .background(
+                                                                MaterialTheme.colorScheme.primary,
+                                                                RoundedCornerShape(24.dp),
+                                                            ),
+                                                ) {
+                                                    Icon(
+                                                        painter = painterResource(R.drawable.shuffle),
+                                                        contentDescription = "Shuffle",
+                                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                                        modifier = Modifier.size(20.dp),
+                                                    )
+                                                }
+                                            }''',
+    '''                                            artistPage?.artist?.shuffleEndpoint?.let { shuffleEndpoint ->
+                                                val playArtistShuffle: () -> Unit = {
+                                                    timber.log.Timber.tag("Dudu7ArtistAction").e(
+                                                        "Shuffle clicked embedded=%s callback=%s",
+                                                        embeddedInPlayer,
+                                                        playerConnection.onUserSongSelection != null,
+                                                    )
+                                                    if (embeddedInPlayer) {
+                                                        playerConnection.notifyUserSongSelection()
+                                                    }
+                                                    playerConnection.playQueue(
+                                                        YouTubeQueue(shuffleEndpoint),
+                                                        notifyUserSelection = !embeddedInPlayer,
+                                                    )
+                                                }
+                                                if (embeddedInPlayer) {
+                                                    Box(
+                                                        contentAlignment = Alignment.Center,
+                                                        modifier =
+                                                            Modifier
+                                                                .size(48.dp)
+                                                                .clip(RoundedCornerShape(24.dp))
+                                                                .background(MaterialTheme.colorScheme.primary)
+                                                                .combinedClickable(
+                                                                    onClick = playArtistShuffle,
+                                                                    onLongClick = {},
+                                                                ),
+                                                    ) {
+                                                        Icon(
+                                                            painter = painterResource(R.drawable.shuffle),
+                                                            contentDescription = "Shuffle",
+                                                            tint = MaterialTheme.colorScheme.onPrimary,
+                                                            modifier = Modifier.size(20.dp),
                                                         )
-                                                        if (embeddedInPlayer) {
-                                                            playerConnection.notifyUserSongSelection()
-                                                        }
-                                                        playerConnection.playQueue(
-                                                            YouTubeQueue(shuffleEndpoint),
-                                                            notifyUserSelection = !embeddedInPlayer,
-                                                        )''',
+                                                    }
+                                                } else {
+                                                    IconButton(
+                                                        onClick = playArtistShuffle,
+                                                        modifier =
+                                                            Modifier
+                                                                .size(48.dp)
+                                                                .background(
+                                                                    MaterialTheme.colorScheme.primary,
+                                                                    RoundedCornerShape(24.dp),
+                                                                ),
+                                                    ) {
+                                                        Icon(
+                                                            painter = painterResource(R.drawable.shuffle),
+                                                            contentDescription = "Shuffle",
+                                                            tint = MaterialTheme.colorScheme.onPrimary,
+                                                            modifier = Modifier.size(20.dp),
+                                                        )
+                                                    }
+                                                }
+                                            }''',
 )
 
 # Optional short diagnostic path used by the dedicated x86 emulator workflow.
