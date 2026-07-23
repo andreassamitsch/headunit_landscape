@@ -1,0 +1,117 @@
+name: Diagnose WebRadio artist action
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-v1367-artist-action.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diagnose-v1367-artist-action
+  cancel-in-progress: true
+
+jobs:
+  focused-test:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    env:
+      METROLIST_APP_NAME: Metrolist
+      API_LEVEL: '33'
+      SYSTEM_TARGET: google_apis
+      DATA_PARTITION_SIZE: 1536M
+      DUDU_WIDTH: '1280'
+      DUDU_HEIGHT: '720'
+      DUDU_DENSITY: '200'
+      PACKAGE_NAME: com.metrolist.music.dudu7.debug
+      ACTIVITY_NAME: com.metrolist.music.MainActivity
+      RESULTS_DIR: ui-test-results
+      APK_PATH: dist/Metrolist-Dudu7-13.6.7-focused-x86.apk
+      FOCUSED_ARTIST_ACTION: '1'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Apply WebRadio sources and focused diagnostics
+        run: |
+          python3 .assistant/patch_webradio_v1367.py
+          python3 .assistant/harden_webradio_v1367_validation.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('app/build.gradle.kts')
+          text = path.read_text(encoding='utf-8')
+          old = 'abiFilters += listOf("arm64-v8a", "armeabi-v7a")'
+          if old not in text:
+              raise SystemExit('Expected ARM ABI declaration not found')
+          path.write_text(text.replace(old, 'abiFilters += listOf("x86_64")', 1), encoding='utf-8')
+          PY
+          chmod +x gradlew scripts/run_dudu7_emulator_ci.sh scripts/dudu7_webradio_reliability_smoke.sh
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-cleanup: on-success
+
+      - name: Build focused emulator APK
+        run: |
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --warning-mode summary
+          mkdir -p dist
+          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
+          test -n "$APK"
+          cp "$APK" "$APK_PATH"
+          unzip -l "$APK_PATH" | grep 'lib/x86_64/'
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+
+      - name: Free disk space
+        run: |
+          ./gradlew --stop || true
+          find . -type d -name build -prune -exec rm -rf {} +
+          rm -rf "$HOME/.gradle/caches/transforms-"* || true
+          test -f "$APK_PATH"
+
+      - name: Enable KVM access
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run focused artist action test
+        run: |
+          set -euxo pipefail
+          mkdir -p "$RESULTS_DIR" radio-test-data
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          ffmpeg -hide_banner -loglevel error -f lavfi -i 'sine=frequency=440:duration=4' -c:a libmp3lame -b:a 96k radio-test-data/station1.mp3
+          ffmpeg -hide_banner -loglevel error -f lavfi -i 'sine=frequency=660:duration=4' -c:a libmp3lame -b:a 96k radio-test-data/station2.mp3
+          ffmpeg -hide_banner -loglevel error -f lavfi -i 'sine=frequency=880:duration=4' -c:a libmp3lame -b:a 96k radio-test-data/station3.mp3
+          ffmpeg -hide_banner -loglevel error -f lavfi -i 'color=c=0x4f46e5:s=512x512' -frames:v 1 radio-test-data/logo3.png
+          python3 scripts/icy_test_server.py \
+            --audio1 radio-test-data/station1.mp3 \
+            --audio2 radio-test-data/station2.mp3 \
+            --audio3 radio-test-data/station3.mp3 \
+            --logo3 radio-test-data/logo3.png \
+            > "$RESULTS_DIR/icy-server.log" 2>&1 &
+          for i in {1..20}; do curl -fsS http://127.0.0.1:8000/health && break; sleep 1; done
+          cp scripts/dudu7_webradio_reliability_smoke.sh scripts/dudu7_ui_smoke.sh
+          chmod +x scripts/dudu7_ui_smoke.sh
+          scripts/run_dudu7_emulator_ci.sh
+
+      - name: Upload focused evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: WebRadio-artist-action-${{ github.run_id }}
+          path: ui-test-results/
+          if-no-files-found: warn
+          retention-days: 7
