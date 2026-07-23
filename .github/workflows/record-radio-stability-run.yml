@@ -1,0 +1,33 @@
+name: Record current WebRadio stability run
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/record-radio-stability-run.yml'
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  record:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record recent runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p _assistant
+          curl -fsSL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs?per_page=10" \
+            > _assistant/current_radio_stability_runs.json
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -f _assistant/current_radio_stability_runs.json
+          git commit -m 'Record current WebRadio stability run status [skip ci]'
+          git push
