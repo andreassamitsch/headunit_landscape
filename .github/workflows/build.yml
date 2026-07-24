@@ -1,71 +1,43 @@
-name: Build Dudu7 APK
+name: Build FYT Radio Test APK
 
 on:
-  workflow_dispatch:
+  push:
+    branches: ["agent/fyt-radio-test-apk"]
 
 permissions:
   contents: read
 
-concurrency:
-  group: manual-dudu7-apk-build
-  cancel-in-progress: true
-
 jobs:
   build:
-    name: Build Dudu7 APK
-    if: github.actor != 'dependabot[bot]' && github.actor != 'renovate[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
-        with:
-          submodules: recursive
-
       - uses: actions/setup-java@v5
         with:
-          java-version: "21"
           distribution: temurin
-
+          java-version: "17"
       - uses: gradle/actions/setup-gradle@v5
         with:
-          cache-cleanup: on-success
-
-      - name: Prepare
+          gradle-version: "8.9"
+          cache-read-only: true
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Extract isolated project
         run: |
-          chmod +x gradlew
-          python3 scripts/verify_dudu7_architecture.py
-          keytool -genkeypair -v \
-            -keystore app/nightly-debug.keystore \
-            -storepass android \
-            -alias androiddebugkey \
-            -keypass android \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=Metrolist Dudu7,O=Metrolist,C=AT"
-
-      - name: Build Dudu7 APK
-        run: ./gradlew --console=plain assembleGmsDudu7Debug --warning-mode summary
-        env:
-          METROLIST_APPLICATION_ID: com.metrolist.music
-          METROLIST_APP_NAME: Metrolist Dudu7
-          METROLIST_DEBUG_KEYSTORE_PATH: nightly-debug.keystore
-          PULL_REQUEST: "false"
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
-          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
-
-      - name: Collect Dudu7 APK
+          mkdir project
+          tar -xzf fyt-radio-test-source.tar.gz -C project
+      - name: Build debug APK
+        working-directory: project
+        run: gradle --no-daemon --console=plain :app:assembleDebug
+      - name: Collect artifact
         run: |
           mkdir -p dist
-          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
-          test -n "$APK"
-          cp "$APK" dist/Metrolist-Dudu7.apk
-
+          cp project/app/build/outputs/apk/debug/app-debug.apk dist/FYT-DUDU7-Radio-Test-0.1.0.apk
+          sha256sum dist/FYT-DUDU7-Radio-Test-0.1.0.apk > dist/FYT-DUDU7-Radio-Test-0.1.0.sha256
       - uses: actions/upload-artifact@v6
         with:
-          name: metrolist-dudu7-apk
-          path: dist/Metrolist-Dudu7.apk
+          name: FYT-DUDU7-Radio-Test-0.1.0
+          path: dist/*
           if-no-files-found: error
-          retention-days: 7

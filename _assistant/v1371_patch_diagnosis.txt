@@ -1,3 +1,0 @@
-Applied current embedded artist initial-pass scroll handling
-
-exit_status=0
