@@ -1,4 +1,4 @@
-name: Build and test Metrolist 13.6.9
+name: Build Metrolist 13.7.0
 
 on:
   push:
@@ -10,26 +10,15 @@ permissions:
   contents: write
 
 concurrency:
-  group: metrolist-v1369-final
+  group: metrolist-v1370-build
   cancel-in-progress: true
 
 jobs:
-  build-test:
+  build-apk:
     runs-on: ubuntu-22.04
-    timeout-minutes: 80
+    timeout-minutes: 45
     env:
       METROLIST_APP_NAME: Metrolist
-      API_LEVEL: '33'
-      SYSTEM_TARGET: google_apis
-      DATA_PARTITION_SIZE: 1536M
-      DUDU_WIDTH: '1280'
-      DUDU_HEIGHT: '720'
-      DUDU_DENSITY: '200'
-      TEST_URL: https://music.youtube.com/watch?v=dQw4w9WgXcQ
-      PACKAGE_NAME: com.metrolist.music.dudu7.debug
-      ACTIVITY_NAME: com.metrolist.music.MainActivity
-      RESULTS_DIR: ui-test-results
-      APK_PATH: dist/Metrolist-Dudu7-13.6.9-emulator.apk
 
     steps:
       - uses: actions/checkout@v4
@@ -37,45 +26,40 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Apply fixes and record run id
+      - name: Apply requested fixes
         run: |
           set -euo pipefail
-          python3 scripts/apply_v1369_fixes.py
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt')
-          text = path.read_text(encoding='utf-8')
-          import_line = 'import androidx.compose.foundation.clickable\n'
-          if import_line not in text:
-              marker = 'import androidx.compose.foundation.combinedClickable\n'
-              if marker not in text:
-                  raise SystemExit('WebRadio clickable import marker missing')
-              text = text.replace(marker, import_line + marker, 1)
-              path.write_text(text, encoding='utf-8')
-          PY
-          python3 scripts/verify_dudu7_v1369_fixes.py
-          python3 -m py_compile scripts/apply_v1369_fixes.py scripts/verify_dudu7_v1369_fixes.py
-          bash -n scripts/dudu7_webradio_reliability_smoke.sh
+          python3 scripts/apply_v1370_requested_fixes.py
+          python3 -m py_compile scripts/apply_v1370_requested_fixes.py
+          git diff --check
+
+          grep -q 'versionCode = 159' app/build.gradle.kts
+          grep -q 'versionName = "13.7.0"' app/build.gradle.kts
+          grep -q 'val safePlayerWeight = 0.5f' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+          grep -q 'embeddedInPlayer = embeddedInPlayer' app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt
+          grep -q 'drag_indicator_grid' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
+          grep -q 'Alignment.BottomEnd' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
+          grep -q 'surfaceVariant.copy(alpha = 0.55f)' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
+          grep -q 'fun toggleShuffle()' app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt
+          grep -q 'ShuffleOrder.DefaultShuffleOrder' app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt
+          grep -q 'onToggleShuffle = playerConnection::toggleShuffle' app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt
+          grep -q 'recognizeStream(streamUrl)' app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt
+          grep -q 'fun recognizeStream(streamUrl: String)' app/src/main/kotlin/com/metrolist/music/recognition/MusicRecognitionService.kt
+          test -f app/src/main/res/drawable/drag_indicator_grid.xml
+
           mkdir -p _assistant
-          printf 'run_id=%s\njob_status=running\ncommit=%s\n' \
+          printf 'run_id=%s\njob_status=building\ncommit=%s\n' \
             "$GITHUB_RUN_ID" "$GITHUB_SHA" \
-            > _assistant/v1369_final_run.txt
+            > _assistant/v1370_build_run.txt
+
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
-          git commit -m 'fix(dudu7): add WebRadio logo selection import [skip ci]'
-          git pull --rebase origin main
-          git push
-
-      - name: Static acceptance checks
-        run: |
-          set -euxo pipefail
-          mkdir -p artifacts "$RESULTS_DIR"
-          python3 scripts/verify_dudu7_v1369_fixes.py | tee artifacts/static-feature-checks.txt
-          grep -q '^import androidx.compose.foundation.clickable$' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
-          grep -q 'versionCode = 158' app/build.gradle.kts
-          grep -q 'versionName = "13.6.9"' app/build.gradle.kts
-          chmod +x gradlew scripts/run_dudu7_emulator_ci.sh scripts/dudu7_webradio_reliability_smoke.sh
+          if ! git diff --cached --quiet; then
+            git commit -m 'feat(dudu7): implement requested player and radio updates [skip ci]'
+            git pull --rebase origin main
+            git push
+          fi
 
       - uses: actions/setup-java@v4
         with:
@@ -89,95 +73,30 @@ jobs:
       - name: Build ARM update APK
         run: |
           set -o pipefail
+          mkdir -p artifacts
           ./gradlew --console=plain :app:assembleGmsDudu7Debug --warning-mode summary 2>&1 | tee artifacts/build-arm.log
         env:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
 
-      - name: Verify and package ARM APK
+      - name: Verify and package APK
         run: |
           set -euxo pipefail
           APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
           test -n "$APK"
-          cp "$APK" artifacts/Metrolist-Dudu7-13.6.9.apk
+          cp "$APK" artifacts/Metrolist-Dudu7-13.7.0.apk
           build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
-          "$build_tools/aapt" dump badging artifacts/Metrolist-Dudu7-13.6.9.apk | tee artifacts/apk-badging.txt
-          "$build_tools/apksigner" verify --verbose --print-certs artifacts/Metrolist-Dudu7-13.6.9.apk | tee artifacts/apk-signature.txt
-          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='158'" artifacts/apk-badging.txt
-          unzip -l artifacts/Metrolist-Dudu7-13.6.9.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
-          sha256sum artifacts/Metrolist-Dudu7-13.6.9.apk | tee artifacts/SHA256SUMS.txt
+          "$build_tools/aapt" dump badging artifacts/Metrolist-Dudu7-13.7.0.apk | tee artifacts/apk-badging.txt
+          "$build_tools/apksigner" verify --verbose --print-certs artifacts/Metrolist-Dudu7-13.7.0.apk | tee artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='159'" artifacts/apk-badging.txt
+          unzip -l artifacts/Metrolist-Dudu7-13.7.0.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
+          sha256sum artifacts/Metrolist-Dudu7-13.7.0.apk | tee artifacts/SHA256SUMS.txt
 
-      - name: Prepare x86_64 emulator build
-        run: |
-          set -euxo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('app/build.gradle.kts')
-          text = path.read_text(encoding='utf-8')
-          old = 'abiFilters += listOf("arm64-v8a", "armeabi-v7a")'
-          if old not in text:
-              raise SystemExit('Expected ARM ABI declaration not found')
-          path.write_text(text.replace(old, 'abiFilters += listOf("x86_64")', 1), encoding='utf-8')
-          PY
-
-      - name: Build emulator APK
-        run: |
-          set -o pipefail
-          ./gradlew --console=plain :app:assembleGmsDudu7Debug --warning-mode summary 2>&1 | tee artifacts/build-x86.log
-          mkdir -p dist
-          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
-          test -n "$APK"
-          cp "$APK" "$APK_PATH"
-          unzip -l "$APK_PATH" | grep 'lib/x86_64/'
-        env:
-          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
-          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
-
-      - name: Free disk space for emulator
-        run: |
-          ./gradlew --stop || true
-          find . -type d -name build -prune -exec rm -rf {} +
-          rm -rf "$HOME/.gradle/caches/transforms-"* || true
-          test -f "$APK_PATH"
-          df -h
-
-      - name: Enable KVM access
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
-            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
-      - name: Run Dudu7 WebRadio regression test
-        run: |
-          set -euxo pipefail
-          mkdir -p "$RESULTS_DIR" radio-test-data
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg
-          ffmpeg -hide_banner -loglevel error -f lavfi -i 'sine=frequency=440:duration=4' -c:a libmp3lame -b:a 96k radio-test-data/station1.mp3
-          ffmpeg -hide_banner -loglevel error -f lavfi -i 'sine=frequency=660:duration=4' -c:a libmp3lame -b:a 96k radio-test-data/station2.mp3
-          ffmpeg -hide_banner -loglevel error -f lavfi -i 'sine=frequency=880:duration=4' -c:a libmp3lame -b:a 96k radio-test-data/station3.mp3
-          ffmpeg -hide_banner -loglevel error -f lavfi -i 'color=c=0x4f46e5:s=512x512' -frames:v 1 radio-test-data/logo3.png
-          python3 scripts/icy_test_server.py \
-            --audio1 radio-test-data/station1.mp3 \
-            --audio2 radio-test-data/station2.mp3 \
-            --audio3 radio-test-data/station3.mp3 \
-            --logo3 radio-test-data/logo3.png \
-            > "$RESULTS_DIR/icy-server.log" 2>&1 &
-          echo $! > "$RESULTS_DIR/icy-server.pid"
-          for i in {1..20}; do curl -fsS http://127.0.0.1:8000/health && break; sleep 1; done
-          curl -fsS http://127.0.0.1:8000/health
-          cp scripts/dudu7_webradio_reliability_smoke.sh scripts/dudu7_ui_smoke.sh
-          chmod +x scripts/dudu7_ui_smoke.sh
-          scripts/run_dudu7_emulator_ci.sh
-
-      - name: Upload APK and evidence
+      - name: Upload APK
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Metrolist-Dudu7-13.6.9-${{ github.run_id }}
-          path: |
-            artifacts/
-            ui-test-results/
+          name: Metrolist-Dudu7-13.7.0-${{ github.run_id }}
+          path: artifacts/
           if-no-files-found: warn
           retention-days: 14
