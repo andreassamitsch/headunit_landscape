@@ -9,11 +9,16 @@ EMULATOR_PORT="${EMULATOR_PORT:-5554}"
 BOOT_TIMEOUT_SECONDS="${BOOT_TIMEOUT_SECONDS:-600}"
 RESULTS_DIR="${RESULTS_DIR:-ui-test-results}"
 DATA_PARTITION_SIZE="${DATA_PARTITION_SIZE:-1536M}"
+DATA_PARTITION_MB="${DATA_PARTITION_SIZE%M}"
 AVD_HOME="${ANDROID_AVD_HOME:-$HOME/.android/avd}"
 
 SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
 if [[ -z "$SDK_ROOT" ]]; then
     echo "ANDROID_SDK_ROOT or ANDROID_HOME must be set" >&2
+    exit 2
+fi
+if ! [[ "$DATA_PARTITION_MB" =~ ^[0-9]+$ ]]; then
+    echo "DATA_PARTITION_SIZE must use megabytes, for example 1536M" >&2
     exit 2
 fi
 
@@ -77,6 +82,8 @@ cp "$CONFIG_PATH" "$RESULTS_DIR/avd-config.ini"
 
 {
     echo "ANDROID_AVD_HOME=$AVD_HOME"
+    echo "partition_size=$DATA_PARTITION_SIZE"
+    echo "partition_mb=$DATA_PARTITION_MB"
     df -h "$AVD_HOME" || true
 } > "$RESULTS_DIR/avd-storage.txt" 2>&1
 df -h > "$RESULTS_DIR/disk-before-emulator.txt" 2>&1 || true
@@ -95,6 +102,7 @@ echo "Starting emulator on port $EMULATOR_PORT with ${DATA_PARTITION_SIZE} data 
 "$SDK_ROOT/emulator/emulator" \
     -avd "$AVD_NAME" \
     -port "$EMULATOR_PORT" \
+    -partition-size "$DATA_PARTITION_MB" \
     -no-window \
     -no-snapshot \
     -noaudio \
