@@ -35,7 +35,7 @@ assert_artist_pixels_not_blank() {
     local image="$1"
     python3 - "$image" "$DUDU_WIDTH" "$DUDU_HEIGHT" <<'PY'
 from PIL import Image
-import numpy as np
+import math
 import sys
 
 path, width, height = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
@@ -46,12 +46,24 @@ left = width // 2 + 18
 top = 185
 right = width - 18
 bottom = height - 18
-crop = np.asarray(image.crop((left, top, right, bottom)), dtype=np.int16)
-brightness = crop.mean(axis=2)
-chroma = crop.max(axis=2) - crop.min(axis=2)
-dark_fraction = float((brightness < 235).mean())
-colored_fraction = float((chroma > 15).mean())
-std = float(crop.std())
+pixels = list(image.crop((left, top, right, bottom)).getdata())
+count = max(1, len(pixels))
+dark = 0
+colored = 0
+channel_values = []
+for red, green, blue in pixels:
+    brightness = (red + green + blue) / 3.0
+    if brightness < 235:
+        dark += 1
+    if max(red, green, blue) - min(red, green, blue) > 15:
+        colored += 1
+    channel_values.extend((red, green, blue))
+dark_fraction = dark / count
+colored_fraction = colored / count
+channel_count = max(1, len(channel_values))
+mean = sum(channel_values) / channel_count
+variance = sum((value - mean) ** 2 for value in channel_values) / channel_count
+std = math.sqrt(variance)
 print(
     f'Artist pixel evidence: dark={dark_fraction:.5f} '
     f'colored={colored_fraction:.5f} std={std:.3f}'
