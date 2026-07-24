@@ -13,6 +13,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -57,6 +58,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
@@ -139,6 +142,7 @@ import com.metrolist.music.utils.rememberPreference
 import com.metrolist.music.viewmodels.ArtistViewModel
 import com.valentinilk.shimmer.shimmer
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
@@ -171,6 +175,8 @@ fun ArtistScreen(
     val lazyListState = rememberLazyListState()
     val rightPaneScrollBridge = LocalRightPaneScrollBridge.current
     val rightPaneScrollOwner = remember { Any() }
+    val rightPaneScrollDeltas = remember { Channel<Float>(Channel.UNLIMITED) }
+    var artistRenderRevision by remember { mutableIntStateOf(0) }
     val rightPaneTapTargets = remember { mutableMapOf<String, Pair<Rect, () -> Unit>>() }
     val snackbarHostState = remember { SnackbarHostState() }
     var showLocal by rememberSaveable { mutableStateOf(false) }
@@ -201,14 +207,21 @@ fun ArtistScreen(
         showLocal = libraryArtist?.artist?.isLocal == true
     }
 
+    LaunchedEffect(embeddedInPlayer, lazyListState, rightPaneScrollDeltas) {
+        if (embeddedInPlayer) {
+            for (delta in rightPaneScrollDeltas) {
+                lazyListState.scrollBy(delta)
+            }
+        }
+    }
+
     DisposableEffect(embeddedInPlayer, rightPaneScrollBridge, lazyListState) {
         if (embeddedInPlayer && rightPaneScrollBridge != null) {
             rightPaneScrollBridge.register(
                 owner = rightPaneScrollOwner,
-                // The embedded LazyColumn must own its vertical scroll. Parent-driven
-                // scrollBy/dispatchRawDelta updated semantics but produced a fully white
-                // rendered pane on the Dudu7. The bridge remains registered for taps only.
-                handler = null,
+                handler = { delta ->
+                    rightPaneScrollDeltas.trySend(delta.coerceIn(-160f, 160f))
+                },
                 tapHandler = { positionInRoot ->
                     val target =
                         rightPaneTapTargets.values.lastOrNull { (bounds, _) ->
@@ -226,6 +239,18 @@ fun ArtistScreen(
                         false
                     }
                 },
+                scrollEndHandler = {
+                    // The Dudu7 could update LazyList semantics while leaving its old
+                    // graphics tree empty. Re-keying recreates only the LazyColumn draw
+                    // tree; the remembered LazyListState keeps the exact scroll position.
+                    artistRenderRevision += 1
+                    timber.log.Timber.tag("Dudu7ArtistRender").i(
+                        "Rebuilding artist list after drag revision=%d index=%d offset=%d",
+                        artistRenderRevision,
+                        lazyListState.firstVisibleItemIndex,
+                        lazyListState.firstVisibleItemScrollOffset,
+                    )
+                },
             )
         }
         onDispose {
@@ -242,11 +267,12 @@ fun ArtistScreen(
         modifier = Modifier.fillMaxSize(),
     ) {
         val embeddedPaneWidth = maxWidth
-        LazyColumn(
+        key(artistRenderRevision) {
+            LazyColumn(
             state = lazyListState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues(),
-            userScrollEnabled = true,
+            userScrollEnabled = !embeddedInPlayer,
         ) {
             if (artistPage == null && !showLocal) {
                 item(key = "shimmer") {

@@ -342,6 +342,7 @@ fun VehicleLandscapeLayout(
                                     currentPaneRoute,
                                     rightPaneScrollBridge.handler,
                                     rightPaneScrollBridge.tapHandler,
+                                    rightPaneScrollBridge.scrollEndHandler,
                                 ) {
                                     val scrollHandler = rightPaneScrollBridge.handler
                                     awaitPointerEventScope {
@@ -386,6 +387,7 @@ fun VehicleLandscapeLayout(
                                             }
                                             if (change.previousPressed) {
                                                 if (verticalDrag) {
+                                                    rightPaneScrollBridge.dispatchScrollEnd()
                                                     Timber.tag("Dudu7RightPaneScroll").i(
                                                         "Right-pane vertical drag ended route=%s",
                                                         currentPaneRoute,
