@@ -9,6 +9,7 @@ EMULATOR_PORT="${EMULATOR_PORT:-5554}"
 BOOT_TIMEOUT_SECONDS="${BOOT_TIMEOUT_SECONDS:-600}"
 RESULTS_DIR="${RESULTS_DIR:-ui-test-results}"
 DATA_PARTITION_SIZE="${DATA_PARTITION_SIZE:-1536M}"
+AVD_HOME="${ANDROID_AVD_HOME:-$HOME/.android/avd}"
 
 SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
 if [[ -z "$SDK_ROOT" ]]; then
@@ -18,6 +19,7 @@ fi
 
 export ANDROID_SDK_ROOT="$SDK_ROOT"
 export ANDROID_HOME="$SDK_ROOT"
+export ANDROID_AVD_HOME="$AVD_HOME"
 export PATH="$SDK_ROOT/platform-tools:$SDK_ROOT/emulator:$SDK_ROOT/cmdline-tools/latest/bin:$PATH"
 
 mkdir -p "$RESULTS_DIR"
@@ -40,17 +42,17 @@ if [[ "$sdk_status" -ne 0 ]]; then
 fi
 
 df -h > "$RESULTS_DIR/disk-after-sdk.txt" 2>&1 || true
-rm -rf "$HOME/.android/avd/${AVD_NAME}.avd" "$HOME/.android/avd/${AVD_NAME}.ini"
-mkdir -p "$HOME/.android/avd"
+rm -rf "$AVD_HOME/${AVD_NAME}.avd" "$AVD_HOME/${AVD_NAME}.ini"
+mkdir -p "$AVD_HOME"
 
-echo "Creating AVD $AVD_NAME"
+echo "Creating AVD $AVD_NAME in $AVD_HOME"
 echo no | avdmanager create avd \
     --force \
     --name "$AVD_NAME" \
     --package "$SYSTEM_IMAGE" \
     2>&1 | tee "$AVD_LOG"
 
-CONFIG_PATH="$HOME/.android/avd/${AVD_NAME}.avd/config.ini"
+CONFIG_PATH="$AVD_HOME/${AVD_NAME}.avd/config.ini"
 python3 - "$CONFIG_PATH" "$DATA_PARTITION_SIZE" <<'PY'
 from pathlib import Path
 import sys
@@ -73,6 +75,10 @@ path.write_text("\n".join(filtered) + "\n", encoding="utf-8")
 PY
 cp "$CONFIG_PATH" "$RESULTS_DIR/avd-config.ini"
 
+{
+    echo "ANDROID_AVD_HOME=$AVD_HOME"
+    df -h "$AVD_HOME" || true
+} > "$RESULTS_DIR/avd-storage.txt" 2>&1
 df -h > "$RESULTS_DIR/disk-before-emulator.txt" 2>&1 || true
 
 cleanup() {
@@ -85,7 +91,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "Starting emulator on port $EMULATOR_PORT with ${DATA_PARTITION_SIZE} data partition"
+echo "Starting emulator on port $EMULATOR_PORT with ${DATA_PARTITION_SIZE} data partition from $AVD_HOME"
 "$SDK_ROOT/emulator/emulator" \
     -avd "$AVD_NAME" \
     -port "$EMULATOR_PORT" \
