@@ -14,16 +14,15 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
-      - name: Split APK into transport-safe text parts
+      - name: Export APK as wrapped Base64 text
         run: |
           test -f dist/FYT-DUDU7-Radio-Test-0.1.0.apk
           rm -rf dist/apk_parts
-          mkdir -p dist/apk_parts
-          base64 -w0 dist/FYT-DUDU7-Radio-Test-0.1.0.apk > /tmp/fyt-radio.apk.b64
-          split -b 6000 -d -a 2 /tmp/fyt-radio.apk.b64 dist/apk_parts/part-
-          sha256sum dist/FYT-DUDU7-Radio-Test-0.1.0.apk > dist/apk_parts/original.sha256
+          base64 -w 76 dist/FYT-DUDU7-Radio-Test-0.1.0.apk > dist/FYT-DUDU7-Radio-Test-0.1.0.apk.b64
+          sha256sum dist/FYT-DUDU7-Radio-Test-0.1.0.apk > dist/FYT-DUDU7-Radio-Test-0.1.0.sha256
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f dist/apk_parts
-          git commit -m "artifact: export APK text parts [skip ci]"
+          git add -f dist/FYT-DUDU7-Radio-Test-0.1.0.apk.b64 dist/FYT-DUDU7-Radio-Test-0.1.0.sha256
+          git rm -r --cached dist/apk_parts 2>/dev/null || true
+          git commit -m "artifact: export wrapped APK Base64 [skip ci]"
           git push origin HEAD:agent/fyt-radio-test-apk
