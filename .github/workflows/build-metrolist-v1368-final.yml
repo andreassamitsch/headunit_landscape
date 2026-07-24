@@ -22,6 +22,7 @@ jobs:
       API_LEVEL: '33'
       SYSTEM_TARGET: google_apis
       DATA_PARTITION_SIZE: 1536M
+      ANDROID_AVD_HOME: /mnt/android-avd
       DUDU_WIDTH: '1280'
       DUDU_HEIGHT: '720'
       DUDU_DENSITY: '200'
@@ -61,6 +62,7 @@ jobs:
             scripts/apply_v1372_artist_scroll_test_mode.py \
             scripts/apply_v1372_top_songs_navigation_fix.py
           bash -n scripts/dudu7_v1371_regression_smoke.sh
+          bash -n scripts/run_dudu7_emulator_ci.sh
           git diff --check
           grep -q 'versionCode = 160' app/build.gradle.kts
           grep -q 'versionName = "13.7.1"' app/build.gradle.kts
@@ -75,14 +77,14 @@ jobs:
           grep -q 'loadArtistSongFallback' app/src/main/kotlin/com/metrolist/music/viewmodels/ArtistItemsViewModel.kt
           grep -q 'find_clickable_coords' scripts/dudu7_v1371_regression_smoke.sh
           grep -q 'assert_artist_items_detail' scripts/dudu7_v1371_regression_smoke.sh
-          grep -q 'ARTIST_SCROLL_ONLY' scripts/dudu7_v1371_regression_smoke.sh
+          grep -q 'ANDROID_AVD_HOME' scripts/run_dudu7_emulator_ci.sh
           if grep -q 'var accumulatedY = 0f' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt; then
             echo 'Old screen-local drag handler is still present' >&2
             exit 1
           fi
           git add -A
           if ! git diff --cached --quiet; then
-            git commit -m 'fix(dudu7): make Top Songs truly navigable [skip ci]'
+            git commit -m 'fix(dudu7): finalize Top Songs and emulator storage [skip ci]'
             git pull --rebase origin main
             git push
           fi
@@ -145,13 +147,17 @@ jobs:
           find . -type d -name build -prune -exec rm -rf {} +
           rm -rf "$HOME/.gradle/caches/transforms-"* || true
           test -f "$APK_PATH"
+          sudo rm -rf "$ANDROID_AVD_HOME"
+          sudo mkdir -p "$ANDROID_AVD_HOME"
+          sudo chown -R "$USER":"$USER" "$ANDROID_AVD_HOME"
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
           sudo chmod 666 /dev/kvm
+          ls -ld "$ANDROID_AVD_HOME"
           ls -l /dev/kvm
-          df -h
+          df -h / "$ANDROID_AVD_HOME"
 
       - name: Run deterministic artist scroll and Top Songs regression
         run: |
