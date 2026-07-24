@@ -274,7 +274,13 @@ dump_ui "$RESULTS_DIR/artist-before-scroll.xml"
 adb shell input swipe $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*86/100)) $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*30/100)) 700
 sleep 4
 dump_ui "$RESULTS_DIR/artist-after-scroll.xml"
-assert_scroll_moved "$RESULTS_DIR/artist-before-scroll.xml" "$RESULTS_DIR/artist-after-scroll.xml"
+adb logcat -d -v threadtime > "$RESULTS_DIR/artist-scroll-log.txt" || true
+if ! assert_scroll_moved "$RESULTS_DIR/artist-before-scroll.xml" "$RESULTS_DIR/artist-after-scroll.xml"; then
+    grep -E "Dudu7ArtistScroll|Embedded artist drag" "$RESULTS_DIR/artist-scroll-log.txt" || true
+    capture "artist-scroll-failure"
+    exit 1
+fi
+grep -q "Embedded artist drag ended" "$RESULTS_DIR/artist-scroll-log.txt"
 capture "artist-after-real-scroll"
 
 # Exercise a real section navigation when its title is available.
