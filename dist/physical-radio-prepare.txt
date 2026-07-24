@@ -1,5 +1,7 @@
 === architecture ===
-Fehlender Erweiterungspunkt in app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt: activeHistoryMonitorJob
+Fehlende Erweiterungspunkte:
+- app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt: activeHistoryMonitorJob
+- app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt: Recorded active history item
 architecture_status=1
 
 === diff check ===
