@@ -41,13 +41,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -74,11 +74,11 @@ import com.metrolist.music.ui.screens.radio.PhysicalRadioScreen
 import com.metrolist.music.ui.screens.radio.WebRadioScreen
 import com.metrolist.music.utils.SearchRoutes
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import java.text.Normalizer
 import java.util.Locale
-import timber.log.Timber
-import kotlin.math.max
 import kotlin.math.abs
+import kotlin.math.max
 
 private const val VEHICLE_QUEUE_ROUTE = "vehicle_queue"
 private const val VEHICLE_WEBRADIO_ROUTE = "vehicle_webradio"
@@ -89,13 +89,12 @@ private enum class VehicleRightPaneTab(
     val icon: Int,
     val route: String,
 ) {
-    QUEUE("Warteschlange", R.drawable.queue_music, VEHICLE_QUEUE_ROUTE),
     LIBRARY("Bibliothek", R.drawable.library_music_outlined, Screens.Library.route),
+    WEBRADIO("WebRadio", R.drawable.radio, VEHICLE_WEBRADIO_ROUTE),
+    PHYSICAL_RADIO("FM", R.drawable.radio, VEHICLE_PHYSICAL_RADIO_ROUTE),
     SEARCH("Suche", R.drawable.search, Screens.Search.route),
     HISTORY("Hörverlauf", R.drawable.history, "history"),
-    PHYSICAL_RADIO("FM", R.drawable.radio, VEHICLE_PHYSICAL_RADIO_ROUTE),
-    WEBRADIO("WebRadio", R.drawable.radio, VEHICLE_WEBRADIO_ROUTE),
-    HOME("Startseite", R.drawable.home_outlined, Screens.Home.route),
+    QUEUE("Warteschlange", R.drawable.queue_music, VEHICLE_QUEUE_ROUTE),
 }
 
 private fun normalizeArtistName(value: String): String =
