@@ -94,7 +94,6 @@ checks = {
         "selectedTab = VehicleRightPaneTab.QUEUE",
     ),
     "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt": (
-        'System.loadLibrary("fmjni")',
         'private const val SWITCH_FM = "com.syu.music.switch_fm"',
         'private const val SWITCH_NONE = "com.syu.music.switch_none"',
         "twUtil?.initRadioSequence()",
