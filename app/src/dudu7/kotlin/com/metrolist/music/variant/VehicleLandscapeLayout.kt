@@ -383,7 +383,9 @@ fun VehicleLandscapeLayout(
                                         var accumulatedY = 0f
                                         var verticalDrag = false
                                         while (true) {
-                                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                                            // Child controls get Initial/Main first. The bridge only
+                                            // handles scrolling or taps that remained unconsumed.
+                                            val event = awaitPointerEvent(PointerEventPass.Final)
                                             val change = event.changes.firstOrNull() ?: continue
                                             if (change.pressed && !change.previousPressed) {
                                                 downPosition = change.position
@@ -410,14 +412,19 @@ fun VehicleLandscapeLayout(
                                                         currentPaneRoute,
                                                     )
                                                 }
-                                                if (verticalDrag && scrollHandler != null) {
+                                                if (verticalDrag && scrollHandler != null && !change.isConsumed) {
                                                     change.consume()
                                                     scrollHandler(-delta.y)
                                                 }
                                                 continue
                                             }
                                             if (change.previousPressed) {
-                                                if (verticalDrag) {
+                                                if (!verticalDrag && change.isConsumed) {
+                                                    Timber.tag("Dudu7RightPaneTap").d(
+                                                        "Right-pane child handled tap route=%s",
+                                                        currentPaneRoute,
+                                                    )
+                                                } else if (verticalDrag) {
                                                     Timber.tag("Dudu7RightPaneScroll").i(
                                                         "Right-pane vertical drag ended route=%s",
                                                         currentPaneRoute,
