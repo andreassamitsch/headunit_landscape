@@ -50,20 +50,24 @@ jobs:
           git pull --rebase origin main
           git push
 
-      - name: Apply embedded artist scroll fix
+      - name: Apply final artist scroll arbitration
         run: |
           set -euxo pipefail
           python3 scripts/apply_v1371_final_scroll_fix.py
           python3 scripts/apply_v1371_embedded_artist_drag_fix.py
+          python3 scripts/apply_v1371_artist_drag_arbitration_fix.py
           python3 -m py_compile \
             scripts/apply_v1371_final_scroll_fix.py \
             scripts/apply_v1371_embedded_artist_drag_fix.py \
+            scripts/apply_v1371_artist_drag_arbitration_fix.py \
             scripts/apply_v1371_regression_fixes.py
           bash -n scripts/dudu7_v1371_regression_smoke.sh
           git diff --check
           grep -q 'isExpandable = !VehicleVariantConfig.isDudu7' app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt
           grep -q 'detectVerticalDragGestures' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
           grep -q 'lazyListState.dispatchRawDelta(-dragAmount)' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'userScrollEnabled = !embeddedInPlayer' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'Embedded artist drag ended' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
           if grep -A5 'weight(1f - safePlayerWeight)' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt | grep -q 'nestedScroll(state.preUpPostDownNestedScrollConnection)'; then
             echo 'Right pane still contains obsolete sheet nested-scroll bridge' >&2
             exit 1
@@ -72,7 +76,7 @@ jobs:
           grep -q 'assert_scroll_moved' scripts/dudu7_v1371_regression_smoke.sh
           git add -A
           if ! git diff --cached --quiet; then
-            git commit -m 'fix(dudu7): make embedded artist vertically draggable [skip ci]'
+            git commit -m 'fix(dudu7): separate embedded artist drag from lazy scrolling [skip ci]'
             git pull --rebase origin main
             git push
           fi
