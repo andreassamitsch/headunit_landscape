@@ -75,7 +75,10 @@ outer_new = '''    BoxWithConstraints(
                 ),
     ) {'''
 
-if "awaitPointerEvent(PointerEventPass.Initial)" not in text:
+# The file already contains PointerEventPass.Initial for the embedded Radio and
+# Shuffle buttons. Detect this specific scroll handler by its private accumulator
+# instead of using the generic pointer-pass expression.
+if "var accumulatedY = 0f" not in text:
     outer_old = '''    BoxWithConstraints(
         modifier = Modifier.fillMaxSize(),
     ) {'''
