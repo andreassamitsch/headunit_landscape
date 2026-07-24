@@ -22,7 +22,7 @@ class RightPaneScrollBridge {
 
     fun register(
         owner: Any,
-        handler: (Float) -> Unit,
+        handler: ((Float) -> Unit)?,
         tapHandler: ((Offset) -> Boolean)? = null,
     ) {
         this.owner = owner
