@@ -53,7 +53,10 @@ jobs:
         run: |
           set -euxo pipefail
           python3 scripts/apply_v1376_artist_render_rebuild.py
-          python3 -m py_compile scripts/apply_v1376_artist_render_rebuild.py
+          python3 scripts/apply_v1376b_artist_render_brace_fix.py
+          python3 -m py_compile \
+            scripts/apply_v1376_artist_render_rebuild.py \
+            scripts/apply_v1376b_artist_render_brace_fix.py
           bash -n scripts/dudu7_v1371_regression_smoke.sh
           bash -n scripts/run_dudu7_emulator_ci.sh
           git diff --check
