@@ -20,7 +20,7 @@ jobs:
           rm -rf dist/apk_parts
           mkdir -p dist/apk_parts
           base64 -w0 dist/FYT-DUDU7-Radio-Test-0.1.0.apk > /tmp/fyt-radio.apk.b64
-          split -b 20000 -d -a 2 /tmp/fyt-radio.apk.b64 dist/apk_parts/part-
+          split -b 6000 -d -a 2 /tmp/fyt-radio.apk.b64 dist/apk_parts/part-
           sha256sum dist/FYT-DUDU7-Radio-Test-0.1.0.apk > dist/apk_parts/original.sha256
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
