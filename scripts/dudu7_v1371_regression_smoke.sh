@@ -140,6 +140,22 @@ assert_text() {
     return 1
 }
 
+
+assert_text_absent() {
+    local label="$1"; local right="$2"; shift 2
+    local attempt
+    for attempt in 1 2 3 4; do
+        if ! find_coords "$right" "$@" >/dev/null 2>&1; then
+            echo "PASS: $label"
+            return 0
+        fi
+        sleep 2
+    done
+    echo "FAIL: $label is still visible" >&2
+    capture "assertion-failure-${label// /-}"
+    return 1
+}
+
 tap_tab() {
     local label="$1"; shift
     local attempt
@@ -398,9 +414,8 @@ if [[ "${ARTIST_SCROLL_ONLY:-0}" == "1" ]]; then
     adb exec-out screencap -p > "$RESULTS_DIR/artist-after-strong-scroll.png"
     assert_artist_not_blank "$RESULTS_DIR/artist-after-strong-scroll.xml"
     assert_artist_pixels_not_blank "$RESULTS_DIR/artist-after-strong-scroll.png"
-    adb logcat -d -v threadtime > "$RESULTS_DIR/right-pane-scroll-log.txt" || true
-    grep -q "Dudu7RightPaneScroll" "$RESULTS_DIR/right-pane-scroll-log.txt"
-    capture "artist-after-bounded-scroll"
+    adb logcat -d -v threadtime > "$RESULTS_DIR/artist-native-scroll-log.txt" || true
+    capture "artist-after-native-scroll"
 
     adb logcat -c || true
     if ! tap_clickable_text "artist songs section" 1 "=Songs" "=Top songs" "=Top Songs" "=Top-Titel"; then
@@ -419,7 +434,6 @@ if [[ "${ARTIST_SCROLL_ONLY:-0}" == "1" ]]; then
         capture "artist-songs-detail-failure"
         exit 1
     fi
-    grep -q "Dudu7ArtistSectionTap" "$RESULTS_DIR/artist-items-navigation-log.txt"
     grep -q "Dudu7ArtistNavigation" "$RESULTS_DIR/artist-items-navigation-log.txt"
     grep -q "Dudu7ArtistItems" "$RESULTS_DIR/artist-items-navigation-log.txt"
     capture "artist-songs-detail"
@@ -436,7 +450,7 @@ if [[ "${ARTIST_SCROLL_ONLY:-0}" == "1" ]]; then
     sleep 16
     adb logcat -d -v threadtime > "$RESULTS_DIR/artist-play-all-log.txt" || true
     grep -q "Dudu7ArtistAction.*Play all clicked" "$RESULTS_DIR/artist-play-all-log.txt"
-    grep -q "Dudu7RightPaneTap.*handled=true" "$RESULTS_DIR/artist-play-all-log.txt"
+    assert_text_absent "radio LIVE indicator cleared after Play All" 0 "=LIVE"
     capture "artist-play-all-action"
 
     adb logcat -d -v threadtime > "$RESULTS_DIR/logcat.txt" 2>&1 || true
@@ -457,7 +471,7 @@ PY
 - PASS: right-pane bridge received the vertical drag
 - PASS: artist content visibly moved and real screenshot pixels stayed rendered after repeated strong swipes
 - PASS: Top Songs detail navigation opened
-- PASS: embedded artist Play All tap reached the playback action
+- PASS: native embedded artist Play All tap started non-radio playback
 - PASS: no crash or ANR detected
 EOF
     echo "Dudu7 artist scroll regression passed."

@@ -272,7 +272,7 @@ fun ArtistScreen(
             state = lazyListState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues(),
-            userScrollEnabled = !embeddedInPlayer,
+            userScrollEnabled = true,
         ) {
             if (artistPage == null && !showLocal) {
                 item(key = "shimmer") {

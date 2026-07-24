@@ -344,6 +344,17 @@ fun VehicleLandscapeLayout(
                                     rightPaneScrollBridge.tapHandler,
                                     rightPaneScrollBridge.scrollEndHandler,
                                 ) {
+                                    // Artist screens must receive their pointer stream directly.
+                                    // Merely observing the stream here on PointerEventPass.Initial
+                                    // prevented the embedded LazyColumn and its buttons from handling
+                                    // native gestures reliably on the Dudu7.
+                                    if (currentPaneRoute?.startsWith("artist/") == true) {
+                                        Timber.tag("Dudu7ArtistInput").i(
+                                            "Using native artist pointer handling route=%s",
+                                            currentPaneRoute,
+                                        )
+                                        return@pointerInput
+                                    }
                                     val scrollHandler = rightPaneScrollBridge.handler
                                     awaitPointerEventScope {
                                         var downPosition: Offset? = null
