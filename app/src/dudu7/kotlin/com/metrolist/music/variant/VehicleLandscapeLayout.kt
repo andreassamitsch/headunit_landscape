@@ -338,24 +338,23 @@ fun VehicleLandscapeLayout(
                                 .onGloballyPositioned { coordinates ->
                                     rightPaneOriginInRoot = coordinates.positionInRoot()
                                 }
-                                .pointerInput(
-                                    currentPaneRoute,
-                                    rightPaneScrollBridge.handler,
-                                    rightPaneScrollBridge.tapHandler,
-                                    rightPaneScrollBridge.scrollEndHandler,
-                                ) {
-                                    // Artist screens must receive their pointer stream directly.
-                                    // Merely observing the stream here on PointerEventPass.Initial
-                                    // prevented the embedded LazyColumn and its buttons from handling
-                                    // native gestures reliably on the Dudu7.
+                                .then(
                                     if (currentPaneRoute?.startsWith("artist/") == true) {
-                                        Timber.tag("Dudu7ArtistInput").i(
-                                            "Using native artist pointer handling route=%s",
+                                        // Do not attach the Dudu7 pane's custom pointer modifier at all.
+                                        // A pointerInput modifier whose coroutine returns immediately still
+                                        // participates in hit testing and prevented the original ArtistScreen
+                                        // LazyColumn/FABs from receiving the complete gesture stream.
+                                        // The player's original nested-scroll connection is on the left player
+                                        // column and remains unchanged.
+                                        Modifier
+                                    } else {
+                                        Modifier.pointerInput(
                                             currentPaneRoute,
-                                        )
-                                        return@pointerInput
-                                    }
-                                    val scrollHandler = rightPaneScrollBridge.handler
+                                            rightPaneScrollBridge.handler,
+                                            rightPaneScrollBridge.tapHandler,
+                                            rightPaneScrollBridge.scrollEndHandler,
+                                        ) {
+                                            val scrollHandler = rightPaneScrollBridge.handler
                                     awaitPointerEventScope {
                                         var downPosition: Offset? = null
                                         var lastPosition: Offset? = null
@@ -428,8 +427,10 @@ fun VehicleLandscapeLayout(
                                                 verticalDrag = false
                                             }
                                         }
-                                    }
-                                },
+                                            }
+                                        }
+                                    },
+                                )
                     ) {
                         if (activity != null) {
                             NavHost(
