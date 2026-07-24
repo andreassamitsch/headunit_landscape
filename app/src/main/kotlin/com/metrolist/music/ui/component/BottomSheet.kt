@@ -13,8 +13,8 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.DraggableState
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.metrolist.music.constants.NavigationBarAnimationSpec
+import com.metrolist.music.variant.VehicleVariantConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -67,60 +68,70 @@ fun BottomSheet(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val density = LocalDensity.current
-    
+    // The Dudu7 queue sheet is intentionally locked and has only a 1 dp
+    // collapsed/dismissed gap. The outer player has a real collapsed mini-player
+    // range and must remain swipeable so the original MetroList UI and settings
+    // can still be reached.
+    val effectiveExpandable =
+        isExpandable ||
+            (
+                VehicleVariantConfig.isDudu7 &&
+                    state.collapsedBound - state.dismissedBound > 2.dp
+            )
+
     Box(
-        modifier = modifier
-            .graphicsLayer {
-                // background fades during about 10%-61% progress
-                alpha = (1.4f * (state.progress.coerceAtLeast(0.1f) - 0.1f).pow(0.5f)).coerceIn(0f, 1f)
-            }
-            .fillMaxSize(),
-        content = background
+        modifier =
+            modifier
+                .graphicsLayer {
+                    // background fades during about 10%-61% progress
+                    alpha = (1.4f * (state.progress.coerceAtLeast(0.1f) - 0.1f).pow(0.5f)).coerceIn(0f, 1f)
+                }.fillMaxSize(),
+        content = background,
     )
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            // Use graphicsLayer for offset to ensure hardware acceleration and 120Hz support
-            .graphicsLayer {
-                val y = (state.expandedBound - state.value)
-                    .toPx()
-                    .coerceAtLeast(0f)
-                translationY = if (isExpandable) y else 0f
-            }
-            .pointerInput(state, isExpandable) {
-                if (!isExpandable) return@pointerInput
-                val velocityTracker = VelocityTracker()
+        modifier =
+            modifier
+                .fillMaxSize()
+                // Use graphicsLayer for offset to ensure hardware acceleration and 120Hz support
+                .graphicsLayer {
+                    val y =
+                        (state.expandedBound - state.value)
+                            .toPx()
+                            .coerceAtLeast(0f)
+                    translationY = if (effectiveExpandable) y else 0f
+                }.pointerInput(state, effectiveExpandable) {
+                    if (!effectiveExpandable) return@pointerInput
+                    val velocityTracker = VelocityTracker()
 
-                detectVerticalDragGestures(
-                    onVerticalDrag = { change, dragAmount ->
-                        velocityTracker.addPointerInputChange(change)
-                        state.dispatchRawDelta(dragAmount)
-                    },
-                    onDragCancel = {
-                        velocityTracker.resetTracking()
-                        state.snapTo(state.collapsedBound)
-                    },
-                    onDragEnd = {
-                        val velocity = -velocityTracker.calculateVelocity().y
-                        velocityTracker.resetTracking()
-                        state.performFling(velocity, onDismiss)
-                    }
-                )
-            }
-            .graphicsLayer {
-                val cornerRadius = if (isExpandable && !state.isExpanded) 16.dp.toPx() else 0f
-                shape = RoundedCornerShape(topStart = cornerRadius, topEnd = cornerRadius)
-                clip = true
-            }
+                    detectVerticalDragGestures(
+                        onVerticalDrag = { change, dragAmount ->
+                            velocityTracker.addPointerInputChange(change)
+                            state.dispatchRawDelta(dragAmount)
+                        },
+                        onDragCancel = {
+                            velocityTracker.resetTracking()
+                            state.snapTo(state.collapsedBound)
+                        },
+                        onDragEnd = {
+                            val velocity = -velocityTracker.calculateVelocity().y
+                            velocityTracker.resetTracking()
+                            state.performFling(velocity, onDismiss)
+                        },
+                    )
+                }.graphicsLayer {
+                    val cornerRadius = if (effectiveExpandable && !state.isExpanded) 16.dp.toPx() else 0f
+                    shape = RoundedCornerShape(topStart = cornerRadius, topEnd = cornerRadius)
+                    clip = true
+                },
     ) {
-        if (isExpandable && !state.isCollapsed && !state.isDismissed) {
+        if (effectiveExpandable && !state.isCollapsed && !state.isDismissed) {
             PredictiveBackHandler { progress ->
                 val initialValue = state.value
                 try {
                     val range = initialValue - state.collapsedBound
                     progress.collect { event ->
                         state.snapToAndWait(
-                            initialValue - range * event.progress.coerceIn(0f, 1f)
+                            initialValue - range * event.progress.coerceIn(0f, 1f),
                         )
                     }
                     state.collapseSoft()
@@ -131,31 +142,31 @@ fun BottomSheet(
         }
 
         // main content
-        if (!isExpandable || !state.isCollapsed) {
+        if (!effectiveExpandable || !state.isCollapsed) {
             BoxWithConstraints(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        alpha = if (isExpandable) ((state.progress - 0.15f) * 4).coerceIn(0f, 1f) else 1f
-                    },
-                content = content
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            alpha = if (effectiveExpandable) ((state.progress - 0.15f) * 4).coerceIn(0f, 1f) else 1f
+                        },
+                content = content,
             )
         }
 
-        if (isExpandable && !state.isExpanded && (onDismiss == null || !state.isDismissed)) {
+        if (effectiveExpandable && !state.isExpanded && (onDismiss == null || !state.isDismissed)) {
             Box(
                 modifier =
-                Modifier
-                    .graphicsLayer {
-                        alpha = 1f - (state.progress * 4).coerceAtMost(1f)
-                    }.clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { if (isExpandable) state.expandSoft() },
-                    )
-                    .focusable(false)
-                    .fillMaxWidth()
-                    .height(state.collapsedBound),
+                    Modifier
+                        .graphicsLayer {
+                            alpha = 1f - (state.progress * 4).coerceAtMost(1f)
+                        }.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { if (effectiveExpandable) state.expandSoft() },
+                        ).focusable(false)
+                        .fillMaxWidth()
+                        .height(state.collapsedBound),
                 content = collapsedContent,
             )
         }
@@ -230,7 +241,7 @@ class BottomSheetState(
             animatable.animateTo(animatable.lowerBound!!)
         }
     }
-    
+
     suspend fun dismissAndWait() {
         onAnchorChanged(dismissedAnchor)
         animatable.animateTo(animatable.lowerBound!!)
@@ -280,55 +291,56 @@ class BottomSheetState(
     }
 
     val preUpPostDownNestedScrollConnection
-        get() = object : NestedScrollConnection {
-            var isTopReached = false
+        get() =
+            object : NestedScrollConnection {
+                var isTopReached = false
 
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (isExpanded && available.y < 0) {
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    if (isExpanded && available.y < 0) {
+                        isTopReached = false
+                    }
+
+                    return if (isTopReached && available.y < 0 && source == NestedScrollSource.UserInput) {
+                        dispatchRawDelta(available.y)
+                        available
+                    } else {
+                        Offset.Zero
+                    }
+                }
+
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    if (!isTopReached) {
+                        isTopReached = consumed.y == 0f && available.y > 0
+                    }
+
+                    return if (isTopReached && source == NestedScrollSource.UserInput) {
+                        dispatchRawDelta(available.y)
+                        available
+                    } else {
+                        Offset.Zero
+                    }
+                }
+
+                override suspend fun onPreFling(available: Velocity): Velocity {
+                    return if (isTopReached) {
+                        val velocity = -available.y
+                        performFling(velocity, null)
+
+                        available
+                    } else {
+                        Velocity.Zero
+                    }
+                }
+
+                override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
                     isTopReached = false
-                }
-
-                return if (isTopReached && available.y < 0 && source == NestedScrollSource.UserInput) {
-                    dispatchRawDelta(available.y)
-                    available
-                } else {
-                    Offset.Zero
+                    return Velocity.Zero
                 }
             }
-
-            override fun onPostScroll(
-                consumed: Offset,
-                available: Offset,
-                source: NestedScrollSource,
-            ): Offset {
-                if (!isTopReached) {
-                    isTopReached = consumed.y == 0f && available.y > 0
-                }
-
-                return if (isTopReached && source == NestedScrollSource.UserInput) {
-                    dispatchRawDelta(available.y)
-                    available
-                } else {
-                    Offset.Zero
-                }
-            }
-
-            override suspend fun onPreFling(available: Velocity): Velocity {
-                return if (isTopReached) {
-                    val velocity = -available.y
-                    performFling(velocity, null)
-
-                    available
-                } else {
-                    Velocity.Zero
-                }
-            }
-
-            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                isTopReached = false
-                return Velocity.Zero
-            }
-        }
 }
 
 const val expandedAnchor = 2
@@ -348,33 +360,44 @@ fun rememberBottomSheetState(
     var previousAnchor by rememberSaveable {
         mutableIntStateOf(initialAnchor)
     }
-    val animatable = remember {
-        Animatable(0.dp, Dp.VectorConverter)
-    }
+    val animatable =
+        remember {
+            Animatable(0.dp, Dp.VectorConverter)
+        }
 
     return remember(dismissedBound, expandedBound, collapsedBound, coroutineScope) {
-        val initialValue = when (previousAnchor) {
-            expandedAnchor -> expandedBound
-            collapsedAnchor -> collapsedBound
-            dismissedAnchor -> dismissedBound
-            else -> error("Unknown BottomSheet anchor")
-        }
-
-        animatable.updateBounds(dismissedBound.coerceAtMost(expandedBound), expandedBound)
-        coroutineScope.launch {
-            animatable.animateTo(initialValue, NavigationBarAnimationSpec)
-        }
-
-        BottomSheetState(
-            draggableState = DraggableState { delta ->
-                coroutineScope.launch {
-                    animatable.snapTo(animatable.value - with(density) { delta.toDp() })
+        val initialValue =
+            when (previousAnchor) {
+                expandedAnchor -> expandedBound
+                collapsedAnchor -> collapsedBound
+                dismissedAnchor -> dismissedBound
+                else -> error("Unknown BottomSheet anchor")
+            }
+        val animatable =
+            animatable.apply {
+                updateBounds(lowerBound = dismissedBound, upperBound = expandedBound)
+                try {
+                    snapTo(initialValue)
+                } catch (_: Exception) {
+                    // ignored during initial composition
                 }
-            },
-            onAnchorChanged = { previousAnchor = it },
-            coroutineScope = coroutineScope,
-            animatable = animatable,
-            collapsedBound = collapsedBound
-        )
+            }
+        val state =
+            BottomSheetState(
+                draggableState =
+                    DraggableState { delta ->
+                        coroutineScope.launch {
+                            animatable.snapTo(
+                                (animatable.value - with(density) { delta.toDp() })
+                                    .coerceIn(dismissedBound, expandedBound),
+                            )
+                        }
+                    },
+                coroutineScope = coroutineScope,
+                animatable = animatable,
+                onAnchorChanged = { previousAnchor = it },
+                collapsedBound = collapsedBound,
+            )
+        state
     }
 }
