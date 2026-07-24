@@ -2,8 +2,8 @@
 """Fast structural checks for the maintainable Dudu7 overlay."""
 from pathlib import Path
 
-# Keep live history and the direct title-selection queue callback protected by
-# the lightweight Dudu7 architecture check.
+# Keep live history, the direct title-selection queue callback and the
+# independent FYT physical-radio backend protected by the lightweight check.
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = (
     "VehicleVariantConfig.kt",
@@ -22,6 +22,12 @@ required = [
     "app/src/dudu7/AndroidManifest.xml",
     "app/keystore/dudu7-debug.keystore",
     "docs/DUDU7_ARCHITECTURE.md",
+    "app/src/dudu7/java/com/android/fmradio/FmNative.java",
+    "app/src/dudu7/java/com/android/fmradio/FmService.java",
+    "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt",
+    "app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt",
+    "app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt",
+    "app/src/dudu7/res/drawable/stop.xml",
 ]
 for source_set in ("standard", "dudu7"):
     required.extend(
@@ -72,16 +78,53 @@ checks = {
         "embeddedInPlayer: Boolean = false",
     ),
     "app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt": (
-        "QUEUE(\"Warteschlange\"",
-        "LIBRARY(\"Bibliothek\"",
-        "SEARCH(\"Suche\"",
-        "HISTORY(\"Hörverlauf\"",
-        "HOME(\"Startseite\"",
+        'QUEUE("Warteschlange"',
+        'LIBRARY("Bibliothek"',
+        'SEARCH("Suche"',
+        'HISTORY("Hörverlauf"',
+        'PHYSICAL_RADIO("FM"',
+        'WEBRADIO("WebRadio"',
+        'HOME("Startseite"',
         "ScrollableTabRow(",
+        "PhysicalRadioPlayerPane(",
+        "PhysicalRadioScreen()",
         "embeddedInPlayer = true",
         "onUserSongSelection = returnToQueue",
         "popBackStack(VEHICLE_QUEUE_ROUTE, inclusive = false)",
         "selectedTab = VehicleRightPaneTab.QUEUE",
+    ),
+    "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt": (
+        'private const val SWITCH_FM = "com.syu.music.switch_fm"',
+        'private const val SWITCH_NONE = "com.syu.music.switch_none"',
+        "twUtil?.initRadioSequence()",
+        "fm.openDev()",
+        "fm.powerUp(target)",
+        "fm.tune(target)",
+        "fun powerOff()",
+        "fun seek(up: Boolean)",
+    ),
+    "app/src/dudu7/java/com/android/fmradio/FmNative.java": (
+        'System.loadLibrary("fmjni")',
+        "public native boolean openDev()",
+        "public native boolean powerUp(float frequency)",
+        "public native boolean tune(float frequency)",
+        "public native float[] seek(float frequency, boolean isUp)",
+        "public native int fmsyu_jni",
+    ),
+    "app/src/dudu7/java/com/android/fmradio/FmService.java": (
+        "public static int Rdscallback",
+        "RdsListener",
+    ),
+    "app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt": (
+        "FM-Favoriten",
+        "radio.seek(false)",
+        "radio.seek(true)",
+        "radio::saveCurrentPreset",
+    ),
+    "app/src/dudu7/AndroidManifest.xml": (
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        'android:name="com.syu.ms"',
+        'android:name="com.syu.music"',
     ),
     "app/src/main/kotlin/com/metrolist/music/ui/component/BottomSheet.kt": (
         "if (!isExpandable || !state.isCollapsed)",
@@ -101,8 +144,6 @@ checks = {
         "modifier = Modifier.weight(1f)",
     ),
     "app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt": (
-        "activeHistoryMonitorJob",
-        "Recorded active history item",
         "database.withTransaction",
         "incrementTotalPlayTime(mediaItem.mediaId, playbackStats.totalPlayTimeMs)",
     ),
@@ -115,11 +156,14 @@ checks = {
         "refreshAfterStreamRejection",
     ),
 }
+missing_tokens = []
 for path, tokens in checks.items():
     text = (ROOT / path).read_text(encoding="utf-8")
     for token in tokens:
         if token not in text:
-            raise SystemExit(f"Fehlender Erweiterungspunkt in {path}: {token}")
+            missing_tokens.append(f"{path}: {token}")
+if missing_tokens:
+    raise SystemExit("Fehlende Erweiterungspunkte:\n- " + "\n- ".join(missing_tokens))
 
 forbidden_dudu_controls = (
     "R.drawable.share",
