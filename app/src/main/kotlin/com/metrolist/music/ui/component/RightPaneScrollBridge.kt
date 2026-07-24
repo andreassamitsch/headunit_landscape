@@ -1,5 +1,6 @@
 package com.metrolist.music.ui.component
 
+import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -23,16 +24,21 @@ class RightPaneScrollBridge {
     var scrollEndHandler: (() -> Unit)? by mutableStateOf(null)
         private set
 
+    var scrollableState: ScrollableState? by mutableStateOf(null)
+        private set
+
     fun register(
         owner: Any,
         handler: ((Float) -> Unit)?,
         tapHandler: ((Offset) -> Boolean)? = null,
         scrollEndHandler: (() -> Unit)? = null,
+        scrollableState: ScrollableState? = null,
     ) {
         this.owner = owner
         this.handler = handler
         this.tapHandler = tapHandler
         this.scrollEndHandler = scrollEndHandler
+        this.scrollableState = scrollableState
     }
 
     fun dispatchTap(positionInRoot: Offset): Boolean = tapHandler?.invoke(positionInRoot) == true
@@ -47,6 +53,7 @@ class RightPaneScrollBridge {
             handler = null
             tapHandler = null
             scrollEndHandler = null
+            scrollableState = null
         }
     }
 }

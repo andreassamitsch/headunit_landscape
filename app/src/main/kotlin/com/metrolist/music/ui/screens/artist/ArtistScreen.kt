@@ -13,8 +13,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -118,6 +116,7 @@ import com.metrolist.music.ui.component.HideOnScrollFAB
 import com.metrolist.music.ui.component.IconButton
 import com.metrolist.music.ui.component.LinkSegment
 import com.metrolist.music.ui.component.LocalMenuState
+import com.metrolist.music.ui.component.LocalRightPaneScrollBridge
 import com.metrolist.music.ui.component.NavigationTitle
 import com.metrolist.music.ui.component.SongListItem
 import com.metrolist.music.ui.component.YouTubeGridItem
@@ -170,6 +169,8 @@ fun ArtistScreen(
     val showMonthlyListeners by rememberPreference(key = ShowMonthlyListenersKey, defaultValue = true)
 
     val lazyListState = rememberLazyListState()
+    val rightPaneScrollBridge = LocalRightPaneScrollBridge.current
+    val rightPaneScrollOwner = remember { Any() }
     val rightPaneTapTargets = remember { mutableMapOf<String, Pair<Rect, () -> Unit>>() }
     val snackbarHostState = remember { SnackbarHostState() }
     var showLocal by rememberSaveable { mutableStateOf(false) }
@@ -200,24 +201,28 @@ fun ArtistScreen(
         showLocal = libraryArtist?.artist?.isLocal == true
     }
 
+
+    DisposableEffect(embeddedInPlayer, rightPaneScrollBridge, lazyListState) {
+        if (embeddedInPlayer && rightPaneScrollBridge != null) {
+            rightPaneScrollBridge.register(
+                owner = rightPaneScrollOwner,
+                handler = null,
+                tapHandler = null,
+                scrollEndHandler = null,
+                scrollableState = lazyListState,
+            )
+        }
+        onDispose {
+            rightPaneScrollBridge?.unregister(rightPaneScrollOwner)
+        }
+    }
+
     LaunchedEffect(artistPage?.artist?.id) {
         rightPaneTapTargets.clear()
     }
 
     BoxWithConstraints(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .then(
-                    if (embeddedInPlayer) {
-                        Modifier.scrollable(
-                            state = lazyListState,
-                            orientation = Orientation.Vertical,
-                        )
-                    } else {
-                        Modifier
-                    },
-                ),
+        modifier = Modifier.fillMaxSize(),
     ) {
         val embeddedPaneWidth = maxWidth
         LazyColumn(

@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -340,13 +342,12 @@ fun VehicleLandscapeLayout(
                                 }
                                 .then(
                                     if (currentPaneRoute?.startsWith("artist/") == true) {
-                                        // Do not attach the Dudu7 pane's custom pointer modifier at all.
-                                        // A pointerInput modifier whose coroutine returns immediately still
-                                        // participates in hit testing and prevented the original ArtistScreen
-                                        // LazyColumn/FABs from receiving the complete gesture stream.
-                                        // The player's original nested-scroll connection is on the left player
-                                        // column and remains unchanged.
-                                        Modifier
+                                        rightPaneScrollBridge.scrollableState?.let { artistScrollState ->
+                                            Modifier.scrollable(
+                                                state = artistScrollState,
+                                                orientation = Orientation.Vertical,
+                                            )
+                                        } ?: Modifier
                                     } else {
                                         Modifier.pointerInput(
                                             currentPaneRoute,
