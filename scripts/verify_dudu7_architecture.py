@@ -158,11 +158,14 @@ checks = {
         "refreshAfterStreamRejection",
     ),
 }
+missing_tokens = []
 for path, tokens in checks.items():
     text = (ROOT / path).read_text(encoding="utf-8")
     for token in tokens:
         if token not in text:
-            raise SystemExit(f"Fehlender Erweiterungspunkt in {path}: {token}")
+            missing_tokens.append(f"{path}: {token}")
+if missing_tokens:
+    raise SystemExit("Fehlende Erweiterungspunkte:\n- " + "\n- ".join(missing_tokens))
 
 forbidden_dudu_controls = (
     "R.drawable.share",
