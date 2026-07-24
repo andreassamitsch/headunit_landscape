@@ -37,10 +37,22 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Apply five fixes and record run id
+      - name: Apply fixes and record run id
         run: |
           set -euo pipefail
           python3 scripts/apply_v1369_fixes.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt')
+          text = path.read_text(encoding='utf-8')
+          import_line = 'import androidx.compose.foundation.clickable\n'
+          if import_line not in text:
+              marker = 'import androidx.compose.foundation.combinedClickable\n'
+              if marker not in text:
+                  raise SystemExit('WebRadio clickable import marker missing')
+              text = text.replace(marker, import_line + marker, 1)
+              path.write_text(text, encoding='utf-8')
+          PY
           python3 scripts/verify_dudu7_v1369_fixes.py
           python3 -m py_compile scripts/apply_v1369_fixes.py scripts/verify_dudu7_v1369_fixes.py
           bash -n scripts/dudu7_webradio_reliability_smoke.sh
@@ -51,7 +63,7 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
-          git commit -m 'fix(dudu7): resolve artist, radio drag, logo and pane navigation issues [skip ci]'
+          git commit -m 'fix(dudu7): add WebRadio logo selection import [skip ci]'
           git pull --rebase origin main
           git push
 
@@ -60,6 +72,7 @@ jobs:
           set -euxo pipefail
           mkdir -p artifacts "$RESULTS_DIR"
           python3 scripts/verify_dudu7_v1369_fixes.py | tee artifacts/static-feature-checks.txt
+          grep -q '^import androidx.compose.foundation.clickable$' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
           grep -q 'versionCode = 158' app/build.gradle.kts
           grep -q 'versionName = "13.6.9"' app/build.gradle.kts
           chmod +x gradlew scripts/run_dudu7_emulator_ci.sh scripts/dudu7_webradio_reliability_smoke.sh
