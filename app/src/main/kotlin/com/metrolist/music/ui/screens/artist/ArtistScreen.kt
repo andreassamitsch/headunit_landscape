@@ -627,7 +627,7 @@ fun ArtistScreen(
                                         .fillMaxWidth()
                                         .padding(horizontal = 16.dp)
                                         .padding(bottom = 16.dp)
-                                        .animateItem(),
+                                        ,
                             ) {
                                 if (showArtistDescription && (!description.isNullOrEmpty() || !descriptionRuns.isNullOrEmpty())) {
                                     Text(
@@ -698,7 +698,7 @@ fun ArtistScreen(
                         item(key = "local_songs_title") {
                             NavigationTitle(
                                 title = stringResource(R.string.songs),
-                                modifier = Modifier.animateItem(),
+                                modifier = Modifier,
                                 onClick = {
                                     navController.navigate("artist/${viewModel.artistId}/songs")
                                 },
@@ -765,7 +765,7 @@ fun ArtistScreen(
                                                     )
                                                 }
                                             },
-                                        ).animateItem(),
+                                        ),
                             )
                         }
                     }
@@ -774,7 +774,7 @@ fun ArtistScreen(
                         item(key = "local_albums_title") {
                             NavigationTitle(
                                 title = stringResource(R.string.albums),
-                                modifier = Modifier.animateItem(),
+                                modifier = Modifier,
                                 onClick = {
                                     navController.navigate("artist/${viewModel.artistId}/albums")
                                 },
@@ -815,7 +815,7 @@ fun ArtistScreen(
                                                             )
                                                         }
                                                     },
-                                                ).animateItem(),
+                                                ),
                                     )
                                 }
                             }
@@ -875,7 +875,7 @@ fun ArtistScreen(
                                                 } else {
                                                     rightPaneTapTargets.remove(sectionTapKey)
                                                 }
-                                            }.animateItem(),
+                                            },
                                     onClick = openSection,
                                 )
                             }
@@ -933,7 +933,7 @@ fun ArtistScreen(
                                                         )
                                                     }
                                                 },
-                                            ).animateItem(),
+                                            ),
                                 )
                             }
                         } else {
@@ -1050,7 +1050,7 @@ fun ArtistScreen(
                                                                 }
                                                             }
                                                         },
-                                                    ).animateItem(),
+                                                    ),
                                         )
                                     }
                                 }

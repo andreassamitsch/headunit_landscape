@@ -241,6 +241,52 @@ PY
 }
 
 
+
+assert_artist_pixels_not_blank() {
+    local image="$1"
+    python3 - "$image" "$DUDU_WIDTH" "$DUDU_HEIGHT" <<'PY'
+from PIL import Image
+import math
+import sys
+
+path, width, height = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+image = Image.open(path).convert('RGB')
+# Exclude tabs and top app bar. The remaining crop is exactly the artist body that
+# became white on the Dudu7 video although accessibility XML still contained nodes.
+left = width // 2 + 18
+top = 185
+right = width - 18
+bottom = height - 18
+pixels = list(image.crop((left, top, right, bottom)).getdata())
+count = max(1, len(pixels))
+dark = 0
+colored = 0
+channel_values = []
+for red, green, blue in pixels:
+    brightness = (red + green + blue) / 3.0
+    if brightness < 235:
+        dark += 1
+    if max(red, green, blue) - min(red, green, blue) > 15:
+        colored += 1
+    channel_values.extend((red, green, blue))
+dark_fraction = dark / count
+colored_fraction = colored / count
+channel_count = max(1, len(channel_values))
+mean = sum(channel_values) / channel_count
+variance = sum((value - mean) ** 2 for value in channel_values) / channel_count
+std = math.sqrt(variance)
+print(
+    f'Artist pixel evidence: dark={dark_fraction:.5f} '
+    f'colored={colored_fraction:.5f} std={std:.3f}'
+)
+# The reproduced white failure had dark ~= 0.004, colored == 0 and std ~= 10.
+# Require clear visual content, not merely logical UI nodes.
+if dark_fraction < 0.012 and colored_fraction < 0.004 and std < 16.0:
+    raise SystemExit('Artist pane is visually blank/white after scrolling')
+print('PASS: artist pane has real rendered pixels after scrolling')
+PY
+}
+
 assert_artist_not_blank() {
     local xml="$1"
     python3 - "$xml" "$DUDU_WIDTH" "$DUDU_HEIGHT" <<'PY'
@@ -342,20 +388,27 @@ if [[ "${ARTIST_SCROLL_ONLY:-0}" == "1" ]]; then
     adb shell input swipe $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*86/100)) $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*24/100)) 500
     sleep 3
     dump_ui "$RESULTS_DIR/artist-after-scroll.xml"
+    adb exec-out screencap -p > "$RESULTS_DIR/artist-after-scroll.png"
     assert_scroll_moved "$RESULTS_DIR/artist-before-scroll.xml" "$RESULTS_DIR/artist-after-scroll.xml"
     assert_artist_not_blank "$RESULTS_DIR/artist-after-scroll.xml"
+    assert_artist_pixels_not_blank "$RESULTS_DIR/artist-after-scroll.png"
     adb shell input swipe $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*86/100)) $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*20/100)) 350
     sleep 3
     dump_ui "$RESULTS_DIR/artist-after-strong-scroll.xml"
+    adb exec-out screencap -p > "$RESULTS_DIR/artist-after-strong-scroll.png"
     assert_artist_not_blank "$RESULTS_DIR/artist-after-strong-scroll.xml"
+    assert_artist_pixels_not_blank "$RESULTS_DIR/artist-after-strong-scroll.png"
     adb logcat -d -v threadtime > "$RESULTS_DIR/right-pane-scroll-log.txt" || true
     grep -q "Dudu7RightPaneScroll" "$RESULTS_DIR/right-pane-scroll-log.txt"
     capture "artist-after-bounded-scroll"
 
     adb logcat -c || true
     if ! tap_clickable_text "artist songs section" 1 "=Songs" "=Top songs" "=Top Songs" "=Top-Titel"; then
-        adb shell input swipe $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*86/100)) $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*24/100)) 700
-        sleep 3
+        # The stress scroll may have passed the title. Return toward the beginning
+        # instead of scrolling even farther away as the previous test did.
+        adb shell input swipe $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*22/100)) $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*88/100)) 450
+        adb shell input swipe $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*22/100)) $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*88/100)) 450
+        sleep 4
         tap_clickable_text "artist songs section retry" 1 "=Songs" "=Top songs" "=Top Songs" "=Top-Titel"
     fi
     sleep 10
@@ -402,7 +455,7 @@ PY
 - PASS: local WebRadio station started
 - PASS: radio artist page opened in the right pane
 - PASS: right-pane bridge received the vertical drag
-- PASS: artist content visibly moved and stayed populated after repeated strong swipes
+- PASS: artist content visibly moved and real screenshot pixels stayed rendered after repeated strong swipes
 - PASS: Top Songs detail navigation opened
 - PASS: embedded artist Play All tap reached the playback action
 - PASS: no crash or ANR detected
