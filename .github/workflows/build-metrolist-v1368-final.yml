@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 90
     env:
       METROLIST_APP_NAME: Metrolist
-      VALIDATION_REVISION: section-tap-2
+      VALIDATION_REVISION: parent-section-tap-3
       API_LEVEL: '33'
       SYSTEM_TARGET: google_apis
       DATA_PARTITION_SIZE: 1536M
@@ -58,10 +58,12 @@ jobs:
           python3 scripts/apply_v1372_right_pane_scroll_bridge.py
           python3 scripts/apply_v1372_artist_scroll_test_mode.py
           python3 scripts/apply_v1372_top_songs_navigation_fix.py
+          python3 scripts/apply_v1372_parent_section_taps.py
           python3 -m py_compile \
             scripts/apply_v1372_right_pane_scroll_bridge.py \
             scripts/apply_v1372_artist_scroll_test_mode.py \
-            scripts/apply_v1372_top_songs_navigation_fix.py
+            scripts/apply_v1372_top_songs_navigation_fix.py \
+            scripts/apply_v1372_parent_section_taps.py
           bash -n scripts/dudu7_v1371_regression_smoke.sh
           bash -n scripts/run_dudu7_emulator_ci.sh
           git diff --check
@@ -69,25 +71,23 @@ jobs:
           grep -q 'versionName = "13.7.1"' app/build.gradle.kts
           grep -q 'isExpandable = !VehicleVariantConfig.isDudu7' app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt
           grep -q 'Dudu7RightPaneScroll' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
-          grep -q 'LocalRightPaneScrollBridge provides rightPaneScrollBridge' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
-          grep -q 'rightPaneScrollBridge.register' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
-          grep -q 'lazyListState.dispatchRawDelta(delta)' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
-          grep -q 'userScrollEnabled = !embeddedInPlayer' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
-          grep -q 'Dudu7ArtistNavigation' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'Dudu7RightPaneTap' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+          grep -q 'rightPaneScrollBridge.dispatchTap' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+          grep -q 'tapHandler:' app/src/main/kotlin/com/metrolist/music/ui/component/RightPaneScrollBridge.kt
+          grep -q 'rightPaneTapTargets\[sectionTapKey\]' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'coordinates.boundsInRoot() to sectionClick' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
           grep -q 'Dudu7ArtistSectionTap' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
           grep -q 'browseId=__artist_songs__&params=' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
           grep -q 'browseId == "__artist_songs__"' app/src/main/kotlin/com/metrolist/music/viewmodels/ArtistItemsViewModel.kt
-          grep -q 'loadArtistSongFallback' app/src/main/kotlin/com/metrolist/music/viewmodels/ArtistItemsViewModel.kt
-          grep -q 'find_clickable_coords' scripts/dudu7_v1371_regression_smoke.sh
           grep -q 'assert_artist_items_detail' scripts/dudu7_v1371_regression_smoke.sh
           grep -q -- '-partition-size' scripts/run_dudu7_emulator_ci.sh
-          if grep -q 'var accumulatedY = 0f' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt; then
-            echo 'Old screen-local drag handler is still present' >&2
+          if grep -q 'val embeddedSectionTapModifier' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt; then
+            echo 'Obsolete child section tap handler is still present' >&2
             exit 1
           fi
           git add -A
           if ! git diff --cached --quiet; then
-            git commit -m 'fix(dudu7): apply explicit embedded section taps [skip ci]'
+            git commit -m 'fix(dudu7): route artist section taps through parent pane [skip ci]'
             git pull --rebase origin main
             git push
           fi
@@ -123,25 +123,6 @@ jobs:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
 
-      - name: Build and verify ARM candidate APK
-        run: |
-          set -euxo pipefail
-          git checkout -- app/build.gradle.kts
-          rm -rf app/build
-          ./gradlew --console=plain :app:assembleGmsDudu7Debug --warning-mode summary 2>&1 | tee artifacts/build-arm.log
-          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
-          test -n "$APK"
-          cp "$APK" artifacts/Metrolist-Dudu7-13.7.1.apk
-          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
-          "$build_tools/aapt" dump badging artifacts/Metrolist-Dudu7-13.7.1.apk | tee artifacts/apk-badging.txt
-          "$build_tools/apksigner" verify --verbose --print-certs artifacts/Metrolist-Dudu7-13.7.1.apk | tee artifacts/apk-signature.txt
-          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='160'" artifacts/apk-badging.txt
-          unzip -l artifacts/Metrolist-Dudu7-13.7.1.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
-          sha256sum artifacts/Metrolist-Dudu7-13.7.1.apk | tee artifacts/SHA256SUMS.txt
-        env:
-          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
-          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
-
       - name: Prepare deterministic radio streams
         run: |
           set -euxo pipefail
@@ -167,7 +148,7 @@ jobs:
           set -euxo pipefail
           ./gradlew --stop || true
           find . -type d -name build -prune -exec rm -rf {} +
-          rm -rf "$HOME/.gradle/caches" "$HOME/.gradle/daemon" "$HOME/.gradle/native" || true
+          rm -rf "$HOME/.gradle/daemon" "$HOME/.gradle/native" || true
           sudo rm -rf \
             /usr/share/dotnet \
             /usr/local/share/boost \
@@ -177,7 +158,6 @@ jobs:
             "$ANDROID_HOME/cmake" || true
           docker system prune -af || true
           test -f "$APK_PATH"
-          test -f artifacts/Metrolist-Dudu7-13.7.1.apk
           sudo rm -rf "$ANDROID_AVD_HOME"
           sudo mkdir -p "$ANDROID_AVD_HOME"
           sudo chown -R "$USER":"$USER" "$ANDROID_AVD_HOME"
@@ -199,14 +179,34 @@ jobs:
         env:
           ARTIST_SCROLL_ONLY: '1'
 
-      - name: Confirm validated release candidate
+      - name: Confirm UI regression
         run: |
           set -euxo pipefail
-          test -f artifacts/Metrolist-Dudu7-13.7.1.apk
-          test -f artifacts/SHA256SUMS.txt
           grep -q 'Dudu7 artist scroll regression passed' "$RESULTS_DIR/regression-smoke.log"
           grep -q 'PASS: real Top Songs detail screen opened' "$RESULTS_DIR/regression-smoke.log"
+          grep -q 'Dudu7RightPaneTap' "$RESULTS_DIR/artist-items-navigation-log.txt"
           grep -q 'Dudu7ArtistSectionTap' "$RESULTS_DIR/artist-items-navigation-log.txt"
+          grep -q 'Dudu7ArtistItems' "$RESULTS_DIR/artist-items-navigation-log.txt"
+
+      - name: Build and verify ARM release APK
+        run: |
+          set -euxo pipefail
+          rm -rf "$ANDROID_AVD_HOME"
+          git checkout -- app/build.gradle.kts
+          rm -rf app/build
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --warning-mode summary 2>&1 | tee artifacts/build-arm.log
+          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
+          test -n "$APK"
+          cp "$APK" artifacts/Metrolist-Dudu7-13.7.1.apk
+          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          "$build_tools/aapt" dump badging artifacts/Metrolist-Dudu7-13.7.1.apk | tee artifacts/apk-badging.txt
+          "$build_tools/apksigner" verify --verbose --print-certs artifacts/Metrolist-Dudu7-13.7.1.apk | tee artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='160'" artifacts/apk-badging.txt
+          unzip -l artifacts/Metrolist-Dudu7-13.7.1.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
+          sha256sum artifacts/Metrolist-Dudu7-13.7.1.apk | tee artifacts/SHA256SUMS.txt
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
 
       - name: Upload APK and evidence
         if: always()
