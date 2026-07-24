@@ -6,9 +6,6 @@
 package com.metrolist.music.ui.player
 
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -657,27 +654,19 @@ fun BottomSheetPlayer(
 
     val scope = rememberCoroutineScope()
     var recognitionRequestedForRadio by remember { mutableStateOf(false) }
-    val recordPermissionLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) {
-                scope.launch { MusicRecognitionService.recognize(context) }
-            } else {
-                recognitionRequestedForRadio = false
-                Toast.makeText(context, "Mikrofonzugriff ist für die Musikerkennung erforderlich", Toast.LENGTH_SHORT).show()
-            }
-        }
     val recognitionInProgress =
         recognitionRequestedForRadio &&
             (recognitionStatus is RecognitionStatus.Listening || recognitionStatus is RecognitionStatus.Processing)
 
     fun startRadioRecognition() {
+        val streamUrl = currentRadioStation?.streamUrl?.trim().orEmpty()
+        if (streamUrl.isBlank()) {
+            Toast.makeText(context, "Radiostream ist nicht verfügbar", Toast.LENGTH_SHORT).show()
+            return
+        }
         recognitionRequestedForRadio = true
         MusicRecognitionService.reset()
-        if (MusicRecognitionService.hasRecordPermission(context)) {
-            scope.launch { MusicRecognitionService.recognize(context) }
-        } else {
-            recordPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-        }
+        scope.launch { MusicRecognitionService.recognizeStream(streamUrl) }
     }
 
     LaunchedEffect(recognitionStatus, recognitionRequestedForRadio, isWebRadio) {
@@ -2015,10 +2004,7 @@ fun BottomSheetPlayer(
                                     }
                                 },
                                 onNext = playerConnection::seekToNext,
-                                onToggleShuffle = {
-                                    playerConnection.player.shuffleModeEnabled =
-                                        !playerConnection.player.shuffleModeEnabled
-                                },
+                                onToggleShuffle = playerConnection::toggleShuffle,
                                 onToggleRepeat = playerConnection.player::toggleRepeatMode,
                                 onSliderValueChange = {
                                     if (!isListenTogetherGuest) sliderPosition = it

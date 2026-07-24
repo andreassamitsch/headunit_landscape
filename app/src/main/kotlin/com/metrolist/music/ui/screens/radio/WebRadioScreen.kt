@@ -273,9 +273,11 @@ fun WebRadioScreen() {
                                     onLongClick = { actionStation = station },
                                     dragHandle = {
                                         RadioDragHandle(
-                                            Modifier.draggableHandle(
-                                                onDragStarted = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
-                                            ),
+                                            modifier =
+                                                Modifier.draggableHandle(
+                                                    onDragStarted = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
+                                                ),
+                                            icon = R.drawable.drag_indicator_grid,
                                         )
                                     },
                                     onLogoResolved = store::addOrUpdate,
@@ -534,7 +536,7 @@ private fun RadioStationRow(
                 .fillMaxWidth()
                 .padding(horizontal = 6.dp, vertical = 2.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.48f) else MaterialTheme.colorScheme.surface)
+                .background(if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.48f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
                 .combinedClickable(onClick = onPlay, onLongClick = onLongClick)
                 .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
@@ -566,56 +568,78 @@ private fun RadioStationCard(
     dragHandle: @Composable () -> Unit = {},
     onLogoResolved: (RadioStation) -> Unit = {},
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Box(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(0.86f)
                 .clip(RoundedCornerShape(14.dp))
-                .background(if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.58f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
-                .combinedClickable(onClick = onPlay, onLongClick = onLongClick)
-                .padding(10.dp),
+                .background(
+                    if (isActive) {
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.58f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                    },
+                ).combinedClickable(onClick = onPlay, onLongClick = onLongClick),
     ) {
-        Box(contentAlignment = Alignment.TopEnd) {
-            RadioStationArtwork(station, 88, Modifier, onLogoResolved)
-            if (isSaved) {
-                Box(Modifier.align(Alignment.TopEnd)) { dragHandle() }
-            } else {
-                IconButton(onClick = onSave, modifier = Modifier.align(Alignment.TopEnd).size(34.dp)) {
-                    Icon(painterResource(R.drawable.add_circle), contentDescription = "Speichern")
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(start = 10.dp, top = 10.dp, end = 10.dp, bottom = if (isSaved) 42.dp else 10.dp),
+        ) {
+            Box(contentAlignment = Alignment.TopEnd) {
+                RadioStationArtwork(station, 88, Modifier, onLogoResolved)
+                if (!isSaved) {
+                    IconButton(onClick = onSave, modifier = Modifier.align(Alignment.TopEnd).size(34.dp)) {
+                        Icon(painterResource(R.drawable.add_circle), contentDescription = "Speichern")
+                    }
                 }
             }
-        }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            station.name,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        if (isActive) {
+            Spacer(Modifier.height(8.dp))
             Text(
-                if (isPlaying) "● LÄUFT" else "PAUSIERT",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
+                station.name,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
-        } else {
-            StationDetails(station, compact = true)
+            if (isActive) {
+                Text(
+                    if (isPlaying) "● LÄUFT" else "PAUSIERT",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            } else {
+                StationDetails(station, compact = true)
+            }
+        }
+        if (isSaved) {
+            Box(
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 2.dp, bottom = 2.dp),
+            ) {
+                dragHandle()
+            }
         }
     }
 }
 
 @Composable
-private fun RadioDragHandle(modifier: Modifier) {
+private fun RadioDragHandle(
+    modifier: Modifier,
+    icon: Int = R.drawable.drag_handle,
+) {
     IconButton(
         onClick = {},
         modifier = modifier.size(42.dp),
     ) {
         Icon(
-            painter = painterResource(R.drawable.drag_handle),
+            painter = painterResource(icon),
             contentDescription = "Sender verschieben",
         )
     }

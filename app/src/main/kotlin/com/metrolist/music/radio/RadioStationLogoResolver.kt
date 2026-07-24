@@ -15,7 +15,7 @@ import java.util.ArrayDeque
 import java.util.Locale
 
 object RadioStationLogoResolver {
-    private const val USER_AGENT = "MetrolistHU/13.6.9 (Android WebRadio)"
+    private const val USER_AGENT = "MetrolistHU/13.7.0 (Android WebRadio)"
     private const val MAX_HTML_BYTES = 1_500_000
     private const val MAX_PAGES = 5
 

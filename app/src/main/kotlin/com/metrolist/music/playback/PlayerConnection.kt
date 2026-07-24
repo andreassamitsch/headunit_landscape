@@ -17,6 +17,7 @@ import androidx.media3.common.Player.REPEAT_MODE_OFF
 import androidx.media3.common.Player.STATE_ENDED
 import androidx.media3.common.Timeline
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.ShuffleOrder
 import androidx.media3.extractor.metadata.icy.IcyInfo
 import com.metrolist.innertube.YouTube
 import com.metrolist.innertube.models.SongItem
@@ -392,6 +393,24 @@ class PlayerConnection(
             }
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Error in togglePlayPause")
+        }
+    }
+
+    fun toggleShuffle() {
+        if (!allowInternalSync && shouldBlockPlaybackChanges?.invoke() == true) return
+        val activePlayer = getPlayerOrNull() ?: return
+        if (activePlayer.shuffleModeEnabled) {
+            activePlayer.shuffleModeEnabled = false
+        } else {
+            if (activePlayer.mediaItemCount > 1) {
+                activePlayer.setShuffleOrder(
+                    ShuffleOrder.DefaultShuffleOrder(
+                        activePlayer.mediaItemCount,
+                        System.nanoTime(),
+                    ),
+                )
+            }
+            activePlayer.shuffleModeEnabled = true
         }
     }
 

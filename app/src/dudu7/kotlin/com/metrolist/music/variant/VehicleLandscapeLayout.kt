@@ -135,7 +135,7 @@ fun VehicleLandscapeLayout(
     val verticalPaddingDp = with(density) { verticalPadding.toDp() }
     val verticalWindowInsets =
         WindowInsets(left = 0.dp, top = verticalPaddingDp, right = 0.dp, bottom = verticalPaddingDp)
-    val safePlayerWeight = Dudu7Layout.sanitizePlayerPaneWeight(playerPaneWeight)
+    val safePlayerWeight = 0.5f
 
     val paneNavController = rememberNavController()
     val paneBackStackEntry by paneNavController.currentBackStackEntryAsState()
