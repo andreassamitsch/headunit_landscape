@@ -240,6 +240,36 @@ else:
 PY
 }
 
+
+assert_artist_not_blank() {
+    local xml="$1"
+    python3 - "$xml" "$DUDU_WIDTH" "$DUDU_HEIGHT" <<'PY'
+import re, sys, xml.etree.ElementTree as ET
+path, width, height = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+root = ET.parse(path).getroot()
+ignore = {
+    'warteschlange','queue','bibliothek','library','suche','search',
+    'hörverlauf','history','webradio','startseite','home','rick astley'
+}
+visible = []
+for node in root.iter('node'):
+    value = (node.attrib.get('text','').strip() or node.attrib.get('content-desc','').strip())
+    if not value or value.casefold() in ignore:
+        continue
+    m = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', node.attrib.get('bounds',''))
+    if not m:
+        continue
+    l,t,r,b = map(int,m.groups())
+    if l < width//2 or t < 105 or b > height-4 or r <= l or b <= t:
+        continue
+    visible.append(value)
+unique = list(dict.fromkeys(visible))
+if len(unique) < 2:
+    raise SystemExit(f'Artist pane became blank after scrolling: visible={unique}')
+print(f'PASS: artist pane remains populated after scrolling: {unique[:8]}')
+PY
+}
+
 assert_artist_items_detail() {
     local xml="$1"
     python3 - "$xml" "$DUDU_WIDTH" <<'PY'
@@ -309,13 +339,18 @@ if [[ "${ARTIST_SCROLL_ONLY:-0}" == "1" ]]; then
 
     adb logcat -c || true
     dump_ui "$RESULTS_DIR/artist-before-scroll.xml"
-    adb shell input swipe $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*86/100)) $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*30/100)) 700
-    sleep 4
+    adb shell input swipe $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*86/100)) $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*24/100)) 500
+    sleep 3
     dump_ui "$RESULTS_DIR/artist-after-scroll.xml"
     assert_scroll_moved "$RESULTS_DIR/artist-before-scroll.xml" "$RESULTS_DIR/artist-after-scroll.xml"
+    assert_artist_not_blank "$RESULTS_DIR/artist-after-scroll.xml"
+    adb shell input swipe $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*86/100)) $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*20/100)) 350
+    sleep 3
+    dump_ui "$RESULTS_DIR/artist-after-strong-scroll.xml"
+    assert_artist_not_blank "$RESULTS_DIR/artist-after-strong-scroll.xml"
     adb logcat -d -v threadtime > "$RESULTS_DIR/right-pane-scroll-log.txt" || true
     grep -q "Dudu7RightPaneScroll" "$RESULTS_DIR/right-pane-scroll-log.txt"
-    capture "artist-after-real-scroll"
+    capture "artist-after-bounded-scroll"
 
     adb logcat -c || true
     if ! tap_clickable_text "artist songs section" 1 "=Songs" "=Top songs" "=Top Songs" "=Top-Titel"; then
@@ -336,6 +371,21 @@ if [[ "${ARTIST_SCROLL_ONLY:-0}" == "1" ]]; then
     grep -q "Dudu7ArtistItems" "$RESULTS_DIR/artist-items-navigation-log.txt"
     capture "artist-songs-detail"
 
+    adb shell input keyevent KEYCODE_BACK
+    sleep 4
+    assert_text "back to artist before play all" 1 "=Rick Astley"
+    adb shell input swipe $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*20/100)) $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*88/100)) 450
+    adb shell input swipe $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*20/100)) $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*88/100)) 450
+    sleep 4
+    assert_text "artist play all button" 1 "=Play All"
+    adb logcat -c || true
+    tap_clickable_text "artist play all" 1 "=Play All"
+    sleep 16
+    adb logcat -d -v threadtime > "$RESULTS_DIR/artist-play-all-log.txt" || true
+    grep -q "Dudu7ArtistAction.*Play all clicked" "$RESULTS_DIR/artist-play-all-log.txt"
+    grep -q "Dudu7RightPaneTap.*handled=true" "$RESULTS_DIR/artist-play-all-log.txt"
+    capture "artist-play-all-action"
+
     adb logcat -d -v threadtime > "$RESULTS_DIR/logcat.txt" 2>&1 || true
     python3 - "$RESULTS_DIR/logcat.txt" "$PACKAGE_NAME" <<'PY'
 import re, sys
@@ -352,8 +402,9 @@ PY
 - PASS: local WebRadio station started
 - PASS: radio artist page opened in the right pane
 - PASS: right-pane bridge received the vertical drag
-- PASS: artist content visibly moved after the swipe
+- PASS: artist content visibly moved and stayed populated after repeated strong swipes
 - PASS: Top Songs detail navigation opened
+- PASS: embedded artist Play All tap reached the playback action
 - PASS: no crash or ANR detected
 EOF
     echo "Dudu7 artist scroll regression passed."

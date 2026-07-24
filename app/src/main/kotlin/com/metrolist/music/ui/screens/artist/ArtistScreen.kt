@@ -13,6 +13,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -138,6 +139,7 @@ import com.metrolist.music.ui.utils.resize
 import com.metrolist.music.utils.rememberPreference
 import com.metrolist.music.viewmodels.ArtistViewModel
 import com.valentinilk.shimmer.shimmer
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -171,6 +173,7 @@ fun ArtistScreen(
     val lazyListState = rememberLazyListState()
     val rightPaneScrollBridge = LocalRightPaneScrollBridge.current
     val rightPaneScrollOwner = remember { Any() }
+    val rightPaneScrollDeltas = remember { Channel<Float>(Channel.UNLIMITED) }
     val rightPaneTapTargets = remember { mutableMapOf<String, Pair<Rect, () -> Unit>>() }
     val snackbarHostState = remember { SnackbarHostState() }
     var showLocal by rememberSaveable { mutableStateOf(false) }
@@ -201,11 +204,26 @@ fun ArtistScreen(
         showLocal = libraryArtist?.artist?.isLocal == true
     }
 
+    LaunchedEffect(embeddedInPlayer, lazyListState, rightPaneScrollDeltas) {
+        if (embeddedInPlayer) {
+            for (delta in rightPaneScrollDeltas) {
+                // scrollBy uses the normal LazyList bounds calculation. The former
+                // dispatchRawDelta path could move the measured content completely
+                // outside the pane and leave an all-white artist page on real units.
+                lazyListState.scrollBy(delta)
+            }
+        }
+    }
+
     DisposableEffect(embeddedInPlayer, rightPaneScrollBridge, lazyListState) {
         if (embeddedInPlayer && rightPaneScrollBridge != null) {
             rightPaneScrollBridge.register(
                 owner = rightPaneScrollOwner,
-                handler = { delta -> lazyListState.dispatchRawDelta(delta) },
+                handler = { delta ->
+                    // A single malformed pointer delta must never jump beyond the
+                    // complete list. Normal gestures arrive as many smaller deltas.
+                    rightPaneScrollDeltas.trySend(delta.coerceIn(-160f, 160f))
+                },
                 tapHandler = { positionInRoot ->
                     val target =
                         rightPaneTapTargets.values.lastOrNull { (bounds, _) ->
@@ -1085,6 +1103,11 @@ fun ArtistScreen(
                         .padding(bottom = if (showLocalFab) 64.dp else 0.dp),
             ) {
                 val onPlayAllClick: () -> Unit = {
+                    timber.log.Timber.tag("Dudu7ArtistAction").i(
+                        "Play all clicked embedded=%s local=%s",
+                        embeddedInPlayer,
+                        showLocal,
+                    )
                     if (!isGuest) {
                         if (showLocal) {
                             if (librarySongs.isNotEmpty()) {
@@ -1158,9 +1181,29 @@ fun ArtistScreen(
                     }
                 }
 
+                val playAllTapKey = "artist_play_all"
+                DisposableEffect(playAllTapKey, embeddedInPlayer) {
+                    onDispose {
+                        rightPaneTapTargets.remove(playAllTapKey)
+                    }
+                }
+                val playAllTapModifier =
+                    if (embeddedInPlayer) {
+                        Modifier.onGloballyPositioned { coordinates ->
+                            rightPaneTapTargets[playAllTapKey] =
+                                coordinates.boundsInRoot() to onPlayAllClick
+                        }
+                    } else {
+                        Modifier
+                    }
+
                 if (showLocalFab) {
                     androidx.compose.material3.SmallFloatingActionButton(
-                        modifier = Modifier.padding(16.dp).offset(x = (-4).dp), // Align center with standard FAB (56dp vs 48dp)
+                        modifier =
+                            Modifier
+                                .padding(16.dp)
+                                .offset(x = (-4).dp)
+                                .then(playAllTapModifier), // Align center with standard FAB (56dp vs 48dp)
                         onClick = onPlayAllClick,
                     ) {
                         Icon(
@@ -1170,7 +1213,7 @@ fun ArtistScreen(
                     }
                 } else {
                     androidx.compose.material3.FloatingActionButton(
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier.padding(16.dp).then(playAllTapModifier),
                         onClick = onPlayAllClick,
                     ) {
                         Icon(
