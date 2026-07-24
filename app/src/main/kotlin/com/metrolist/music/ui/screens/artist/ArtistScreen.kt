@@ -13,6 +13,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -197,7 +198,21 @@ fun ArtistScreen(
         val embeddedPaneWidth = maxWidth
         LazyColumn(
             state = lazyListState,
-            modifier = Modifier.fillMaxSize(),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (embeddedInPlayer) {
+                            Modifier.pointerInput(lazyListState) {
+                                detectVerticalDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    lazyListState.dispatchRawDelta(-dragAmount)
+                                }
+                            }
+                        } else {
+                            Modifier
+                        },
+                    ),
             contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues(),
             userScrollEnabled = true,
         ) {
