@@ -144,8 +144,6 @@ checks = {
         "modifier = Modifier.weight(1f)",
     ),
     "app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt": (
-        "activeHistoryMonitorJob",
-        "Recorded active history item",
         "database.withTransaction",
         "incrementTotalPlayTime(mediaItem.mediaId, playbackStats.totalPlayTimeMs)",
     ),
