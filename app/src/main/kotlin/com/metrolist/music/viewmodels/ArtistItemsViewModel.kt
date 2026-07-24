@@ -11,8 +11,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.metrolist.innertube.YouTube
 import com.metrolist.innertube.models.BrowseEndpoint
-import com.metrolist.innertube.models.filterExplicit
+import com.metrolist.innertube.models.SongItem
 import com.metrolist.innertube.models.YTItem
+import com.metrolist.innertube.models.filterExplicit
 import com.metrolist.innertube.models.filterVideoSongs
 import com.metrolist.music.constants.HideExplicitKey
 import com.metrolist.music.constants.HideVideoSongsKey
@@ -25,6 +26,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 @HiltViewModel
@@ -34,7 +36,8 @@ constructor(
     @ApplicationContext val context: Context,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
-    private val browseId = savedStateHandle.get<String>("browseId")!!
+    private val artistId = savedStateHandle.get<String>("artistId")!!
+    private val browseId = savedStateHandle.get<String>("browseId").orEmpty()
     private val params = savedStateHandle.get<String>("params")
 
     val title = MutableStateFlow("")
@@ -42,29 +45,89 @@ constructor(
 
     init {
         viewModelScope.launch {
-            YouTube
-                .artistItems(
-                    BrowseEndpoint(
-                        browseId = browseId,
-                        params = params,
-                    ),
-                )                .onSuccess { artistItemsPage ->
-                    val resolvedItems = YouTube.resolveArtistIds(artistItemsPage.items)
-                    val hideExplicit = context.dataStore.get(HideExplicitKey, false)
-                    val hideVideoSongs = context.dataStore.get(HideVideoSongsKey, false)
-                    title.value = artistItemsPage.title
-                    itemsPage.value =
-                        ItemsPage(
-                            items = resolvedItems
-                                .distinctBy { it.id }
-                                .filterExplicit(hideExplicit)
-                                .filterVideoSongs(hideVideoSongs),
-                            continuation = artistItemsPage.continuation,
-                        )
-                }.onFailure {
-                    reportException(it)
-                }
+            if (browseId.isBlank()) {
+                loadArtistSongFallback()
+            } else {
+                loadEndpoint(
+                    endpoint =
+                        BrowseEndpoint(
+                            browseId = browseId,
+                            params = params,
+                        ),
+                )
+            }
         }
+    }
+
+    private suspend fun filteredItems(items: List<YTItem>): List<YTItem> {
+        val resolvedItems = YouTube.resolveArtistIds(items)
+        val hideExplicit = context.dataStore.get(HideExplicitKey, false)
+        val hideVideoSongs = context.dataStore.get(HideVideoSongsKey, false)
+        return resolvedItems
+            .distinctBy { it.id }
+            .filterExplicit(hideExplicit)
+            .filterVideoSongs(hideVideoSongs)
+    }
+
+    private suspend fun loadEndpoint(
+        endpoint: BrowseEndpoint,
+        fallbackTitle: String = "",
+    ): Boolean {
+        val result = YouTube.artistItems(endpoint)
+        val artistItemsPage = result.getOrNull()
+        if (artistItemsPage == null) {
+            result.exceptionOrNull()?.let(::reportException)
+            return false
+        }
+
+        title.value = artistItemsPage.title.ifBlank { fallbackTitle }
+        itemsPage.value =
+            ItemsPage(
+                items = filteredItems(artistItemsPage.items),
+                continuation = artistItemsPage.continuation,
+            )
+        Timber
+            .tag("Dudu7ArtistItems")
+            .d(
+                "Opened artist items endpoint title=%s count=%d",
+                title.value,
+                itemsPage.value?.items?.size ?: 0,
+            )
+        return true
+    }
+
+    private suspend fun loadArtistSongFallback() {
+        val result = YouTube.artist(artistId)
+        val artistPage = result.getOrNull()
+        if (artistPage == null) {
+            result.exceptionOrNull()?.let(::reportException)
+            return
+        }
+
+        val songSection =
+            artistPage.sections.firstOrNull { section ->
+                section.items.firstOrNull() is SongItem
+            } ?: return
+
+        val moreEndpoint = songSection.moreEndpoint
+        if (moreEndpoint != null && loadEndpoint(moreEndpoint, songSection.title)) {
+            return
+        }
+
+        title.value = songSection.title.ifBlank { artistPage.artist.title }
+        itemsPage.value =
+            ItemsPage(
+                items = filteredItems(songSection.items),
+                continuation = null,
+            )
+        Timber
+            .tag("Dudu7ArtistItems")
+            .d(
+                "Opened artist song fallback artistId=%s title=%s count=%d",
+                artistId,
+                title.value,
+                itemsPage.value?.items?.size ?: 0,
+            )
     }
 
     fun loadMore() {
@@ -80,10 +143,10 @@ constructor(
                     itemsPage.update {
                         ItemsPage(
                             items =
-                            (oldItemsPage.items + resolvedItems)
-                                .distinctBy { it.id }
-                                .filterExplicit(hideExplicit)
-                                .filterVideoSongs(hideVideoSongs),
+                                (oldItemsPage.items + resolvedItems)
+                                    .distinctBy { it.id }
+                                    .filterExplicit(hideExplicit)
+                                    .filterVideoSongs(hideVideoSongs),
                             continuation = artistItemsContinuationPage.continuation,
                         )
                     }
@@ -92,6 +155,7 @@ constructor(
                 }
         }
     }
+
     /** Load every continuation before a category is handed to the player queue. */
     suspend fun loadAllItems(): List<YTItem> {
         var page = itemsPage.value ?: return emptyList()
@@ -108,5 +172,4 @@ constructor(
         itemsPage.value = ItemsPage(items = filtered, continuation = null)
         return filtered
     }
-
 }
