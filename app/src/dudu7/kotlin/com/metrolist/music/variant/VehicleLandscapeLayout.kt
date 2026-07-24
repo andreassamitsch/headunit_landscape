@@ -5,8 +5,6 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -341,13 +339,11 @@ fun VehicleLandscapeLayout(
                                     rightPaneOriginInRoot = coordinates.positionInRoot()
                                 }
                                 .then(
-                                    if (currentPaneRoute?.startsWith("artist/") == true) {
-                                        rightPaneScrollBridge.scrollableState?.let { artistScrollState ->
-                                            Modifier.scrollable(
-                                                state = artistScrollState,
-                                                orientation = Orientation.Vertical,
-                                            )
-                                        } ?: Modifier
+                                    if (
+                                        currentPaneRoute?.startsWith("artist/") == true &&
+                                        rightPaneScrollBridge.handler == null
+                                    ) {
+                                        Modifier
                                     } else {
                                         Modifier.pointerInput(
                                             currentPaneRoute,
