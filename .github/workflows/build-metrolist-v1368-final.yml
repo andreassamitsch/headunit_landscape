@@ -1,4 +1,4 @@
-name: Regression-test Metrolist 13.7.1
+name: Final validation Metrolist 13.7.1
 
 on:
   push:
@@ -10,13 +10,13 @@ permissions:
   contents: write
 
 concurrency:
-  group: metrolist-v1371-emulator
+  group: metrolist-v1371-final
   cancel-in-progress: true
 
 jobs:
-  regression:
+  validate:
     runs-on: ubuntu-22.04
-    timeout-minutes: 70
+    timeout-minutes: 90
     env:
       METROLIST_APP_NAME: Metrolist
       API_LEVEL: '33'
@@ -37,30 +37,38 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Record final regression run id
+      - name: Record final run id
         run: |
           set -euxo pipefail
           mkdir -p _assistant
           printf 'run_id=%s\nstatus=running\ncommit=%s\n' \
-            "$GITHUB_RUN_ID" "$GITHUB_SHA" > _assistant/v1371_final_regression_run.txt
+            "$GITHUB_RUN_ID" "$GITHUB_SHA" > _assistant/v1371_final_validation_run.txt
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add _assistant/v1371_final_regression_run.txt
-          git commit -m 'test(dudu7): record final regression run [skip ci]'
+          git add _assistant/v1371_final_validation_run.txt
+          git commit -m 'test(dudu7): record 13.7.1 final validation [skip ci]'
           git pull --rebase origin main
           git push
 
-      - name: Verify corrected source and test harness
+      - name: Apply definitive scroll fix
         run: |
           set -euxo pipefail
-          python3 -m py_compile scripts/apply_v1371_regression_fixes.py
+          python3 scripts/apply_v1371_final_scroll_fix.py
+          python3 -m py_compile scripts/apply_v1371_final_scroll_fix.py scripts/apply_v1371_regression_fixes.py
           bash -n scripts/dudu7_v1371_regression_smoke.sh
-          grep -q 'versionCode = 160' app/build.gradle.kts
-          grep -q 'versionName = "13.7.1"' app/build.gradle.kts
+          git diff --check
+          grep -q 'isExpandable = !VehicleVariantConfig.isDudu7' app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt
           grep -A5 'weight(1f - safePlayerWeight)' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt | grep -q 'nestedScroll(state.preUpPostDownNestedScrollConnection)'
           grep -A5 'LazyColumn(' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt | grep -q 'modifier = Modifier.fillMaxSize()'
           grep -q 'userScrollEnabled = true' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'selected or r >= width - 20' scripts/dudu7_v1371_regression_smoke.sh
           grep -q 'assert_scroll_moved' scripts/dudu7_v1371_regression_smoke.sh
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m 'fix(dudu7): release right-pane scroll gestures [skip ci]'
+            git pull --rebase origin main
+            git push
+          fi
 
       - uses: actions/setup-java@v4
         with:
@@ -71,7 +79,7 @@ jobs:
         with:
           cache-cleanup: on-success
 
-      - name: Build only the x86_64 test APK
+      - name: Build x86_64 test APK
         run: |
           set -euxo pipefail
           mkdir -p artifacts dist "$RESULTS_DIR"
@@ -113,23 +121,20 @@ jobs:
           for i in {1..20}; do curl -fsS http://127.0.0.1:8000/health && break; sleep 1; done
           curl -fsS http://127.0.0.1:8000/health
 
-      - name: Free disk space for emulator
+      - name: Free disk space and enable KVM
         run: |
+          set -euxo pipefail
           ./gradlew --stop || true
           find . -type d -name build -prune -exec rm -rf {} +
           rm -rf "$HOME/.gradle/caches/transforms-"* || true
           test -f "$APK_PATH"
-          df -h
-
-      - name: Enable KVM access
-        run: |
-          set -euxo pipefail
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
           sudo chmod 666 /dev/kvm
           ls -l /dev/kvm
+          df -h
 
       - name: Run focused Dudu7 regression
         run: |
@@ -138,11 +143,30 @@ jobs:
           chmod +x scripts/run_dudu7_emulator_ci.sh scripts/dudu7_ui_smoke.sh
           scripts/run_dudu7_emulator_ci.sh
 
-      - name: Upload test evidence
+      - name: Build and verify final ARM APK
+        run: |
+          set -euxo pipefail
+          git checkout -- app/build.gradle.kts
+          rm -rf app/build
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --warning-mode summary 2>&1 | tee artifacts/build-arm.log
+          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
+          test -n "$APK"
+          cp "$APK" artifacts/Metrolist-Dudu7-13.7.1.apk
+          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          "$build_tools/aapt" dump badging artifacts/Metrolist-Dudu7-13.7.1.apk | tee artifacts/apk-badging.txt
+          "$build_tools/apksigner" verify --verbose --print-certs artifacts/Metrolist-Dudu7-13.7.1.apk | tee artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='160'" artifacts/apk-badging.txt
+          unzip -l artifacts/Metrolist-Dudu7-13.7.1.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
+          sha256sum artifacts/Metrolist-Dudu7-13.7.1.apk | tee artifacts/SHA256SUMS.txt
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+
+      - name: Upload APK and evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Metrolist-Dudu7-13.7.1-regression-${{ github.run_id }}
+          name: Metrolist-Dudu7-13.7.1-final-${{ github.run_id }}
           path: |
             artifacts/
             ui-test-results/
