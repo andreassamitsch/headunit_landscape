@@ -4,7 +4,8 @@ from pathlib import Path
 
 artist_path = Path("app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt")
 artist = artist_path.read_text(encoding="utf-8")
-old_section = '''                    artistPage?.sections?.forEachIndexed { index, section ->
+
+original_section = '''                    artistPage?.sections?.forEachIndexed { index, section ->
                         if (section.items.isNotEmpty()) {
                             item(key = "section_${section.title}") {
                                 NavigationTitle(
@@ -24,7 +25,8 @@ old_section = '''                    artistPage?.sections?.forEachIndexed { inde
 
                         if ((section.items.firstOrNull() as? SongItem)?.album != null) {
 '''
-new_section = '''                    artistPage?.sections?.forEachIndexed { index, section ->
+
+previous_section = '''                    artistPage?.sections?.forEachIndexed { index, section ->
                         val isSongSection = (section.items.firstOrNull() as? SongItem)?.album != null
                         val moreEndpoint = section.moreEndpoint
                         val openSection: (() -> Unit)? =
@@ -69,11 +71,125 @@ new_section = '''                    artistPage?.sections?.forEachIndexed { inde
 
                         if (isSongSection) {
 '''
-if new_section not in artist:
-    if old_section not in artist:
+
+fixed_section = '''                    artistPage?.sections?.forEachIndexed { index, section ->
+                        val isSongSection = (section.items.firstOrNull() as? SongItem)?.album != null
+                        val moreEndpoint = section.moreEndpoint
+                        val openSection: (() -> Unit)? =
+                            when {
+                                moreEndpoint != null -> {
+                                    {
+                                        timber.log.Timber.tag("Dudu7ArtistNavigation").d(
+                                            "Opening artist section title=%s browseId=%s fallback=false",
+                                            section.title,
+                                            moreEndpoint.browseId,
+                                        )
+                                        navController.navigate(
+                                            "artist/${viewModel.artistId}/items?browseId=${android.net.Uri.encode(moreEndpoint.browseId)}&params=${android.net.Uri.encode(moreEndpoint.params.orEmpty())}",
+                                        )
+                                    }
+                                }
+
+                                isSongSection -> {
+                                    {
+                                        timber.log.Timber.tag("Dudu7ArtistNavigation").d(
+                                            "Opening artist section title=%s browseId=artist_songs_fallback fallback=true",
+                                            section.title,
+                                        )
+                                        navController.navigate(
+                                            "artist/${viewModel.artistId}/items?browseId=__artist_songs__&params=",
+                                        )
+                                    }
+                                }
+
+                                else -> null
+                            }
+
+                        val embeddedSectionTapModifier =
+                            if (embeddedInPlayer && openSection != null) {
+                                val sectionClick = openSection
+                                Modifier.pointerInput(section.title, sectionClick) {
+                                    awaitPointerEventScope {
+                                        var downPosition: Offset? = null
+                                        var tapCancelled = false
+                                        while (true) {
+                                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                                            val change = event.changes.firstOrNull() ?: continue
+                                            when {
+                                                change.pressed && !change.previousPressed -> {
+                                                    downPosition = change.position
+                                                    tapCancelled = false
+                                                }
+
+                                                change.pressed && change.previousPressed -> {
+                                                    val start = downPosition
+                                                    if (
+                                                        start == null ||
+                                                        (change.position - start).getDistance() > viewConfiguration.touchSlop
+                                                    ) {
+                                                        tapCancelled = true
+                                                    }
+                                                }
+
+                                                !change.pressed && change.previousPressed -> {
+                                                    val start = downPosition
+                                                    val moved =
+                                                        start == null ||
+                                                            (change.position - start).getDistance() > viewConfiguration.touchSlop
+                                                    if (!tapCancelled && !moved) {
+                                                        change.consume()
+                                                        timber.log.Timber.tag("Dudu7ArtistSectionTap").i(
+                                                            "Embedded artist section tapped title=%s",
+                                                            section.title,
+                                                        )
+                                                        sectionClick.invoke()
+                                                    }
+                                                    downPosition = null
+                                                    tapCancelled = false
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                Modifier
+                            }
+
+                        if (section.items.isNotEmpty()) {
+                            item(key = "section_${section.title}") {
+                                NavigationTitle(
+                                    title = section.title,
+                                    modifier =
+                                        Modifier
+                                            .then(embeddedSectionTapModifier)
+                                            .animateItem(),
+                                    onClick = openSection,
+                                )
+                            }
+                        }
+
+                        if (isSongSection) {
+'''
+
+if fixed_section not in artist:
+    if previous_section in artist:
+        artist = artist.replace(previous_section, fixed_section, 1)
+    elif original_section in artist:
+        artist = artist.replace(original_section, fixed_section, 1)
+    else:
         raise SystemExit("ArtistScreen online section marker missing")
-    artist = artist.replace(old_section, new_section, 1)
 artist_path.write_text(artist, encoding="utf-8")
+
+view_model_path = Path("app/src/main/kotlin/com/metrolist/music/viewmodels/ArtistItemsViewModel.kt")
+view_model = view_model_path.read_text(encoding="utf-8")
+view_model = view_model.replace(
+    "            if (browseId.isBlank()) {",
+    "            if (browseId.isBlank() || browseId == \"__artist_songs__\") {",
+    1,
+)
+if 'browseId == "__artist_songs__"' not in view_model:
+    raise SystemExit("ArtistItemsViewModel fallback marker missing")
+view_model_path.write_text(view_model, encoding="utf-8")
 
 smoke_path = Path("scripts/dudu7_v1371_regression_smoke.sh")
 smoke = smoke_path.read_text(encoding="utf-8")
@@ -165,16 +281,7 @@ if "assert_artist_items_detail()" not in smoke:
         raise SystemExit("Smoke adb start marker missing")
     smoke = smoke.replace(marker, "}\n" + assert_detail + "\nadb wait-for-device", 1)
 
-old_test = '''    if ! tap_text "artist songs section" 1 "=Songs" "=Top songs" "=Top Songs" "=Top-Titel"; then
-        adb shell input swipe $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*86/100)) $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*24/100)) 700
-        sleep 3
-        tap_text "artist songs section retry" 1 "=Songs" "=Top songs" "=Top Songs" "=Top-Titel"
-    fi
-    sleep 10
-    assert_text "artist songs detail content" 1 "=Never Gonna Give You Up" "=Together Forever"
-    capture "artist-songs-detail"
-'''
-new_test = '''    adb logcat -c || true
+old_test = '''    adb logcat -c || true
     if ! tap_clickable_text "artist songs section" 1 "=Songs" "=Top songs" "=Top Songs" "=Top-Titel"; then
         adb shell input swipe $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*86/100)) $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*24/100)) 700
         sleep 3
@@ -188,10 +295,30 @@ new_test = '''    adb logcat -c || true
     grep -q "Dudu7ArtistItems" "$RESULTS_DIR/artist-items-navigation-log.txt"
     capture "artist-songs-detail"
 '''
+new_test = '''    adb logcat -c || true
+    if ! tap_clickable_text "artist songs section" 1 "=Songs" "=Top songs" "=Top Songs" "=Top-Titel"; then
+        adb shell input swipe $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*86/100)) $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*24/100)) 700
+        sleep 3
+        tap_clickable_text "artist songs section retry" 1 "=Songs" "=Top songs" "=Top Songs" "=Top-Titel"
+    fi
+    sleep 10
+    adb logcat -d -v threadtime > "$RESULTS_DIR/artist-items-navigation-log.txt" || true
+    dump_ui "$RESULTS_DIR/artist-songs-detail.xml"
+    if ! assert_artist_items_detail "$RESULTS_DIR/artist-songs-detail.xml"; then
+        grep -E "Dudu7ArtistSectionTap|Dudu7ArtistNavigation|Dudu7ArtistItems|IllegalArgumentException|FATAL EXCEPTION" \
+            "$RESULTS_DIR/artist-items-navigation-log.txt" || true
+        capture "artist-songs-detail-failure"
+        exit 1
+    fi
+    grep -q "Dudu7ArtistSectionTap" "$RESULTS_DIR/artist-items-navigation-log.txt"
+    grep -q "Dudu7ArtistNavigation" "$RESULTS_DIR/artist-items-navigation-log.txt"
+    grep -q "Dudu7ArtistItems" "$RESULTS_DIR/artist-items-navigation-log.txt"
+    capture "artist-songs-detail"
+'''
 if new_test not in smoke:
     if old_test not in smoke:
         raise SystemExit("Deterministic Top Songs test marker missing")
     smoke = smoke.replace(old_test, new_test, 1)
 
 smoke_path.write_text(smoke, encoding="utf-8")
-print("Applied real Top Songs navigation and strict detail validation")
+print("Applied explicit embedded Top Songs tap and strict detail validation")
