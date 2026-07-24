@@ -1,4 +1,4 @@
-name: Validate Metrolist 13.7.2 artist parent scrollable
+name: Validate Metrolist 13.7.2 non-lazy artist pane
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: metrolist-v1372-artist-parent-scrollable
+  group: metrolist-v1372-non-lazy-artist
   cancel-in-progress: true
 
 jobs:
@@ -36,45 +36,41 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Record parent scrollable run
+      - name: Record non-lazy artist run
         run: |
           set -euxo pipefail
           mkdir -p _assistant
           printf 'run_id=%s\nstatus=running\ncommit=%s\n' \
-            "$GITHUB_RUN_ID" "$GITHUB_SHA" > _assistant/v1372_artist_parent_scrollable_run.txt
+            "$GITHUB_RUN_ID" "$GITHUB_SHA" > _assistant/v1372_non_lazy_artist_run.txt
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add _assistant/v1372_artist_parent_scrollable_run.txt
-          git commit -m 'test(dudu7): record artist parent scrollable run [skip ci]'
+          git add _assistant/v1372_non_lazy_artist_run.txt
+          git commit -m 'test(dudu7): record non-lazy artist run [skip ci]'
           git pull --rebase origin main
           git push
 
-      - name: Bind artist state to parent Compose scrollable
+      - name: Apply non-lazy embedded artist pane
         run: |
           set -euxo pipefail
-          python3 scripts/apply_v1380_artist_parent_scrollable_state.py
-          python3 -m py_compile scripts/apply_v1380_artist_parent_scrollable_state.py
+          python3 scripts/apply_v1381_embedded_artist_column.py
+          python3 -m py_compile scripts/apply_v1381_embedded_artist_column.py
           bash -n scripts/dudu7_v1371_regression_smoke.sh
           bash -n scripts/run_dudu7_emulator_ci.sh
           git diff --check
           grep -q 'versionCode = 161' app/build.gradle.kts
           grep -q 'versionName = "13.7.2"' app/build.gradle.kts
-          grep -q 'var scrollableState: ScrollableState?' app/src/main/kotlin/com/metrolist/music/ui/component/RightPaneScrollBridge.kt
-          grep -q 'scrollableState = lazyListState' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
-          grep -q 'rightPaneScrollBridge.scrollableState' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
-          grep -q 'Modifier.scrollable(' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
-          grep -q 'userScrollEnabled = !embeddedInPlayer' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'val embeddedScrollState = rememberScrollState()' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q '\.verticalScroll(embeddedScrollState)' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'embeddedScrollState.dispatchRawDelta' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'Play all clicked embedded=true' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'playerConnection.notifyUserSongSelection()' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
           grep -q '\.nestedScroll(state.preUpPostDownNestedScrollConnection)' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'assert_artist_pixels_not_blank' scripts/dudu7_v1371_regression_smoke.sh
           grep -q 'DUDU_WIDTH\*70/100' scripts/dudu7_v1371_regression_smoke.sh
           grep -q 'radio LIVE indicator cleared after Play All' scripts/dudu7_v1371_regression_smoke.sh
-          if grep -Eq 'rightPaneScrollDeltas|artistRenderRevision|lazyListState\.scrollBy\(' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt; then
-            echo 'Obsolete manual artist scroll workaround remains' >&2
-            exit 1
-          fi
           git add -A
           if ! git diff --cached --quiet; then
-            git commit -m 'fix(dudu7): scroll artist via parent Compose state [skip ci]'
+            git commit -m 'fix(dudu7): render embedded artist without LazyColumn [skip ci]'
             git pull --rebase origin main
             git push
           fi
@@ -150,7 +146,7 @@ jobs:
           available_kb="$(df --output=avail / | tail -n 1 | tr -d ' ')"
           test "$available_kb" -ge 9000000
 
-      - name: Run artist parent-scrollable regression
+      - name: Run non-lazy artist regression
         run: |
           set -euxo pipefail
           cp scripts/dudu7_v1371_regression_smoke.sh scripts/dudu7_ui_smoke.sh
@@ -168,11 +164,11 @@ jobs:
           grep -q 'Dudu7ArtistAction.*Play all clicked' "$RESULTS_DIR/artist-play-all-log.txt"
           grep -q 'PASS: radio LIVE indicator cleared after Play All' "$RESULTS_DIR/regression-smoke.log"
 
-      - name: Upload parent-scrollable evidence
+      - name: Upload non-lazy artist evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Metrolist-Dudu7-13.7.2-parent-scrollable-${{ github.run_id }}
+          name: Metrolist-Dudu7-13.7.2-non-lazy-artist-${{ github.run_id }}
           path: |
             artifacts/
             ui-test-results/
