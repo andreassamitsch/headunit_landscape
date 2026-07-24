@@ -401,14 +401,14 @@ if [[ "${ARTIST_SCROLL_ONLY:-0}" == "1" ]]; then
 
     adb logcat -c || true
     dump_ui "$RESULTS_DIR/artist-before-scroll.xml"
-    adb shell input swipe $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*86/100)) $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*24/100)) 500
+    adb shell input swipe $((DUDU_WIDTH*70/100)) $((DUDU_HEIGHT*86/100)) $((DUDU_WIDTH*70/100)) $((DUDU_HEIGHT*24/100)) 500
     sleep 3
     dump_ui "$RESULTS_DIR/artist-after-scroll.xml"
     adb exec-out screencap -p > "$RESULTS_DIR/artist-after-scroll.png"
     assert_scroll_moved "$RESULTS_DIR/artist-before-scroll.xml" "$RESULTS_DIR/artist-after-scroll.xml"
     assert_artist_not_blank "$RESULTS_DIR/artist-after-scroll.xml"
     assert_artist_pixels_not_blank "$RESULTS_DIR/artist-after-scroll.png"
-    adb shell input swipe $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*86/100)) $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*20/100)) 350
+    adb shell input swipe $((DUDU_WIDTH*70/100)) $((DUDU_HEIGHT*86/100)) $((DUDU_WIDTH*70/100)) $((DUDU_HEIGHT*20/100)) 350
     sleep 3
     dump_ui "$RESULTS_DIR/artist-after-strong-scroll.xml"
     adb exec-out screencap -p > "$RESULTS_DIR/artist-after-strong-scroll.png"
