@@ -12,21 +12,41 @@ fun String.resize(
     height: Int? = null,
 ): String {
     if (width == null && height == null) return this
-    // Match BOTH lh3 and yt3 googleusercontent: YouTube migrated music/album art from
-    // lh3.googleusercontent.com to yt3.googleusercontent.com. Both serve the same =wW-hH resize
-    // params; matching only lh3 silently no-ops on the new host, so the player upscales the raw
-    // ~60px thumbnail (blurry). Verified live: a yt3 URL + =w544-h544 returns a sharp full-size image.
+
+    // YouTube Music album art is served from both lh3 and yt3. Replace the
+    // existing dimensions instead of appending a second parameter block.
     "https://(?:lh3|yt3)\\.googleusercontent\\.com/.*=w(\\d+)-h(\\d+).*".toRegex()
-        .matchEntire(this)?.groupValues?.let { group ->
-        val (W, H) = group.drop(1).map { it.toInt() }
-        var w = width
-        var h = height
-        if (w != null && h == null) h = (w / W) * H
-        if (w == null && h != null) w = (h / H) * W
-        return "${split("=w")[0]}=w$w-h$h-p-l90-rj"
+        .matchEntire(this)
+        ?.groupValues
+        ?.let { group ->
+            val (W, H) = group.drop(1).map(String::toInt)
+            val requestedWidth = width ?: ((height!!.toLong() * W) / H).toInt()
+            val requestedHeight = height ?: ((width!!.toLong() * H) / W).toInt()
+            return "${substringBefore("=w")}=w$requestedWidth-h$requestedHeight-l90-rj"
+        }
+
+    // Channel/avatar images use =sNN by default. A rectangular request needs
+    // YouTube's w-h-p form; a single dimension can stay in the square format.
+    if (matches("https://yt3\\.ggpht\\.com/.*=s(\\d+).*".toRegex())) {
+        val base = substringBefore("=s")
+        return if (width != null && height != null) {
+            "$base=w$width-h$height-p-l90-rj"
+        } else {
+            "$base=s${width ?: height}"
+        }
     }
-    if (this matches "https://yt3\\.ggpht\\.com/.*=s(\\d+)".toRegex()) {
-        return "$this-s${width ?: height}"
+
+    // Video thumbnails should use the high-resolution asset for large player
+    // artwork while retaining any signed/query parameters on the URL.
+    if (
+        startsWith("https://i.ytimg.com/vi/") &&
+        maxOf(width ?: 0, height ?: 0) >= 544
+    ) {
+        return replace(
+            Regex("/(?:default|mqdefault|hqdefault|sddefault)\\.jpg(?=\\?|$)"),
+            "/maxresdefault.jpg",
+        )
     }
+
     return this
 }
