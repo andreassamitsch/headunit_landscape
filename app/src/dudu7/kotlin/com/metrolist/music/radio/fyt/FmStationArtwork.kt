@@ -20,6 +20,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.metrolist.music.R
 import com.metrolist.music.radio.RadioBrowserClient
@@ -108,7 +109,7 @@ object FmStationLogoResolver {
     private suspend fun resolveStationLogo(station: RadioStation): String? {
         if (station.manualFavicon && station.favicon.isHttpUrl()) return station.favicon
         return RadioStationLogoResolver.resolve(station)
-            ?: station.favicon.takeIf(String::isHttpUrl)
+            ?: station.favicon.takeIf { it.isHttpUrl() }
     }
 
     private fun bestMatch(
@@ -215,7 +216,7 @@ fun FmStationArtwork(
         }
     }
 
-    val shape = RoundedCornerShape(size / 7)
+    val shape = RoundedCornerShape((size.value / 7f).dp)
     if (!artworkUrl.isNullOrBlank()) {
         AsyncImage(
             model = artworkUrl,
@@ -242,7 +243,7 @@ fun FmStationArtwork(
                 painter = painterResource(R.drawable.radio),
                 contentDescription = "FM-Radio",
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(size * 0.62f),
+                modifier = Modifier.size((size.value * 0.62f).dp),
             )
         }
     }
