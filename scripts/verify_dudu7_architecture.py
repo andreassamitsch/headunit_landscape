@@ -119,7 +119,7 @@ checks = {
         "FM-Favoriten",
         "radio.seek(false)",
         "radio.seek(true)",
-        "radio.saveCurrentPreset",
+        "radio::saveCurrentPreset",
     ),
     "app/src/dudu7/AndroidManifest.xml": (
         "android.permission.MODIFY_AUDIO_SETTINGS",
