@@ -777,24 +777,49 @@ fun ArtistScreen(
                     }
                 } else {
                     artistPage?.sections?.forEachIndexed { index, section ->
+                        val isSongSection = (section.items.firstOrNull() as? SongItem)?.album != null
+                        val moreEndpoint = section.moreEndpoint
+                        val openSection: (() -> Unit)? =
+                            when {
+                                moreEndpoint != null -> {
+                                    {
+                                        timber.log.Timber.tag("Dudu7ArtistNavigation").d(
+                                            "Opening artist section title=%s browseId=%s fallback=false",
+                                            section.title,
+                                            moreEndpoint.browseId,
+                                        )
+                                        navController.navigate(
+                                            "artist/${viewModel.artistId}/items?browseId=${android.net.Uri.encode(moreEndpoint.browseId)}&params=${android.net.Uri.encode(moreEndpoint.params.orEmpty())}",
+                                        )
+                                    }
+                                }
+
+                                isSongSection -> {
+                                    {
+                                        timber.log.Timber.tag("Dudu7ArtistNavigation").d(
+                                            "Opening artist section title=%s browseId=none fallback=true",
+                                            section.title,
+                                        )
+                                        navController.navigate(
+                                            "artist/${viewModel.artistId}/items?browseId=&params=",
+                                        )
+                                    }
+                                }
+
+                                else -> null
+                            }
+
                         if (section.items.isNotEmpty()) {
                             item(key = "section_${section.title}") {
                                 NavigationTitle(
                                     title = section.title,
                                     modifier = Modifier.animateItem(),
-                                    onClick =
-                                        section.moreEndpoint?.let {
-                                            {
-                                                navController.navigate(
-                                                    "artist/${viewModel.artistId}/items?browseId=${android.net.Uri.encode(it.browseId)}&params=${android.net.Uri.encode(it.params.orEmpty())}",
-                                                )
-                                            }
-                                        },
+                                    onClick = openSection,
                                 )
                             }
                         }
 
-                        if ((section.items.firstOrNull() as? SongItem)?.album != null) {
+                        if (isSongSection) {
                             items(
                                 items = distinctItemsBySection[index] ?: section.items,
                                 key = { "youtube_song_${it.id}" },

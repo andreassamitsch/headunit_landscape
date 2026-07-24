@@ -78,6 +78,44 @@ raise SystemExit(1)
 PY
 }
 
+find_clickable_coords() {
+    local right_only="$1"; shift
+    dump_ui "$RESULTS_DIR/current-window.xml" || return 1
+    python3 - "$RESULTS_DIR/current-window.xml" "$DUDU_WIDTH" "$right_only" "$@" <<'PY'
+import re, sys, xml.etree.ElementTree as ET
+path, width, right_only, *needles = sys.argv[1:]
+width = int(width)
+exact = [n[1:].casefold() for n in needles if n.startswith('=')]
+partial = [n.casefold() for n in needles if not n.startswith('=')]
+root = ET.parse(path).getroot()
+parent = {child: node for node in root.iter() for child in node}
+for node in root.iter('node'):
+    values = [node.attrib.get('text','').strip().casefold(), node.attrib.get('content-desc','').strip().casefold()]
+    hay = ' '.join(v for v in values if v)
+    if not any(v == n for v in values for n in exact) and not (hay and any(n in hay for n in partial)):
+        continue
+    cur = node
+    while cur is not None:
+        m = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', cur.attrib.get('bounds',''))
+        if m:
+            l,t,r,b = map(int,m.groups())
+            if (right_only != '1' or l >= width//2) and r > l and b > t and cur.attrib.get('clickable') == 'true':
+                print((l+r)//2, (t+b)//2)
+                raise SystemExit(0)
+        cur = parent.get(cur)
+raise SystemExit(1)
+PY
+}
+
+tap_clickable_text() {
+    local label="$1"; local right="$2"; shift 2
+    local coords
+    coords=$(find_clickable_coords "$right" "$@") || return 1
+    echo "Tapping clickable $label at $coords"
+    adb shell input tap $coords
+    sleep 3
+}
+
 tap_text() {
     local label="$1"; local right="$2"; shift 2
     local coords
@@ -202,6 +240,37 @@ else:
 PY
 }
 
+assert_artist_items_detail() {
+    local xml="$1"
+    python3 - "$xml" "$DUDU_WIDTH" <<'PY'
+import re, sys, xml.etree.ElementTree as ET
+path, width = sys.argv[1], int(sys.argv[2])
+root = ET.parse(path).getroot()
+texts=[]
+for node in root.iter('node'):
+    value=(node.attrib.get('text','').strip() or node.attrib.get('content-desc','').strip())
+    if not value:
+        continue
+    m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', node.attrib.get('bounds',''))
+    if not m:
+        continue
+    l,t,r,b=map(int,m.groups())
+    if l < width//2:
+        continue
+    texts.append((value.casefold(), value, l,t,r,b))
+appbar_titles=[row for row in texts if row[0] in {'top songs','top-titel','songs'} and row[3] < 190]
+about=[row for row in texts if row[0] in {'about','über den künstler','über den interpreten'}]
+songs=[row for row in texts if row[0] in {'never gonna give you up','together forever','never gonna give you up (2022 remaster)'} and row[3] >= 170]
+if not appbar_titles:
+    raise SystemExit('Top Songs detail app bar title is missing')
+if about:
+    raise SystemExit(f'Artist overview is still visible after Top Songs tap: {about}')
+if len({row[0] for row in songs}) < 2:
+    raise SystemExit(f'Top Songs detail list is missing expected songs: {songs}')
+print(f'PASS: real Top Songs detail screen opened: title={appbar_titles[0][1]}, songs={len(songs)}')
+PY
+}
+
 adb wait-for-device
 adb shell input keyevent KEYCODE_WAKEUP || true
 adb shell wm dismiss-keyguard || true
@@ -248,13 +317,18 @@ if [[ "${ARTIST_SCROLL_ONLY:-0}" == "1" ]]; then
     grep -q "Dudu7RightPaneScroll" "$RESULTS_DIR/right-pane-scroll-log.txt"
     capture "artist-after-real-scroll"
 
-    if ! tap_text "artist songs section" 1 "=Songs" "=Top songs" "=Top Songs" "=Top-Titel"; then
+    adb logcat -c || true
+    if ! tap_clickable_text "artist songs section" 1 "=Songs" "=Top songs" "=Top Songs" "=Top-Titel"; then
         adb shell input swipe $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*86/100)) $((DUDU_WIDTH*82/100)) $((DUDU_HEIGHT*24/100)) 700
         sleep 3
-        tap_text "artist songs section retry" 1 "=Songs" "=Top songs" "=Top Songs" "=Top-Titel"
+        tap_clickable_text "artist songs section retry" 1 "=Songs" "=Top songs" "=Top Songs" "=Top-Titel"
     fi
     sleep 10
-    assert_text "artist songs detail content" 1 "=Never Gonna Give You Up" "=Together Forever"
+    dump_ui "$RESULTS_DIR/artist-songs-detail.xml"
+    assert_artist_items_detail "$RESULTS_DIR/artist-songs-detail.xml"
+    adb logcat -d -v threadtime > "$RESULTS_DIR/artist-items-navigation-log.txt" || true
+    grep -q "Dudu7ArtistNavigation" "$RESULTS_DIR/artist-items-navigation-log.txt"
+    grep -q "Dudu7ArtistItems" "$RESULTS_DIR/artist-items-navigation-log.txt"
     capture "artist-songs-detail"
 
     adb logcat -d -v threadtime > "$RESULTS_DIR/logcat.txt" 2>&1 || true
