@@ -204,17 +204,29 @@ fun ArtistScreen(
                     .then(
                         if (embeddedInPlayer) {
                             Modifier.pointerInput(lazyListState) {
-                                detectVerticalDragGestures { change, dragAmount ->
-                                    change.consume()
-                                    lazyListState.dispatchRawDelta(-dragAmount)
-                                }
+                                detectVerticalDragGestures(
+                                    onDragStart = {
+                                        timber.log.Timber.tag("Dudu7ArtistScroll").d("Embedded artist drag started")
+                                    },
+                                    onDragEnd = {
+                                        timber.log.Timber.tag("Dudu7ArtistScroll").d(
+                                            "Embedded artist drag ended index=%d offset=%d",
+                                            lazyListState.firstVisibleItemIndex,
+                                            lazyListState.firstVisibleItemScrollOffset,
+                                        )
+                                    },
+                                    onVerticalDrag = { change, dragAmount ->
+                                        change.consume()
+                                        lazyListState.dispatchRawDelta(-dragAmount)
+                                    },
+                                )
                             }
                         } else {
                             Modifier
                         },
                     ),
             contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues(),
-            userScrollEnabled = true,
+            userScrollEnabled = !embeddedInPlayer,
         ) {
             if (artistPage == null && !showLocal) {
                 item(key = "shimmer") {
