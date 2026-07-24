@@ -5,10 +5,11 @@ on:
     branches: ["agent/fyt-radio-test-apk"]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -41,3 +42,10 @@ jobs:
           name: FYT-DUDU7-Radio-Test-0.1.0
           path: dist/*
           if-no-files-found: error
+      - name: Publish APK on isolated branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f dist/FYT-DUDU7-Radio-Test-0.1.0.*
+          git commit -m "artifact: FYT Radio Test APK [skip ci]"
+          git push origin HEAD:agent/fyt-radio-test-apk
