@@ -1,4 +1,4 @@
-# One-time validation trigger: 2026-07-24 attempt 3
+# One-time validation trigger: 2026-07-24 attempt 4
 name: One-time Dudu7 FM final validation
 
 on:
@@ -54,10 +54,20 @@ jobs:
         with:
           cache-cleanup: on-success
 
+      - name: Apply deterministic artist-control fix
+        run: |
+          set -euxo pipefail
+          python3 scripts/fix_dudu7_artist_controls.py
+          ! grep -q 'pointerInput(radioEndpoint)' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          ! grep -q 'pointerInput(shuffleEndpoint)' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          git diff --check
+          git diff -- app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt > artifacts-artist-controls.patch
+
       - name: Static architecture and signing checks
         run: |
           set -euxo pipefail
           mkdir -p artifacts "$RESULTS_DIR" dist
+          mv artifacts-artist-controls.patch artifacts/artist-controls.patch
           chmod +x gradlew scripts/run_dudu7_emulator_ci.sh scripts/dudu7_webradio_reliability_smoke.sh
           python3 scripts/verify_dudu7_architecture.py | tee artifacts/architecture-check.txt
           bash -n scripts/run_dudu7_emulator_ci.sh
@@ -180,7 +190,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Record one-time validation run
+      - name: Record tested source and validation run
         if: always()
         run: |
           set -euo pipefail
@@ -191,6 +201,8 @@ jobs:
             > .build-metadata/fm-final-run.txt
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add .build-metadata/fm-final-run.txt
-          git commit -m "Record FM final validation $GITHUB_RUN_ID [skip ci]" || exit 0
+          git add \
+            app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt \
+            .build-metadata/fm-final-run.txt
+          git commit -m "Record tested FM validation $GITHUB_RUN_ID [skip ci]" || exit 0
           git push origin HEAD:agent/fm-radio-ui-logos-tabs
