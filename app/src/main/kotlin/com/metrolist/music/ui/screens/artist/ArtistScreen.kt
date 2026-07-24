@@ -1071,6 +1071,7 @@ fun ArtistScreen(
                 }
             }
         }
+        }
 
         val isScrollingUp = lazyListState.isScrollingUp()
         val showLocalFab = librarySongs.isNotEmpty() && libraryArtist?.artist?.isLocal != true
