@@ -1,4 +1,4 @@
-name: Build and test Metrolist 13.6.8
+name: Build and test Metrolist 13.6.9
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: metrolist-v1368-final
+  group: metrolist-v1369-final
   cancel-in-progress: true
 
 jobs:
@@ -29,7 +29,7 @@ jobs:
       PACKAGE_NAME: com.metrolist.music.dudu7.debug
       ACTIVITY_NAME: com.metrolist.music.MainActivity
       RESULTS_DIR: ui-test-results
-      APK_PATH: dist/Metrolist-Dudu7-13.6.8-emulator.apk
+      APK_PATH: dist/Metrolist-Dudu7-13.6.9-emulator.apk
 
     steps:
       - uses: actions/checkout@v4
@@ -37,21 +37,21 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Apply final correction and record run id
+      - name: Apply five fixes and record run id
         run: |
           set -euo pipefail
-          python3 .assistant/finalize_v1368.py
-          rm -f .assistant/finalize_v1368.py
+          python3 scripts/apply_v1369_fixes.py
+          python3 scripts/verify_dudu7_v1369_fixes.py
+          python3 -m py_compile scripts/apply_v1369_fixes.py scripts/verify_dudu7_v1369_fixes.py
+          bash -n scripts/dudu7_webradio_reliability_smoke.sh
           mkdir -p _assistant
           printf 'run_id=%s\njob_status=running\ncommit=%s\n' \
             "$GITHUB_RUN_ID" "$GITHUB_SHA" \
-            > _assistant/v1368_final_run.txt
-          python3 scripts/verify_dudu7_v1368_features.py
-          bash -n scripts/dudu7_webradio_reliability_smoke.sh
+            > _assistant/v1369_final_run.txt
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
-          git commit -m 'Finalize radio metadata handling and record validation run [skip ci]'
+          git commit -m 'fix(dudu7): resolve artist, radio drag, logo and pane navigation issues [skip ci]'
           git pull --rebase origin main
           git push
 
@@ -59,10 +59,9 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p artifacts "$RESULTS_DIR"
-          python3 scripts/verify_dudu7_v1368_features.py | tee artifacts/static-feature-checks.txt
-          bash -n scripts/dudu7_webradio_reliability_smoke.sh
-          grep -q 'versionCode = 157' app/build.gradle.kts
-          grep -q 'versionName = "13.6.8"' app/build.gradle.kts
+          python3 scripts/verify_dudu7_v1369_fixes.py | tee artifacts/static-feature-checks.txt
+          grep -q 'versionCode = 158' app/build.gradle.kts
+          grep -q 'versionName = "13.6.9"' app/build.gradle.kts
           chmod +x gradlew scripts/run_dudu7_emulator_ci.sh scripts/dudu7_webradio_reliability_smoke.sh
 
       - uses: actions/setup-java@v4
@@ -87,18 +86,17 @@ jobs:
           set -euxo pipefail
           APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
           test -n "$APK"
-          cp "$APK" artifacts/Metrolist-Dudu7-13.6.8.apk
+          cp "$APK" artifacts/Metrolist-Dudu7-13.6.9.apk
           build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
-          "$build_tools/aapt" dump badging artifacts/Metrolist-Dudu7-13.6.8.apk | tee artifacts/apk-badging.txt
-          "$build_tools/apksigner" verify --verbose --print-certs artifacts/Metrolist-Dudu7-13.6.8.apk | tee artifacts/apk-signature.txt
-          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='157'" artifacts/apk-badging.txt
-          unzip -l artifacts/Metrolist-Dudu7-13.6.8.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
-          sha256sum artifacts/Metrolist-Dudu7-13.6.8.apk | tee artifacts/SHA256SUMS.txt
+          "$build_tools/aapt" dump badging artifacts/Metrolist-Dudu7-13.6.9.apk | tee artifacts/apk-badging.txt
+          "$build_tools/apksigner" verify --verbose --print-certs artifacts/Metrolist-Dudu7-13.6.9.apk | tee artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='158'" artifacts/apk-badging.txt
+          unzip -l artifacts/Metrolist-Dudu7-13.6.9.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
+          sha256sum artifacts/Metrolist-Dudu7-13.6.9.apk | tee artifacts/SHA256SUMS.txt
 
       - name: Prepare x86_64 emulator build
         run: |
           set -euxo pipefail
-          cp app/build.gradle.kts /tmp/build.gradle.arm.kts
           python3 - <<'PY'
           from pathlib import Path
           path = Path('app/build.gradle.kts')
@@ -164,11 +162,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Metrolist-Dudu7-13.6.8-${{ github.run_id }}
+          name: Metrolist-Dudu7-13.6.9-${{ github.run_id }}
           path: |
             artifacts/
             ui-test-results/
           if-no-files-found: warn
           retention-days: 14
-
-# final-validation-5
