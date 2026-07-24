@@ -1,5 +1,5 @@
 === architecture ===
-Fehlender Erweiterungspunkt in app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt: radio.saveCurrentPreset
+Fehlender Erweiterungspunkt in app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt: activeHistoryMonitorJob
 architecture_status=1
 
 === diff check ===
