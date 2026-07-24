@@ -151,15 +151,19 @@ for node in root.iter('node'):
     if not values & labels:
         continue
     cur = node
+    candidates = []
     while cur is not None:
         m = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', cur.attrib.get('bounds',''))
-        if m and cur.attrib.get('clickable') == 'true':
+        if m:
             l,t,r,b = map(int,m.groups())
-            expected = width // 2
-            if expected - 55 <= l <= expected + 100:
-                print(f'PASS: right pane begins near half width: left={l}, expected={expected}')
-                raise SystemExit(0)
+            if r > width // 2 and b > t:
+                candidates.append((l,t,r,b,cur.attrib.get('selected') == 'true'))
         cur = parent.get(cur)
+    expected = width // 2
+    for l,t,r,b,selected in candidates:
+        if expected - 55 <= l <= expected + 100 and (selected or r >= width - 20):
+            print(f'PASS: right pane begins near half width: left={l}, expected={expected}, selected={selected}')
+            raise SystemExit(0)
 raise SystemExit('Right pane does not begin near the 50/50 split')
 PY
 }
