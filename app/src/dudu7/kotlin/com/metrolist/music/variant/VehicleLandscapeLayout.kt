@@ -52,6 +52,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -63,11 +64,13 @@ import com.metrolist.music.LocalNavController
 import com.metrolist.music.LocalPlayerAwareWindowInsets
 import com.metrolist.music.LocalPlayerConnection
 import com.metrolist.music.R
+import com.metrolist.music.radio.fyt.FytPhysicalRadio
 import com.metrolist.music.ui.component.BottomSheetState
 import com.metrolist.music.ui.component.LocalRightPaneScrollBridge
 import com.metrolist.music.ui.component.RightPaneScrollBridge
 import com.metrolist.music.ui.screens.Screens
 import com.metrolist.music.ui.screens.navigationBuilder
+import com.metrolist.music.ui.screens.radio.PhysicalRadioScreen
 import com.metrolist.music.ui.screens.radio.WebRadioScreen
 import com.metrolist.music.utils.SearchRoutes
 import kotlinx.coroutines.launch
@@ -79,6 +82,7 @@ import kotlin.math.abs
 
 private const val VEHICLE_QUEUE_ROUTE = "vehicle_queue"
 private const val VEHICLE_WEBRADIO_ROUTE = "vehicle_webradio"
+private const val VEHICLE_PHYSICAL_RADIO_ROUTE = "vehicle_physical_radio"
 
 private enum class VehicleRightPaneTab(
     val title: String,
@@ -89,6 +93,7 @@ private enum class VehicleRightPaneTab(
     LIBRARY("Bibliothek", R.drawable.library_music_outlined, Screens.Library.route),
     SEARCH("Suche", R.drawable.search, Screens.Search.route),
     HISTORY("Hörverlauf", R.drawable.history, "history"),
+    PHYSICAL_RADIO("FM", R.drawable.radio, VEHICLE_PHYSICAL_RADIO_ROUTE),
     WEBRADIO("WebRadio", R.drawable.radio, VEHICLE_WEBRADIO_ROUTE),
     HOME("Startseite", R.drawable.home_outlined, Screens.Home.route),
 }
@@ -149,10 +154,17 @@ fun VehicleLandscapeLayout(
     val paneBackStackEntry by paneNavController.currentBackStackEntryAsState()
     val currentPaneRoute = paneBackStackEntry?.destination?.route
     var selectedTab by rememberSaveable { mutableStateOf(VehicleRightPaneTab.QUEUE) }
-    val activity = LocalContext.current.findActivity()
+    val context = LocalContext.current
+    val activity = context.findActivity()
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val playerConnection = LocalPlayerConnection.current
+    val physicalRadio = remember(context) { FytPhysicalRadio.get(context) }
+    val physicalRadioState by physicalRadio.state.collectAsStateWithLifecycle()
+    val androidIsPlayingState =
+        playerConnection?.isEffectivelyPlaying?.collectAsStateWithLifecycle()
+            ?: remember { mutableStateOf(false) }
+    val androidIsPlaying by androidIsPlayingState
     val rightPaneScope = rememberCoroutineScope()
     val rightPaneScrollBridge = remember { RightPaneScrollBridge() }
     var rightPaneOriginInRoot by remember { mutableStateOf(Offset.Zero) }
@@ -161,6 +173,12 @@ fun VehicleLandscapeLayout(
         VehicleRightPaneTab.entries
             .firstOrNull { it.route == currentPaneRoute }
             ?.let { selectedTab = it }
+    }
+
+    LaunchedEffect(androidIsPlaying, physicalRadioState.isActive) {
+        if (androidIsPlaying && physicalRadioState.isActive) {
+            physicalRadio.powerOff()
+        }
     }
 
     BackHandler(enabled = paneNavController.previousBackStackEntry != null) {
@@ -173,6 +191,7 @@ fun VehicleLandscapeLayout(
     DisposableEffect(playerConnection, paneNavController) {
         val activeConnection = playerConnection
         val returnToQueue: () -> Unit = {
+            if (physicalRadio.state.value.isActive) physicalRadio.powerOff()
             if (paneNavController.currentDestination?.route != VEHICLE_QUEUE_ROUTE) {
                 selectedTab = VehicleRightPaneTab.QUEUE
                 val popped = paneNavController.popBackStack(VEHICLE_QUEUE_ROUTE, inclusive = false)
@@ -258,19 +277,26 @@ fun VehicleLandscapeLayout(
                     .padding(horizontal = 12.dp, vertical = 4.dp)
                     .nestedScroll(state.preUpPostDownNestedScrollConnection),
         ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .padding(top = 2.dp, bottom = 2.dp)
-                        .clickable(onClick = onToggleLyrics),
-            ) {
-                thumbnailContent()
+            if (physicalRadioState.isActive) {
+                PhysicalRadioPlayerPane(
+                    radio = physicalRadio,
+                    playerConnection = playerConnection,
+                )
+            } else {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(top = 2.dp, bottom = 2.dp)
+                            .clickable(onClick = onToggleLyrics),
+                ) {
+                    thumbnailContent()
+                }
+                controlsContent()
+                Spacer(Modifier.height(2.dp))
             }
-            controlsContent()
-            Spacer(Modifier.height(2.dp))
         }
 
         Surface(
@@ -426,6 +452,9 @@ fun VehicleLandscapeLayout(
                             ) {
                                 composable(VEHICLE_QUEUE_ROUTE) {
                                     queueContent()
+                                }
+                                composable(VEHICLE_PHYSICAL_RADIO_ROUTE) {
+                                    PhysicalRadioScreen()
                                 }
                                 composable(VEHICLE_WEBRADIO_ROUTE) {
                                     WebRadioScreen()
