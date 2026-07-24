@@ -27,6 +27,12 @@ vehicle = ensure_after(
 )
 vehicle = ensure_after(
     vehicle,
+    "import androidx.compose.ui.input.pointer.pointerInput\n",
+    "import androidx.compose.ui.layout.onGloballyPositioned\nimport androidx.compose.ui.layout.positionInRoot\n",
+    "VehicleLandscapeLayout layout coordinate imports",
+)
+vehicle = ensure_after(
+    vehicle,
     "import com.metrolist.music.ui.component.BottomSheetState\n",
     "import com.metrolist.music.ui.component.LocalRightPaneScrollBridge\nimport com.metrolist.music.ui.component.RightPaneScrollBridge\n",
     "VehicleLandscapeLayout component imports",
@@ -44,10 +50,13 @@ if bridge_state not in vehicle:
     if marker not in vehicle:
         raise SystemExit("VehicleLandscapeLayout rightPaneScope marker missing")
     vehicle = vehicle.replace(marker, marker + bridge_state, 1)
+origin_state = "    var rightPaneOriginInRoot by remember { mutableStateOf(Offset.Zero) }\n"
+if origin_state not in vehicle:
+    vehicle = vehicle.replace(bridge_state, bridge_state + origin_state, 1)
 
-old_box = """                    Box(Modifier.weight(1f).fillMaxWidth()) {
-"""
-new_box = """                    Box(
+old_box = '''                    Box(Modifier.weight(1f).fillMaxWidth()) {
+'''
+previous_box = '''                    Box(
                         modifier =
                             Modifier
                                 .weight(1f)
@@ -106,27 +115,117 @@ new_box = """                    Box(
                                     }
                                 },
                     ) {
-"""
-if "Dudu7RightPaneScroll" not in vehicle:
-    if old_box not in vehicle:
+'''
+final_box = '''                    Box(
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .onGloballyPositioned { coordinates ->
+                                    rightPaneOriginInRoot = coordinates.positionInRoot()
+                                }
+                                .pointerInput(
+                                    currentPaneRoute,
+                                    rightPaneScrollBridge.handler,
+                                    rightPaneScrollBridge.tapHandler,
+                                ) {
+                                    val scrollHandler = rightPaneScrollBridge.handler
+                                    awaitPointerEventScope {
+                                        var downPosition: Offset? = null
+                                        var lastPosition: Offset? = null
+                                        var accumulatedX = 0f
+                                        var accumulatedY = 0f
+                                        var verticalDrag = false
+                                        while (true) {
+                                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                                            val change = event.changes.firstOrNull() ?: continue
+                                            if (change.pressed && !change.previousPressed) {
+                                                downPosition = change.position
+                                                lastPosition = change.position
+                                                accumulatedX = 0f
+                                                accumulatedY = 0f
+                                                verticalDrag = false
+                                                continue
+                                            }
+                                            if (change.pressed) {
+                                                val previous = lastPosition ?: change.position
+                                                val delta = change.position - previous
+                                                lastPosition = change.position
+                                                accumulatedX += delta.x
+                                                accumulatedY += delta.y
+                                                if (
+                                                    !verticalDrag &&
+                                                    abs(accumulatedY) > viewConfiguration.touchSlop &&
+                                                    abs(accumulatedY) > abs(accumulatedX)
+                                                ) {
+                                                    verticalDrag = true
+                                                    Timber.tag("Dudu7RightPaneScroll").i(
+                                                        "Right-pane vertical drag started route=%s",
+                                                        currentPaneRoute,
+                                                    )
+                                                }
+                                                if (verticalDrag && scrollHandler != null) {
+                                                    change.consume()
+                                                    scrollHandler(-delta.y)
+                                                }
+                                                continue
+                                            }
+                                            if (change.previousPressed) {
+                                                if (verticalDrag) {
+                                                    Timber.tag("Dudu7RightPaneScroll").i(
+                                                        "Right-pane vertical drag ended route=%s",
+                                                        currentPaneRoute,
+                                                    )
+                                                } else {
+                                                    val start = downPosition
+                                                    val moved =
+                                                        start == null ||
+                                                            (change.position - start).getDistance() > viewConfiguration.touchSlop
+                                                    if (!moved) {
+                                                        val positionInRoot = rightPaneOriginInRoot + change.position
+                                                        val handled = rightPaneScrollBridge.dispatchTap(positionInRoot)
+                                                        Timber.tag("Dudu7RightPaneTap").i(
+                                                            "Right-pane tap route=%s x=%.1f y=%.1f handled=%s",
+                                                            currentPaneRoute,
+                                                            positionInRoot.x,
+                                                            positionInRoot.y,
+                                                            handled,
+                                                        )
+                                                        if (handled) change.consume()
+                                                    }
+                                                }
+                                                downPosition = null
+                                                lastPosition = null
+                                                accumulatedX = 0f
+                                                accumulatedY = 0f
+                                                verticalDrag = false
+                                            }
+                                        }
+                                    }
+                                },
+                    ) {
+'''
+if final_box not in vehicle:
+    if previous_box in vehicle:
+        vehicle = vehicle.replace(previous_box, final_box, 1)
+    elif old_box in vehicle:
+        vehicle = vehicle.replace(old_box, final_box, 1)
+    else:
         raise SystemExit("VehicleLandscapeLayout right pane content Box marker missing")
-    vehicle = vehicle.replace(old_box, new_box, 1)
 
-provider_marker = """                    LocalNavController provides paneNavController,
-"""
-provider_addition = """                    LocalRightPaneScrollBridge provides rightPaneScrollBridge,
-"""
+provider_marker = '''                    LocalNavController provides paneNavController,
+'''
+provider_addition = '''                    LocalRightPaneScrollBridge provides rightPaneScrollBridge,
+'''
 if provider_addition not in vehicle:
     if provider_marker not in vehicle:
         raise SystemExit("VehicleLandscapeLayout CompositionLocalProvider marker missing")
     vehicle = vehicle.replace(provider_marker, provider_marker + provider_addition, 1)
-
 vehicle_path.write_text(vehicle, encoding="utf-8")
 
 
 artist_path = Path("app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt")
 artist = artist_path.read_text(encoding="utf-8")
-
 artist = ensure_after(
     artist,
     "import androidx.compose.runtime.Composable\n",
@@ -135,21 +234,46 @@ artist = ensure_after(
 )
 artist = ensure_after(
     artist,
+    "import androidx.compose.runtime.mutableStateOf\n",
+    "import androidx.compose.runtime.mutableStateMapOf\n",
+    "ArtistScreen state map import",
+)
+artist = ensure_after(
+    artist,
+    "import androidx.compose.ui.geometry.Offset\n",
+    "import androidx.compose.ui.geometry.Rect\n",
+    "ArtistScreen Rect import",
+)
+artist = ensure_after(
+    artist,
+    "import androidx.compose.ui.input.pointer.pointerInput\n",
+    "import androidx.compose.ui.layout.boundsInRoot\nimport androidx.compose.ui.layout.onGloballyPositioned\n",
+    "ArtistScreen bounds imports",
+)
+artist = ensure_after(
+    artist,
     "import com.metrolist.music.ui.component.LocalMenuState\n",
     "import com.metrolist.music.ui.component.LocalRightPaneScrollBridge\n",
     "ArtistScreen component import",
 )
 
-bridge_vars = """    val rightPaneScrollBridge = LocalRightPaneScrollBridge.current
+bridge_vars = '''    val rightPaneScrollBridge = LocalRightPaneScrollBridge.current
     val rightPaneScrollOwner = remember { Any() }
-"""
-if bridge_vars not in artist:
-    marker = "    val lazyListState = rememberLazyListState()\n"
-    if marker not in artist:
-        raise SystemExit("ArtistScreen LazyListState marker missing")
-    artist = artist.replace(marker, marker + bridge_vars, 1)
+'''
+final_bridge_vars = '''    val rightPaneScrollBridge = LocalRightPaneScrollBridge.current
+    val rightPaneScrollOwner = remember { Any() }
+    val rightPaneTapTargets = remember { mutableStateMapOf<String, Pair<Rect, () -> Unit>>() }
+'''
+if final_bridge_vars not in artist:
+    if bridge_vars in artist:
+        artist = artist.replace(bridge_vars, final_bridge_vars, 1)
+    else:
+        marker = "    val lazyListState = rememberLazyListState()\n"
+        if marker not in artist:
+            raise SystemExit("ArtistScreen LazyListState marker missing")
+        artist = artist.replace(marker, marker + final_bridge_vars, 1)
 
-registration = """    DisposableEffect(embeddedInPlayer, rightPaneScrollBridge, lazyListState) {
+previous_registration = '''    DisposableEffect(embeddedInPlayer, rightPaneScrollBridge, lazyListState) {
         if (embeddedInPlayer && rightPaneScrollBridge != null) {
             rightPaneScrollBridge.register(rightPaneScrollOwner) { delta ->
                 lazyListState.dispatchRawDelta(delta)
@@ -160,20 +284,48 @@ registration = """    DisposableEffect(embeddedInPlayer, rightPaneScrollBridge, 
         }
     }
 
-"""
-if registration not in artist:
-    marker = """    LaunchedEffect(libraryArtist) {
-        // always show local page for local artists. Show local page remote artist when offline
-        showLocal = libraryArtist?.artist?.isLocal == true
+'''
+final_registration = '''    DisposableEffect(embeddedInPlayer, rightPaneScrollBridge, lazyListState) {
+        if (embeddedInPlayer && rightPaneScrollBridge != null) {
+            rightPaneScrollBridge.register(
+                owner = rightPaneScrollOwner,
+                handler = { delta -> lazyListState.dispatchRawDelta(delta) },
+                tapHandler = { positionInRoot ->
+                    val target =
+                        rightPaneTapTargets.values.lastOrNull { (bounds, _) ->
+                            bounds.contains(positionInRoot)
+                        }
+                    if (target != null) {
+                        timber.log.Timber.tag("Dudu7ArtistSectionTap").i(
+                            "Bridged artist section tap x=%.1f y=%.1f",
+                            positionInRoot.x,
+                            positionInRoot.y,
+                        )
+                        target.second.invoke()
+                        true
+                    } else {
+                        false
+                    }
+                },
+            )
+        }
+        onDispose {
+            rightPaneScrollBridge?.unregister(rightPaneScrollOwner)
+            rightPaneTapTargets.clear()
+        }
     }
 
-"""
-    if marker not in artist:
-        raise SystemExit("ArtistScreen library artist effect marker missing")
-    artist = artist.replace(marker, marker + registration, 1)
+    LaunchedEffect(artistPage?.artist?.id) {
+        rightPaneTapTargets.clear()
+    }
 
-# Remove the unsuccessful screen-local pointer handler. The fixed right pane now
-# owns vertical gesture arbitration and forwards only vertical deltas to this list.
+'''
+if final_registration not in artist:
+    if previous_registration not in artist:
+        raise SystemExit("ArtistScreen bridge registration marker missing")
+    artist = artist.replace(previous_registration, final_registration, 1)
+
+# Remove the unsuccessful screen-local root pointer handler if it is still present.
 root_start = artist.find("    BoxWithConstraints(\n        modifier =\n            Modifier\n")
 root_end_marker = "    ) {\n        val embeddedPaneWidth = maxWidth\n"
 if root_start >= 0:
@@ -191,7 +343,6 @@ if "            userScrollEnabled = !embeddedInPlayer," not in artist:
     )
 if "            userScrollEnabled = !embeddedInPlayer," not in artist:
     raise SystemExit("ArtistScreen embedded userScrollEnabled setting missing")
-
 artist_path.write_text(artist, encoding="utf-8")
 
-print("Applied Dudu7 right-pane scroll bridge")
+print("Applied Dudu7 right-pane scroll and tap bridge")
