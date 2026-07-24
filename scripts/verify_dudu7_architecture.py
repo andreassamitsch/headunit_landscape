@@ -25,6 +25,8 @@ required = [
     "app/src/dudu7/java/com/android/fmradio/FmNative.java",
     "app/src/dudu7/java/com/android/fmradio/FmService.java",
     "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt",
+    "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmPresetOrderStore.kt",
+    "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmStationArtwork.kt",
     "app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt",
     "app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt",
     "app/src/dudu7/res/drawable/stop.xml",
@@ -78,13 +80,12 @@ checks = {
         "embeddedInPlayer: Boolean = false",
     ),
     "app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt": (
-        'QUEUE("Warteschlange"',
         'LIBRARY("Bibliothek"',
+        'WEBRADIO("WebRadio"',
+        'PHYSICAL_RADIO("FM"',
         'SEARCH("Suche"',
         'HISTORY("Hörverlauf"',
-        'PHYSICAL_RADIO("FM"',
-        'WEBRADIO("WebRadio"',
-        'HOME("Startseite"',
+        'QUEUE("Warteschlange"',
         "ScrollableTabRow(",
         "PhysicalRadioPlayerPane(",
         "PhysicalRadioScreen()",
@@ -103,6 +104,19 @@ checks = {
         "fun powerOff()",
         "fun seek(up: Boolean)",
     ),
+    "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmPresetOrderStore.kt": (
+        "object FmPresetOrderStore",
+        "fun ordered(",
+        "fun persist(",
+        "fun FytPhysicalRadio.tuneAdjacentFavourite(",
+    ),
+    "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmStationArtwork.kt": (
+        "object FmStationLogoResolver",
+        "RadioStationStore.get(appContext)",
+        "RadioBrowserClient.search(stationName)",
+        "RadioStationLogoResolver.resolve(station)",
+        "fun FmStationArtwork(",
+    ),
     "app/src/dudu7/java/com/android/fmradio/FmNative.java": (
         'System.loadLibrary("fmjni")',
         "public native boolean openDev()",
@@ -116,10 +130,22 @@ checks = {
         "RdsListener",
     ),
     "app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt": (
-        "FM-Favoriten",
+        "PhysicalRadioSection.FAVOURITES",
+        "PhysicalRadioSection.SEARCH",
+        'Text("Favoriten")',
+        'Text("Sendersuche")',
+        "rememberReorderableLazyListState",
+        "FmStationArtwork(",
+        "FmPresetOrderStore.persist",
         "radio.seek(false)",
         "radio.seek(true)",
-        "radio::saveCurrentPreset",
+        "radio.saveCurrentPreset()",
+    ),
+    "app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt": (
+        "FmStationArtwork(",
+        "radio.tuneAdjacentFavourite(context, next = false)",
+        "radio.tuneAdjacentFavourite(context, next = true)",
+        "radio.saveCurrentPreset()",
     ),
     "app/src/dudu7/AndroidManifest.xml": (
         "android.permission.MODIFY_AUDIO_SETTINGS",
@@ -127,7 +153,9 @@ checks = {
         'android:name="com.syu.music"',
     ),
     "app/src/main/kotlin/com/metrolist/music/ui/component/BottomSheet.kt": (
-        "if (!isExpandable || !state.isCollapsed)",
+        "val effectiveExpandable =",
+        "state.collapsedBound - state.dismissedBound > 2.dp",
+        "if (!effectiveExpandable || !state.isCollapsed)",
     ),
     "app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt": (
         "landscapeHorizontalPadding: Dp = PlayerHorizontalPadding",
@@ -164,6 +192,22 @@ for path, tokens in checks.items():
             missing_tokens.append(f"{path}: {token}")
 if missing_tokens:
     raise SystemExit("Fehlende Erweiterungspunkte:\n- " + "\n- ".join(missing_tokens))
+
+layout_path = "app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt"
+layout = (ROOT / layout_path).read_text(encoding="utf-8")
+expected_tab_order = (
+    'LIBRARY("Bibliothek"',
+    'WEBRADIO("WebRadio"',
+    'PHYSICAL_RADIO("FM"',
+    'SEARCH("Suche"',
+    'HISTORY("Hörverlauf"',
+    'QUEUE("Warteschlange"',
+)
+positions = [layout.index(token) for token in expected_tab_order]
+if positions != sorted(positions):
+    raise SystemExit("Falsche Dudu7-Tab-Reihenfolge: Bibliothek, WebRadio, FM, Suche, Hörverlauf, Warteschlange erwartet")
+if 'HOME("Startseite"' in layout:
+    raise SystemExit("Der nicht mehr gewünschte Startseite-Tab ist noch vorhanden")
 
 forbidden_dudu_controls = (
     "R.drawable.share",
