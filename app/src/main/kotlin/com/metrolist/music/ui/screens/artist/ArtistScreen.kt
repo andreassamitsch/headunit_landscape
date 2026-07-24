@@ -539,7 +539,7 @@ fun ArtistScreen(
                                         showInLibraryIcon = true,
                                         isActive = song.id == mediaMetadata?.id,
                                         isPlaying = isPlaying,
-                                        trailingContent = null,
+                                        trailingContent = {},
                                         modifier =
                                             Modifier
                                                 .fillMaxWidth()
@@ -637,7 +637,7 @@ fun ArtistScreen(
                                             item = song,
                                             isActive = mediaMetadata?.id == song.id,
                                             isPlaying = isPlaying,
-                                            trailingContent = null,
+                                            trailingContent = {},
                                             modifier =
                                                 Modifier.combinedClickable(
                                                     onClick = {
