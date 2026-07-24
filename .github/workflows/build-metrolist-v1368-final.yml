@@ -50,22 +50,29 @@ jobs:
           git pull --rebase origin main
           git push
 
-      - name: Apply definitive scroll fix
+      - name: Apply embedded artist scroll fix
         run: |
           set -euxo pipefail
           python3 scripts/apply_v1371_final_scroll_fix.py
-          python3 -m py_compile scripts/apply_v1371_final_scroll_fix.py scripts/apply_v1371_regression_fixes.py
+          python3 scripts/apply_v1371_embedded_artist_drag_fix.py
+          python3 -m py_compile \
+            scripts/apply_v1371_final_scroll_fix.py \
+            scripts/apply_v1371_embedded_artist_drag_fix.py \
+            scripts/apply_v1371_regression_fixes.py
           bash -n scripts/dudu7_v1371_regression_smoke.sh
           git diff --check
           grep -q 'isExpandable = !VehicleVariantConfig.isDudu7' app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt
-          grep -A5 'weight(1f - safePlayerWeight)' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt | grep -q 'nestedScroll(state.preUpPostDownNestedScrollConnection)'
-          grep -A5 'LazyColumn(' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt | grep -q 'modifier = Modifier.fillMaxSize()'
-          grep -q 'userScrollEnabled = true' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'detectVerticalDragGestures' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'lazyListState.dispatchRawDelta(-dragAmount)' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          if grep -A5 'weight(1f - safePlayerWeight)' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt | grep -q 'nestedScroll(state.preUpPostDownNestedScrollConnection)'; then
+            echo 'Right pane still contains obsolete sheet nested-scroll bridge' >&2
+            exit 1
+          fi
           grep -q 'selected or r >= width - 20' scripts/dudu7_v1371_regression_smoke.sh
           grep -q 'assert_scroll_moved' scripts/dudu7_v1371_regression_smoke.sh
           git add -A
           if ! git diff --cached --quiet; then
-            git commit -m 'fix(dudu7): release right-pane scroll gestures [skip ci]'
+            git commit -m 'fix(dudu7): make embedded artist vertically draggable [skip ci]'
             git pull --rebase origin main
             git push
           fi
