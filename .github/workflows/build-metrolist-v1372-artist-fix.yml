@@ -1,4 +1,4 @@
-name: Validate Metrolist 13.7.2 artist rendering
+name: Validate Metrolist 13.7.2 native artist scrolling
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: metrolist-v1372-artist-render
+  group: metrolist-v1372-native-artist-scroll
   cancel-in-progress: true
 
 jobs:
@@ -36,39 +36,41 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Record render validation run
+      - name: Record native scroll validation run
         run: |
           set -euxo pipefail
           mkdir -p _assistant
           printf 'run_id=%s\nstatus=running\ncommit=%s\n' \
-            "$GITHUB_RUN_ID" "$GITHUB_SHA" > _assistant/v1372_artist_render_run.txt
+            "$GITHUB_RUN_ID" "$GITHUB_SHA" > _assistant/v1372_native_artist_scroll_run.txt
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add _assistant/v1372_artist_render_run.txt
-          git commit -m 'test(dudu7): record artist render validation [skip ci]'
+          git add _assistant/v1372_native_artist_scroll_run.txt
+          git commit -m 'test(dudu7): record native artist scroll validation [skip ci]'
           git pull --rebase origin main
           git push
 
-      - name: Apply artist render fix and strict test
+      - name: Apply native scroll and strict visual test
         run: |
           set -euxo pipefail
-          python3 scripts/apply_v1374_artist_render_fix.py
-          python3 -m py_compile scripts/apply_v1374_artist_render_fix.py
+          python3 scripts/apply_v1375_native_artist_scroll.py
+          python3 -m py_compile scripts/apply_v1375_native_artist_scroll.py
           bash -n scripts/dudu7_v1371_regression_smoke.sh
           bash -n scripts/run_dudu7_emulator_ci.sh
           git diff --check
           grep -q 'versionCode = 161' app/build.gradle.kts
           grep -q 'versionName = "13.7.2"' app/build.gradle.kts
-          grep -q 'lazyListState.scrollBy(delta)' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'handler = null' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'userScrollEnabled = true' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'handler: ((Float) -> Unit)?' app/src/main/kotlin/com/metrolist/music/ui/component/RightPaneScrollBridge.kt
           grep -q 'rightPaneTapTargets\[playAllTapKey\]' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
           grep -q 'assert_artist_pixels_not_blank' scripts/dudu7_v1371_regression_smoke.sh
-          if grep -q '\.animateItem()' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt; then
-            echo 'Artist item placement animation remains' >&2
+          if grep -Eq 'rightPaneScrollDeltas|lazyListState\.(scrollBy|dispatchRawDelta)' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt; then
+            echo 'Parent-driven artist scrolling remains' >&2
             exit 1
           fi
           git add -A
           if ! git diff --cached --quiet; then
-            git commit -m 'fix(dudu7): keep artist items rendered while scrolling [skip ci]'
+            git commit -m 'fix(dudu7): let artist LazyColumn scroll natively [skip ci]'
             git pull --rebase origin main
             git push
           fi
@@ -151,7 +153,7 @@ jobs:
           available_kb="$(df --output=avail / | tail -n 1 | tr -d ' ')"
           test "$available_kb" -ge 9000000
 
-      - name: Run screenshot-based artist and Play All regression
+      - name: Run native scroll pixel and Play All regression
         run: |
           set -euxo pipefail
           cp scripts/dudu7_v1371_regression_smoke.sh scripts/dudu7_ui_smoke.sh
@@ -160,7 +162,7 @@ jobs:
         env:
           ARTIST_SCROLL_ONLY: '1'
 
-      - name: Confirm pixel and action evidence
+      - name: Confirm native pixel and action evidence
         run: |
           set -euxo pipefail
           grep -q 'Dudu7 artist scroll regression passed' "$RESULTS_DIR/regression-smoke.log"
@@ -169,11 +171,11 @@ jobs:
           grep -q 'Dudu7ArtistAction.*Play all clicked' "$RESULTS_DIR/artist-play-all-log.txt"
           grep -q 'Dudu7RightPaneTap.*handled=true' "$RESULTS_DIR/artist-play-all-log.txt"
 
-      - name: Upload validation evidence
+      - name: Upload native validation evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Metrolist-Dudu7-13.7.2-render-validation-${{ github.run_id }}
+          name: Metrolist-Dudu7-13.7.2-native-validation-${{ github.run_id }}
           path: |
             artifacts/
             ui-test-results/
