@@ -58,6 +58,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -67,9 +68,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -167,6 +171,7 @@ fun ArtistScreen(
     val lazyListState = rememberLazyListState()
     val rightPaneScrollBridge = LocalRightPaneScrollBridge.current
     val rightPaneScrollOwner = remember { Any() }
+    val rightPaneTapTargets = remember { mutableMapOf<String, Pair<Rect, () -> Unit>>() }
     val snackbarHostState = remember { SnackbarHostState() }
     var showLocal by rememberSaveable { mutableStateOf(false) }
     val density = LocalDensity.current
@@ -198,13 +203,36 @@ fun ArtistScreen(
 
     DisposableEffect(embeddedInPlayer, rightPaneScrollBridge, lazyListState) {
         if (embeddedInPlayer && rightPaneScrollBridge != null) {
-            rightPaneScrollBridge.register(rightPaneScrollOwner) { delta ->
-                lazyListState.dispatchRawDelta(delta)
-            }
+            rightPaneScrollBridge.register(
+                owner = rightPaneScrollOwner,
+                handler = { delta -> lazyListState.dispatchRawDelta(delta) },
+                tapHandler = { positionInRoot ->
+                    val target =
+                        rightPaneTapTargets.values.lastOrNull { (bounds, _) ->
+                            bounds.contains(positionInRoot)
+                        }
+                    if (target != null) {
+                        timber.log.Timber.tag("Dudu7ArtistSectionTap").i(
+                            "Bridged artist section tap x=%.1f y=%.1f",
+                            positionInRoot.x,
+                            positionInRoot.y,
+                        )
+                        target.second.invoke()
+                        true
+                    } else {
+                        false
+                    }
+                },
+            )
         }
         onDispose {
             rightPaneScrollBridge?.unregister(rightPaneScrollOwner)
+            rightPaneTapTargets.clear()
         }
+    }
+
+    LaunchedEffect(artistPage?.artist?.id) {
+        rightPaneTapTargets.clear()
     }
 
     BoxWithConstraints(
@@ -809,64 +837,27 @@ fun ArtistScreen(
                                 else -> null
                             }
 
-                        val embeddedSectionTapModifier =
-                            if (embeddedInPlayer && openSection != null) {
-                                val sectionClick = openSection
-                                Modifier.pointerInput(section.title, sectionClick) {
-                                    awaitPointerEventScope {
-                                        var downPosition: Offset? = null
-                                        var tapCancelled = false
-                                        while (true) {
-                                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                                            val change = event.changes.firstOrNull() ?: continue
-                                            when {
-                                                change.pressed && !change.previousPressed -> {
-                                                    downPosition = change.position
-                                                    tapCancelled = false
-                                                }
-
-                                                change.pressed && change.previousPressed -> {
-                                                    val start = downPosition
-                                                    if (
-                                                        start == null ||
-                                                        (change.position - start).getDistance() > viewConfiguration.touchSlop
-                                                    ) {
-                                                        tapCancelled = true
-                                                    }
-                                                }
-
-                                                !change.pressed && change.previousPressed -> {
-                                                    val start = downPosition
-                                                    val moved =
-                                                        start == null ||
-                                                            (change.position - start).getDistance() > viewConfiguration.touchSlop
-                                                    if (!tapCancelled && !moved) {
-                                                        change.consume()
-                                                        timber.log.Timber.tag("Dudu7ArtistSectionTap").i(
-                                                            "Embedded artist section tapped title=%s",
-                                                            section.title,
-                                                        )
-                                                        sectionClick.invoke()
-                                                    }
-                                                    downPosition = null
-                                                    tapCancelled = false
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            } else {
-                                Modifier
-                            }
-
+                        val sectionTapKey = "${index}_${section.title}"
                         if (section.items.isNotEmpty()) {
                             item(key = "section_${section.title}") {
+                                DisposableEffect(sectionTapKey) {
+                                    onDispose {
+                                        rightPaneTapTargets.remove(sectionTapKey)
+                                    }
+                                }
                                 NavigationTitle(
                                     title = section.title,
                                     modifier =
                                         Modifier
-                                            .then(embeddedSectionTapModifier)
-                                            .animateItem(),
+                                            .onGloballyPositioned { coordinates ->
+                                                val sectionClick = openSection
+                                                if (embeddedInPlayer && sectionClick != null) {
+                                                    rightPaneTapTargets[sectionTapKey] =
+                                                        coordinates.boundsInRoot() to sectionClick
+                                                } else {
+                                                    rightPaneTapTargets.remove(sectionTapKey)
+                                                }
+                                            }.animateItem(),
                                     onClick = openSection,
                                 )
                             }
