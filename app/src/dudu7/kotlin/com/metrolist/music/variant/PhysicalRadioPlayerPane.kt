@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -31,7 +32,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.metrolist.music.R
 import com.metrolist.music.playback.PlayerConnection
+import com.metrolist.music.radio.fyt.FmPresetOrderStore
+import com.metrolist.music.radio.fyt.FmStationArtwork
 import com.metrolist.music.radio.fyt.FytPhysicalRadio
+import com.metrolist.music.radio.fyt.tuneAdjacentFavourite
 import com.metrolist.music.utils.SearchRoutes
 
 @Composable
@@ -39,8 +43,13 @@ fun PhysicalRadioPlayerPane(
     radio: FytPhysicalRadio,
     playerConnection: PlayerConnection?,
 ) {
+    val context = LocalContext.current
     val state by radio.state.collectAsStateWithLifecycle()
     val searchableText = remember(state.rt, state.ps) { state.rt.ifBlank { state.ps } }
+    val isFavourite =
+        remember(state.frequency, state.presets) {
+            state.presets.any { FmPresetOrderStore.sameFrequency(it.frequency, state.frequency) }
+        }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -51,11 +60,10 @@ fun PhysicalRadioPlayerPane(
             contentAlignment = Alignment.Center,
             modifier = Modifier.weight(1f).fillMaxWidth(),
         ) {
-            Icon(
-                painter = painterResource(R.drawable.radio),
-                contentDescription = "Physisches FM-Radio",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(190.dp),
+            FmStationArtwork(
+                stationName = state.displayStation,
+                frequency = state.frequency,
+                size = 190.dp,
             )
         }
 
@@ -95,8 +103,16 @@ fun PhysicalRadioPlayerPane(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            IconButton(onClick = { radio.seek(false) }, enabled = state.isActive && !state.isBusy, modifier = Modifier.size(58.dp)) {
-                Icon(painterResource(R.drawable.skip_previous), contentDescription = "Vorherigen Sender suchen", modifier = Modifier.size(34.dp))
+            IconButton(
+                onClick = { radio.tuneAdjacentFavourite(context, next = false) },
+                enabled = state.isActive && !state.isBusy,
+                modifier = Modifier.size(58.dp),
+            ) {
+                Icon(
+                    painterResource(R.drawable.skip_previous),
+                    contentDescription = "Vorheriger FM-Favorit",
+                    modifier = Modifier.size(34.dp),
+                )
             }
 
             FilledIconButton(
@@ -131,8 +147,16 @@ fun PhysicalRadioPlayerPane(
                 )
             }
 
-            IconButton(onClick = { radio.seek(true) }, enabled = state.isActive && !state.isBusy, modifier = Modifier.size(58.dp)) {
-                Icon(painterResource(R.drawable.skip_next), contentDescription = "Nächsten Sender suchen", modifier = Modifier.size(34.dp))
+            IconButton(
+                onClick = { radio.tuneAdjacentFavourite(context, next = true) },
+                enabled = state.isActive && !state.isBusy,
+                modifier = Modifier.size(58.dp),
+            ) {
+                Icon(
+                    painterResource(R.drawable.skip_next),
+                    contentDescription = "Nächster FM-Favorit",
+                    modifier = Modifier.size(34.dp),
+                )
             }
         }
 
@@ -145,6 +169,26 @@ fun PhysicalRadioPlayerPane(
         ) {
             IconButton(onClick = { radio.step(false) }, enabled = !state.isBusy) {
                 Text("−0,1", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            IconButton(
+                onClick = {
+                    if (isFavourite) {
+                        val remaining = state.presets.filterNot {
+                            FmPresetOrderStore.sameFrequency(it.frequency, state.frequency)
+                        }
+                        radio.removePreset(state.frequency)
+                        FmPresetOrderStore.persist(context, remaining)
+                    } else {
+                        radio.saveCurrentPreset()
+                    }
+                },
+                enabled = state.isActive,
+            ) {
+                Icon(
+                    painter = painterResource(if (isFavourite) R.drawable.favorite else R.drawable.favorite_border),
+                    contentDescription = if (isFavourite) "FM-Favorit entfernen" else "FM-Favorit speichern",
+                    tint = if (isFavourite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                )
             }
             Text(
                 text = "●  FM LIVE",
