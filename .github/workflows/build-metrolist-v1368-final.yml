@@ -19,6 +19,7 @@ jobs:
     timeout-minutes: 90
     env:
       METROLIST_APP_NAME: Metrolist
+      VALIDATION_REVISION: section-tap-2
       API_LEVEL: '33'
       SYSTEM_TARGET: google_apis
       DATA_PARTITION_SIZE: 1536M
@@ -73,7 +74,9 @@ jobs:
           grep -q 'lazyListState.dispatchRawDelta(delta)' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
           grep -q 'userScrollEnabled = !embeddedInPlayer' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
           grep -q 'Dudu7ArtistNavigation' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
-          grep -q 'browseId=&params=' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'Dudu7ArtistSectionTap' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'browseId=__artist_songs__&params=' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'browseId == "__artist_songs__"' app/src/main/kotlin/com/metrolist/music/viewmodels/ArtistItemsViewModel.kt
           grep -q 'loadArtistSongFallback' app/src/main/kotlin/com/metrolist/music/viewmodels/ArtistItemsViewModel.kt
           grep -q 'find_clickable_coords' scripts/dudu7_v1371_regression_smoke.sh
           grep -q 'assert_artist_items_detail' scripts/dudu7_v1371_regression_smoke.sh
@@ -84,7 +87,7 @@ jobs:
           fi
           git add -A
           if ! git diff --cached --quiet; then
-            git commit -m 'fix(dudu7): finalize compact validated artist navigation [skip ci]'
+            git commit -m 'fix(dudu7): apply explicit embedded section taps [skip ci]'
             git pull --rebase origin main
             git push
           fi
@@ -203,6 +206,7 @@ jobs:
           test -f artifacts/SHA256SUMS.txt
           grep -q 'Dudu7 artist scroll regression passed' "$RESULTS_DIR/regression-smoke.log"
           grep -q 'PASS: real Top Songs detail screen opened' "$RESULTS_DIR/regression-smoke.log"
+          grep -q 'Dudu7ArtistSectionTap' "$RESULTS_DIR/artist-items-navigation-log.txt"
 
       - name: Upload APK and evidence
         if: always()
