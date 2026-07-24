@@ -360,44 +360,33 @@ fun rememberBottomSheetState(
     var previousAnchor by rememberSaveable {
         mutableIntStateOf(initialAnchor)
     }
-    val animatable =
-        remember {
-            Animatable(0.dp, Dp.VectorConverter)
-        }
+    val animatable = remember {
+        Animatable(0.dp, Dp.VectorConverter)
+    }
 
     return remember(dismissedBound, expandedBound, collapsedBound, coroutineScope) {
-        val initialValue =
-            when (previousAnchor) {
-                expandedAnchor -> expandedBound
-                collapsedAnchor -> collapsedBound
-                dismissedAnchor -> dismissedBound
-                else -> error("Unknown BottomSheet anchor")
-            }
-        val animatable =
-            animatable.apply {
-                updateBounds(lowerBound = dismissedBound, upperBound = expandedBound)
-                try {
-                    snapTo(initialValue)
-                } catch (_: Exception) {
-                    // ignored during initial composition
+        val initialValue = when (previousAnchor) {
+            expandedAnchor -> expandedBound
+            collapsedAnchor -> collapsedBound
+            dismissedAnchor -> dismissedBound
+            else -> error("Unknown BottomSheet anchor")
+        }
+
+        animatable.updateBounds(dismissedBound.coerceAtMost(expandedBound), expandedBound)
+        coroutineScope.launch {
+            animatable.animateTo(initialValue, NavigationBarAnimationSpec)
+        }
+
+        BottomSheetState(
+            draggableState = DraggableState { delta ->
+                coroutineScope.launch {
+                    animatable.snapTo(animatable.value - with(density) { delta.toDp() })
                 }
-            }
-        val state =
-            BottomSheetState(
-                draggableState =
-                    DraggableState { delta ->
-                        coroutineScope.launch {
-                            animatable.snapTo(
-                                (animatable.value - with(density) { delta.toDp() })
-                                    .coerceIn(dismissedBound, expandedBound),
-                            )
-                        }
-                    },
-                coroutineScope = coroutineScope,
-                animatable = animatable,
-                onAnchorChanged = { previousAnchor = it },
-                collapsedBound = collapsedBound,
-            )
-        state
+            },
+            onAnchorChanged = { previousAnchor = it },
+            coroutineScope = coroutineScope,
+            animatable = animatable,
+            collapsedBound = collapsedBound,
+        )
     }
 }
