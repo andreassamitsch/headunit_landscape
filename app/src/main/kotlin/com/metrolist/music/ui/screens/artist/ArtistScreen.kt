@@ -197,7 +197,9 @@ fun ArtistScreen(
         val embeddedPaneWidth = maxWidth
         LazyColumn(
             state = lazyListState,
+            modifier = Modifier.fillMaxSize(),
             contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues(),
+            userScrollEnabled = true,
         ) {
             if (artistPage == null && !showLocal) {
                 item(key = "shimmer") {

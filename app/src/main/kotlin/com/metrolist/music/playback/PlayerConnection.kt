@@ -401,16 +401,23 @@ class PlayerConnection(
         val activePlayer = getPlayerOrNull() ?: return
         if (activePlayer.shuffleModeEnabled) {
             activePlayer.shuffleModeEnabled = false
+            Timber.tag(TAG).i("Shuffle disabled; original timeline order active")
         } else {
+            val seed = System.nanoTime()
             if (activePlayer.mediaItemCount > 1) {
                 activePlayer.setShuffleOrder(
                     ShuffleOrder.DefaultShuffleOrder(
                         activePlayer.mediaItemCount,
-                        System.nanoTime(),
+                        seed,
                     ),
                 )
             }
             activePlayer.shuffleModeEnabled = true
+            Timber.tag(TAG).i(
+                "Shuffle enabled with fresh seed=%d itemCount=%d",
+                seed,
+                activePlayer.mediaItemCount,
+            )
         }
     }
 

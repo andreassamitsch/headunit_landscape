@@ -85,6 +85,12 @@ object MusicRecognitionService {
             _recognitionStatus.value = RecognitionStatus.Listening
             try {
                 val decoded = decodeRadioStream(streamUrl)
+                Timber.tag(TAG).i(
+                    "Direct radio stream decoded: bytes=%d sampleRate=%d channels=%d",
+                    decoded.data.size,
+                    decoded.sampleRate,
+                    decoded.channelCount,
+                )
                 recognizeDecodedAudio(decoded)
             } catch (error: Exception) {
                 Timber.tag(TAG).e(error, "Direct radio-stream recognition failed")
@@ -148,7 +154,7 @@ object MusicRecognitionService {
                 streamUrl,
                 mapOf(
                     "Icy-MetaData" to "0",
-                    "User-Agent" to "MetrolistHU/13.7.0 (direct recognition)",
+                    "User-Agent" to "MetrolistHU/13.7.1 (direct recognition)",
                 ),
             )
             val trackIndex =

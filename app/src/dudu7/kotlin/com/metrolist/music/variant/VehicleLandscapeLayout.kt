@@ -270,6 +270,7 @@ fun VehicleLandscapeLayout(
                 Modifier
                     .weight(1f - safePlayerWeight)
                     .fillMaxSize()
+                    .nestedScroll(state.preUpPostDownNestedScrollConnection)
                     .padding(start = 6.dp, end = 8.dp),
         ) {
             Column(Modifier.fillMaxSize()) {
