@@ -318,6 +318,13 @@ fun VehicleLandscapeLayout(
                         Tab(
                             selected = selectedTab == tab,
                             onClick = {
+                                if (tab == VehicleRightPaneTab.WEBRADIO && physicalRadio.state.value.isActive) {
+                                    // Release the FYT hardware source before ExoPlayer prepares the
+                                    // WebRadio stream. Waiting for isPlaying is too late and can leave
+                                    // a favourite tap apparently without effect because FM still owns
+                                    // the firmware audio route.
+                                    physicalRadio.powerOff()
+                                }
                                 if (selectedTab != tab || currentPaneRoute != tab.route) {
                                     selectedTab = tab
                                     val restoredExistingTab =
