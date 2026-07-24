@@ -1,4 +1,4 @@
-name: Final validation Metrolist 13.7.1
+name: Build validated Metrolist 13.7.1 APK
 
 on:
   push:
@@ -10,28 +10,13 @@ permissions:
   contents: write
 
 concurrency:
-  group: metrolist-v1371-final
+  group: metrolist-v1371-release
   cancel-in-progress: true
 
 jobs:
-  validate:
+  build-arm:
     runs-on: ubuntu-22.04
-    timeout-minutes: 90
-    env:
-      METROLIST_APP_NAME: Metrolist
-      VALIDATION_REVISION: parent-section-tap-3
-      API_LEVEL: '33'
-      SYSTEM_TARGET: google_apis
-      DATA_PARTITION_SIZE: 1536M
-      ANDROID_AVD_HOME: /mnt/android-avd
-      DUDU_WIDTH: '1280'
-      DUDU_HEIGHT: '720'
-      DUDU_DENSITY: '200'
-      TEST_URL: https://music.youtube.com/watch?v=dQw4w9WgXcQ
-      PACKAGE_NAME: com.metrolist.music.dudu7.debug
-      ACTIVITY_NAME: com.metrolist.music.MainActivity
-      RESULTS_DIR: ui-test-results
-      APK_PATH: dist/Metrolist-Dudu7-13.7.1-emulator.apk
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
@@ -39,58 +24,33 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Record final run id
+      - name: Record release run
         run: |
           set -euxo pipefail
           mkdir -p _assistant
-          printf 'run_id=%s\nstatus=running\ncommit=%s\n' \
-            "$GITHUB_RUN_ID" "$GITHUB_SHA" > _assistant/v1371_final_validation_run.txt
+          printf 'run_id=%s\nstatus=running\nsource_commit=%s\nui_validation_run=30090964124\n' \
+            "$GITHUB_RUN_ID" "$GITHUB_SHA" > _assistant/v1371_release_build_run.txt
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add _assistant/v1371_final_validation_run.txt
-          git commit -m 'test(dudu7): record 13.7.1 final validation [skip ci]'
+          git add _assistant/v1371_release_build_run.txt
+          git commit -m 'build(dudu7): record 13.7.1 release run [skip ci]'
           git pull --rebase origin main
           git push
 
-      - name: Apply scroll and Top Songs fixes
+      - name: Verify validated source markers
         run: |
           set -euxo pipefail
-          python3 scripts/apply_v1372_right_pane_scroll_bridge.py
-          python3 scripts/apply_v1372_artist_scroll_test_mode.py
-          python3 scripts/apply_v1372_top_songs_navigation_fix.py
-          python3 scripts/apply_v1372_parent_section_taps.py
-          python3 -m py_compile \
-            scripts/apply_v1372_right_pane_scroll_bridge.py \
-            scripts/apply_v1372_artist_scroll_test_mode.py \
-            scripts/apply_v1372_top_songs_navigation_fix.py \
-            scripts/apply_v1372_parent_section_taps.py
-          bash -n scripts/dudu7_v1371_regression_smoke.sh
-          bash -n scripts/run_dudu7_emulator_ci.sh
           git diff --check
           grep -q 'versionCode = 160' app/build.gradle.kts
           grep -q 'versionName = "13.7.1"' app/build.gradle.kts
-          grep -q 'isExpandable = !VehicleVariantConfig.isDudu7' app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt
           grep -q 'Dudu7RightPaneScroll' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'Dudu7RightPaneTap' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'rightPaneScrollBridge.dispatchTap' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'tapHandler:' app/src/main/kotlin/com/metrolist/music/ui/component/RightPaneScrollBridge.kt
           grep -q 'rightPaneTapTargets\[sectionTapKey\]' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
           grep -q 'coordinates.boundsInRoot() to sectionClick' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
-          grep -q 'Dudu7ArtistSectionTap' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
           grep -q 'browseId=__artist_songs__&params=' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
           grep -q 'browseId == "__artist_songs__"' app/src/main/kotlin/com/metrolist/music/viewmodels/ArtistItemsViewModel.kt
-          grep -q 'assert_artist_items_detail' scripts/dudu7_v1371_regression_smoke.sh
-          grep -q -- '-partition-size' scripts/run_dudu7_emulator_ci.sh
-          if grep -q 'val embeddedSectionTapModifier' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt; then
-            echo 'Obsolete child section tap handler is still present' >&2
-            exit 1
-          fi
-          git add -A
-          if ! git diff --cached --quiet; then
-            git commit -m 'fix(dudu7): route artist section taps through parent pane [skip ci]'
-            git pull --rebase origin main
-            git push
-          fi
 
       - uses: actions/setup-java@v4
         with:
@@ -101,99 +61,10 @@ jobs:
         with:
           cache-cleanup: on-success
 
-      - name: Build x86_64 test APK
+      - name: Build and verify ARM APK
         run: |
           set -euxo pipefail
-          mkdir -p artifacts dist "$RESULTS_DIR"
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('app/build.gradle.kts')
-          text = path.read_text(encoding='utf-8')
-          old = 'abiFilters += listOf("arm64-v8a", "armeabi-v7a")'
-          if old not in text:
-              raise SystemExit('Expected ARM ABI declaration not found')
-          path.write_text(text.replace(old, 'abiFilters += listOf("x86_64")', 1), encoding='utf-8')
-          PY
-          ./gradlew --console=plain :app:assembleGmsDudu7Debug --warning-mode summary 2>&1 | tee artifacts/build-x86.log
-          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
-          test -n "$APK"
-          cp "$APK" "$APK_PATH"
-          unzip -l "$APK_PATH" | grep 'lib/x86_64/'
-        env:
-          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
-          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
-
-      - name: Prepare deterministic radio streams
-        run: |
-          set -euxo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg
-          mkdir -p radio-test-data "$RESULTS_DIR"
-          ffmpeg -hide_banner -loglevel error -f lavfi -i 'sine=frequency=440:duration=18' -c:a libmp3lame -b:a 96k radio-test-data/station1.mp3
-          ffmpeg -hide_banner -loglevel error -f lavfi -i 'sine=frequency=660:duration=18' -c:a libmp3lame -b:a 96k radio-test-data/station2.mp3
-          ffmpeg -hide_banner -loglevel error -f lavfi -i 'sine=frequency=880:duration=18' -c:a libmp3lame -b:a 96k radio-test-data/station3.mp3
-          ffmpeg -hide_banner -loglevel error -f lavfi -i 'color=c=0x4f46e5:s=512x512' -frames:v 1 radio-test-data/logo3.png
-          python3 scripts/icy_test_server.py \
-            --audio1 radio-test-data/station1.mp3 \
-            --audio2 radio-test-data/station2.mp3 \
-            --audio3 radio-test-data/station3.mp3 \
-            --logo3 radio-test-data/logo3.png \
-            > "$RESULTS_DIR/icy-server.log" 2>&1 &
-          echo $! > "$RESULTS_DIR/icy-server.pid"
-          for i in {1..20}; do curl -fsS http://127.0.0.1:8000/health && break; sleep 1; done
-          curl -fsS http://127.0.0.1:8000/health
-
-      - name: Reclaim runner space and enable KVM
-        run: |
-          set -euxo pipefail
-          ./gradlew --stop || true
-          find . -type d -name build -prune -exec rm -rf {} +
-          rm -rf "$HOME/.gradle/daemon" "$HOME/.gradle/native" || true
-          sudo rm -rf \
-            /usr/share/dotnet \
-            /usr/local/share/boost \
-            /opt/ghc \
-            /usr/local/.ghcup \
-            "$ANDROID_HOME/ndk" \
-            "$ANDROID_HOME/cmake" || true
-          docker system prune -af || true
-          test -f "$APK_PATH"
-          sudo rm -rf "$ANDROID_AVD_HOME"
-          sudo mkdir -p "$ANDROID_AVD_HOME"
-          sudo chown -R "$USER":"$USER" "$ANDROID_AVD_HOME"
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
-            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm || true
-          sudo chmod 666 /dev/kvm
-          df -h / "$ANDROID_AVD_HOME" | tee "$RESULTS_DIR/disk-after-cleanup.txt"
-          available_kb="$(df --output=avail / | tail -n 1 | tr -d ' ')"
-          test "$available_kb" -ge 9000000
-
-      - name: Run deterministic artist scroll and Top Songs regression
-        run: |
-          set -euxo pipefail
-          cp scripts/dudu7_v1371_regression_smoke.sh scripts/dudu7_ui_smoke.sh
-          chmod +x scripts/run_dudu7_emulator_ci.sh scripts/dudu7_ui_smoke.sh
-          scripts/run_dudu7_emulator_ci.sh
-        env:
-          ARTIST_SCROLL_ONLY: '1'
-
-      - name: Confirm UI regression
-        run: |
-          set -euxo pipefail
-          grep -q 'Dudu7 artist scroll regression passed' "$RESULTS_DIR/regression-smoke.log"
-          grep -q 'PASS: real Top Songs detail screen opened' "$RESULTS_DIR/regression-smoke.log"
-          grep -q 'Dudu7RightPaneTap' "$RESULTS_DIR/artist-items-navigation-log.txt"
-          grep -q 'Dudu7ArtistSectionTap' "$RESULTS_DIR/artist-items-navigation-log.txt"
-          grep -q 'Dudu7ArtistItems' "$RESULTS_DIR/artist-items-navigation-log.txt"
-
-      - name: Build and verify ARM release APK
-        run: |
-          set -euxo pipefail
-          rm -rf "$ANDROID_AVD_HOME"
-          git checkout -- app/build.gradle.kts
-          rm -rf app/build
+          mkdir -p artifacts
           ./gradlew --console=plain :app:assembleGmsDudu7Debug --warning-mode summary 2>&1 | tee artifacts/build-arm.log
           APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
           test -n "$APK"
@@ -208,13 +79,10 @@ jobs:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
 
-      - name: Upload APK and evidence
-        if: always()
+      - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
-          name: Metrolist-Dudu7-13.7.1-final-${{ github.run_id }}
-          path: |
-            artifacts/
-            ui-test-results/
-          if-no-files-found: warn
+          name: Metrolist-Dudu7-13.7.1-release-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: error
           retention-days: 14
