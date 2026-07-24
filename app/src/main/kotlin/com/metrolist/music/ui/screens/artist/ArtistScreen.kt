@@ -193,7 +193,65 @@ fun ArtistScreen(
     }
 
     BoxWithConstraints(
-        modifier = Modifier.fillMaxSize(),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .then(
+                    if (embeddedInPlayer) {
+                        Modifier.pointerInput(lazyListState) {
+                            awaitPointerEventScope {
+                                var lastPosition: Offset? = null
+                                var accumulatedX = 0f
+                                var accumulatedY = 0f
+                                var verticalDrag = false
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    val change = event.changes.firstOrNull()
+                                    if (change == null || !change.pressed) {
+                                        if (verticalDrag) {
+                                            timber.log.Timber.tag("Dudu7ArtistScroll").d(
+                                                "Embedded artist drag ended index=%d offset=%d",
+                                                lazyListState.firstVisibleItemIndex,
+                                                lazyListState.firstVisibleItemScrollOffset,
+                                            )
+                                        }
+                                        lastPosition = null
+                                        accumulatedX = 0f
+                                        accumulatedY = 0f
+                                        verticalDrag = false
+                                        continue
+                                    }
+                                    if (!change.previousPressed || lastPosition == null) {
+                                        lastPosition = change.position
+                                        accumulatedX = 0f
+                                        accumulatedY = 0f
+                                        verticalDrag = false
+                                        continue
+                                    }
+                                    val previous = lastPosition ?: change.position
+                                    val delta = change.position - previous
+                                    lastPosition = change.position
+                                    accumulatedX += delta.x
+                                    accumulatedY += delta.y
+                                    if (
+                                        !verticalDrag &&
+                                        kotlin.math.abs(accumulatedY) > viewConfiguration.touchSlop &&
+                                        kotlin.math.abs(accumulatedY) > kotlin.math.abs(accumulatedX)
+                                    ) {
+                                        verticalDrag = true
+                                        timber.log.Timber.tag("Dudu7ArtistScroll").d("Embedded artist drag started")
+                                    }
+                                    if (verticalDrag) {
+                                        change.consume()
+                                        lazyListState.dispatchRawDelta(-delta.y)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Modifier
+                    },
+                ),
     ) {
         val embeddedPaneWidth = maxWidth
         LazyColumn(
