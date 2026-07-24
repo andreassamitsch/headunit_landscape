@@ -50,14 +50,16 @@ jobs:
           git pull --rebase origin main
           git push
 
-      - name: Apply scroll bridge and deterministic test mode
+      - name: Apply scroll and Top Songs fixes
         run: |
           set -euxo pipefail
           python3 scripts/apply_v1372_right_pane_scroll_bridge.py
           python3 scripts/apply_v1372_artist_scroll_test_mode.py
+          python3 scripts/apply_v1372_top_songs_navigation_fix.py
           python3 -m py_compile \
             scripts/apply_v1372_right_pane_scroll_bridge.py \
-            scripts/apply_v1372_artist_scroll_test_mode.py
+            scripts/apply_v1372_artist_scroll_test_mode.py \
+            scripts/apply_v1372_top_songs_navigation_fix.py
           bash -n scripts/dudu7_v1371_regression_smoke.sh
           git diff --check
           grep -q 'versionCode = 160' app/build.gradle.kts
@@ -68,15 +70,19 @@ jobs:
           grep -q 'rightPaneScrollBridge.register' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
           grep -q 'lazyListState.dispatchRawDelta(delta)' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
           grep -q 'userScrollEnabled = !embeddedInPlayer' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'Dudu7ArtistNavigation' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'browseId=&params=' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'loadArtistSongFallback' app/src/main/kotlin/com/metrolist/music/viewmodels/ArtistItemsViewModel.kt
+          grep -q 'find_clickable_coords' scripts/dudu7_v1371_regression_smoke.sh
+          grep -q 'assert_artist_items_detail' scripts/dudu7_v1371_regression_smoke.sh
           grep -q 'ARTIST_SCROLL_ONLY' scripts/dudu7_v1371_regression_smoke.sh
-          grep -q 'Dudu7 artist scroll regression passed' scripts/dudu7_v1371_regression_smoke.sh
           if grep -q 'var accumulatedY = 0f' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt; then
             echo 'Old screen-local drag handler is still present' >&2
             exit 1
           fi
           git add -A
           if ! git diff --cached --quiet; then
-            git commit -m 'test(dudu7): add deterministic artist scroll validation [skip ci]'
+            git commit -m 'fix(dudu7): make Top Songs truly navigable [skip ci]'
             git pull --rebase origin main
             git push
           fi
@@ -147,7 +153,7 @@ jobs:
           ls -l /dev/kvm
           df -h
 
-      - name: Run deterministic artist scroll regression
+      - name: Run deterministic artist scroll and Top Songs regression
         run: |
           set -euxo pipefail
           cp scripts/dudu7_v1371_regression_smoke.sh scripts/dudu7_ui_smoke.sh
