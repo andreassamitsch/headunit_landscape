@@ -15,7 +15,7 @@ import java.util.ArrayDeque
 import java.util.Locale
 
 object RadioStationLogoResolver {
-    private const val USER_AGENT = "MetrolistHU/13.6.6 (Android WebRadio)"
+    private const val USER_AGENT = "MetrolistHU/13.6.9 (Android WebRadio)"
     private const val MAX_HTML_BYTES = 1_500_000
     private const val MAX_PAGES = 5
 
@@ -35,6 +35,7 @@ object RadioStationLogoResolver {
 
     suspend fun resolve(station: RadioStation): String? =
         withContext(Dispatchers.IO) {
+            if (station.manualFavicon) return@withContext station.favicon.trim().takeIf(::isHttpUrl)
             val candidates = mutableListOf<Candidate>()
             val pageQueue = ArrayDeque<String>()
             val visitedPages = linkedSetOf<String>()

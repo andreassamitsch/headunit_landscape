@@ -175,9 +175,13 @@ fun VehicleLandscapeLayout(
         }
         val openRouteInRightPane: (String) -> Unit = { route ->
             selectedTab = VehicleRightPaneTab.SEARCH
-            paneNavController.navigate(route) {
-                launchSingleTop = true
+            if (
+                route.startsWith("search/") &&
+                paneNavController.currentDestination?.route == SearchRoutes.ROUTE
+            ) {
+                paneNavController.popBackStack()
             }
+            paneNavController.navigate(route)
         }
         val openRadioArtistInRightPane: (String) -> Unit = { artistName ->
             rightPaneScope.launch {
@@ -281,12 +285,15 @@ fun VehicleLandscapeLayout(
                             onClick = {
                                 if (selectedTab != tab || currentPaneRoute != tab.route) {
                                     selectedTab = tab
-                                    paneNavController.navigate(tab.route) {
-                                        popUpTo(VEHICLE_QUEUE_ROUTE) {
-                                            saveState = true
+                                    val restoredExistingTab =
+                                        paneNavController.popBackStack(tab.route, inclusive = false)
+                                    if (!restoredExistingTab) {
+                                        paneNavController.popBackStack(VEHICLE_QUEUE_ROUTE, inclusive = false)
+                                        if (tab != VehicleRightPaneTab.QUEUE) {
+                                            paneNavController.navigate(tab.route) {
+                                                launchSingleTop = true
+                                            }
                                         }
-                                        launchSingleTop = true
-                                        restoreState = true
                                     }
                                 }
                             },

@@ -81,6 +81,7 @@ class RadioStationStore private constructor(context: Context) {
                         put("streamUrl", station.streamUrl)
                         put("homepage", station.homepage)
                         put("favicon", station.favicon)
+                        put("manualFavicon", station.manualFavicon)
                         put("country", station.country)
                         put("language", station.language)
                         put("tags", station.tags)
@@ -98,6 +99,7 @@ class RadioStationStore private constructor(context: Context) {
             streamUrl = optString("streamUrl"),
             homepage = optString("homepage"),
             favicon = optString("favicon"),
+            manualFavicon = optBoolean("manualFavicon", false),
             country = optString("country"),
             language = optString("language"),
             tags = optString("tags"),

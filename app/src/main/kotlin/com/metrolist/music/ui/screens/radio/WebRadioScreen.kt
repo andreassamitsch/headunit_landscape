@@ -6,6 +6,7 @@ package com.metrolist.music.ui.screens.radio
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -237,10 +238,13 @@ fun WebRadioScreen() {
                                     onPlay = { if (isActive) playerConnection.togglePlayPause() else playSaved(station) },
                                     onSave = {},
                                     onLongClick = { actionStation = station },
-                                    dragHandleModifier =
-                                        Modifier.longPressDraggableHandle(
-                                            onDragStarted = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
-                                        ),
+                                    dragHandle = {
+                                        RadioDragHandle(
+                                            Modifier.draggableHandle(
+                                                onDragStarted = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
+                                            ),
+                                        )
+                                    },
                                     onLogoResolved = store::addOrUpdate,
                                 )
                             }
@@ -266,10 +270,13 @@ fun WebRadioScreen() {
                                     onPlay = { if (isActive) playerConnection.togglePlayPause() else playSaved(station) },
                                     onSave = {},
                                     onLongClick = { actionStation = station },
-                                    dragHandleModifier =
-                                        Modifier.longPressDraggableHandle(
-                                            onDragStarted = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
-                                        ),
+                                    dragHandle = {
+                                        RadioDragHandle(
+                                            Modifier.draggableHandle(
+                                                onDragStarted = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
+                                            ),
+                                        )
+                                    },
                                     onLogoResolved = store::addOrUpdate,
                                 )
                             }
@@ -516,7 +523,7 @@ private fun RadioStationRow(
     onPlay: () -> Unit,
     onSave: () -> Unit,
     onLongClick: () -> Unit,
-    dragHandleModifier: Modifier = Modifier,
+    dragHandle: @Composable () -> Unit = {},
     onLogoResolved: (RadioStation) -> Unit = {},
 ) {
     Row(
@@ -530,12 +537,14 @@ private fun RadioStationRow(
                 .combinedClickable(onClick = onPlay, onLongClick = onLongClick)
                 .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
-        RadioStationArtwork(station, 54, dragHandleModifier, onLogoResolved)
+        RadioStationArtwork(station, 54, Modifier, onLogoResolved)
         Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
             StationTitle(station, isActive, isPlaying)
             StationDetails(station)
         }
-        if (!isSaved) {
+        if (isSaved) {
+            dragHandle()
+        } else {
             IconButton(onClick = onSave) {
                 Icon(painterResource(R.drawable.add_circle), contentDescription = "Speichern")
             }
@@ -553,7 +562,7 @@ private fun RadioStationCard(
     onPlay: () -> Unit,
     onSave: () -> Unit,
     onLongClick: () -> Unit,
-    dragHandleModifier: Modifier = Modifier,
+    dragHandle: @Composable () -> Unit = {},
     onLogoResolved: (RadioStation) -> Unit = {},
 ) {
     Column(
@@ -568,8 +577,10 @@ private fun RadioStationCard(
                 .padding(10.dp),
     ) {
         Box(contentAlignment = Alignment.TopEnd) {
-            RadioStationArtwork(station, 88, dragHandleModifier, onLogoResolved)
-            if (!isSaved) {
+            RadioStationArtwork(station, 88, Modifier, onLogoResolved)
+            if (isSaved) {
+                Box(Modifier.align(Alignment.TopEnd)) { dragHandle() }
+            } else {
                 IconButton(onClick = onSave, modifier = Modifier.align(Alignment.TopEnd).size(34.dp)) {
                     Icon(painterResource(R.drawable.add_circle), contentDescription = "Speichern")
                 }
@@ -597,6 +608,19 @@ private fun RadioStationCard(
 }
 
 @Composable
+private fun RadioDragHandle(modifier: Modifier) {
+    IconButton(
+        onClick = {},
+        modifier = modifier.size(42.dp),
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.drag_handle),
+            contentDescription = "Sender verschieben",
+        )
+    }
+}
+
+@Composable
 private fun RadioStationArtwork(
     station: RadioStation,
     size: Int,
@@ -613,7 +637,7 @@ private fun RadioStationArtwork(
     if (artworkUrl.isNotBlank()) {
         AsyncImage(
             model = artworkUrl,
-            contentDescription = "Senderlogo ${station.name}; lange drücken und ziehen zum Sortieren",
+            contentDescription = "Senderlogo ${station.name}",
             contentScale = ContentScale.Crop,
             error = painterResource(R.drawable.radio),
             fallback = painterResource(R.drawable.radio),
@@ -716,6 +740,32 @@ private fun RadioStationEditorDialog(
     var name by remember(initial) { mutableStateOf(initial?.name.orEmpty()) }
     var streamUrl by remember(initial) { mutableStateOf(initial?.streamUrl.orEmpty()) }
     var favicon by remember(initial) { mutableStateOf(initial?.favicon.orEmpty()) }
+    var manualFavicon by remember(initial) { mutableStateOf(initial?.manualFavicon == true) }
+    var logoCandidates by remember(initial) { mutableStateOf<List<String>>(emptyList()) }
+    var logoSearchLoading by remember(initial) { mutableStateOf(false) }
+    var logoSearchError by remember(initial) { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    fun searchLogos() {
+        if (name.isBlank() || logoSearchLoading) return
+        scope.launch {
+            logoSearchLoading = true
+            logoSearchError = null
+            RadioBrowserClient.search(name.trim())
+                .onSuccess { stations ->
+                    logoCandidates =
+                        stations
+                            .asSequence()
+                            .map { it.favicon.trim() }
+                            .filter { it.startsWith("https://") || it.startsWith("http://") }
+                            .distinct()
+                            .take(16)
+                            .toList()
+                    if (logoCandidates.isEmpty()) logoSearchError = "Keine passenden Logos gefunden"
+                }.onFailure { logoSearchError = it.message ?: "Logosuche fehlgeschlagen" }
+            logoSearchLoading = false
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -724,7 +774,68 @@ private fun RadioStationEditorDialog(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Sendername") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = streamUrl, onValueChange = { streamUrl = it }, label = { Text("Stream-, M3U- oder PLS-Adresse") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = favicon, onValueChange = { favicon = it }, label = { Text("Senderbild (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(
+                    value = favicon,
+                    onValueChange = {
+                        favicon = it
+                        manualFavicon = it.isNotBlank()
+                    },
+                    label = { Text("Senderbild (optional)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (favicon.isNotBlank()) {
+                    AsyncImage(
+                        model = favicon,
+                        contentDescription = "Ausgewähltes Senderlogo",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.size(82.dp).clip(RoundedCornerShape(10.dp)),
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(onClick = ::searchLogos, enabled = name.isNotBlank() && !logoSearchLoading) {
+                        Text("Logos suchen")
+                    }
+                    TextButton(
+                        onClick = {
+                            favicon = ""
+                            manualFavicon = false
+                            logoCandidates = emptyList()
+                            logoSearchError = null
+                        },
+                    ) { Text("Automatisch") }
+                    if (logoSearchLoading) CircularProgressIndicator(Modifier.size(24.dp))
+                }
+                if (logoCandidates.isNotEmpty()) {
+                    Text("Logo auswählen", style = MaterialTheme.typography.labelLarge)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(logoCandidates, key = { it }) { candidate ->
+                            AsyncImage(
+                                model = candidate,
+                                contentDescription = "Logo auswählen",
+                                contentScale = ContentScale.Fit,
+                                modifier =
+                                    Modifier
+                                        .size(72.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .then(
+                                            if (favicon == candidate && manualFavicon) {
+                                                Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp))
+                                            } else {
+                                                Modifier
+                                            },
+                                        ).clickable {
+                                            favicon = candidate
+                                            manualFavicon = true
+                                        },
+                            )
+                        }
+                    }
+                }
+                logoSearchError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                if (manualFavicon && favicon.isNotBlank()) {
+                    Text("Dieses Logo bleibt fest eingestellt.", style = MaterialTheme.typography.bodySmall)
+                }
             }
         },
         confirmButton = {
@@ -733,7 +844,12 @@ private fun RadioStationEditorDialog(
                 onClick = {
                     onSave(
                         (initial ?: RadioStation(UUID.randomUUID().toString(), name.trim(), streamUrl.trim()))
-                            .copy(name = name.trim(), streamUrl = streamUrl.trim(), favicon = favicon.trim()),
+                            .copy(
+                                name = name.trim(),
+                                streamUrl = streamUrl.trim(),
+                                favicon = favicon.trim(),
+                                manualFavicon = manualFavicon && favicon.isNotBlank(),
+                            ),
                     )
                 },
             ) { Text("Speichern") }

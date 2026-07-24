@@ -20,6 +20,7 @@ data class RadioStation(
     val streamUrl: String,
     val homepage: String = "",
     val favicon: String = "",
+    val manualFavicon: Boolean = false,
     val country: String = "",
     val language: String = "",
     val tags: String = "",
@@ -60,6 +61,7 @@ data class RadioStation(
                             putString("radio_name", name)
                             putString("radio_stream_url", streamUrl)
                             putString("radio_favicon", favicon)
+                            putBoolean("radio_manual_favicon", manualFavicon)
                             putString("radio_country", country)
                         },
                     ).build(),
@@ -75,6 +77,7 @@ fun MediaItem.toRadioStationOrNull(): RadioStation? {
         name = extras?.getString("radio_name") ?: mediaMetadata.title?.toString().orEmpty(),
         streamUrl = extras?.getString("radio_stream_url") ?: localConfiguration?.uri?.toString().orEmpty(),
         favicon = extras?.getString("radio_favicon").orEmpty(),
+        manualFavicon = extras?.getBoolean("radio_manual_favicon", false) == true,
         country = extras?.getString("radio_country").orEmpty(),
     )
 }
