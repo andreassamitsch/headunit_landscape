@@ -18,3 +18,5 @@ jobs:
     steps:
       - name: Confirm paused state
         run: echo 'Metrolist validation is paused pending user review.'
+      - name: Stop here
+        run: echo 'No build, emulator, or APK task will run.'
