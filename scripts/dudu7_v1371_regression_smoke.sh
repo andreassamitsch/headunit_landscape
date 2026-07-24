@@ -324,9 +324,14 @@ if [[ "${ARTIST_SCROLL_ONLY:-0}" == "1" ]]; then
         tap_clickable_text "artist songs section retry" 1 "=Songs" "=Top songs" "=Top Songs" "=Top-Titel"
     fi
     sleep 10
-    dump_ui "$RESULTS_DIR/artist-songs-detail.xml"
-    assert_artist_items_detail "$RESULTS_DIR/artist-songs-detail.xml"
     adb logcat -d -v threadtime > "$RESULTS_DIR/artist-items-navigation-log.txt" || true
+    dump_ui "$RESULTS_DIR/artist-songs-detail.xml"
+    if ! assert_artist_items_detail "$RESULTS_DIR/artist-songs-detail.xml"; then
+        grep -E "Dudu7ArtistSectionTap|Dudu7ArtistNavigation|Dudu7ArtistItems|IllegalArgumentException|FATAL EXCEPTION"             "$RESULTS_DIR/artist-items-navigation-log.txt" || true
+        capture "artist-songs-detail-failure"
+        exit 1
+    fi
+    grep -q "Dudu7ArtistSectionTap" "$RESULTS_DIR/artist-items-navigation-log.txt"
     grep -q "Dudu7ArtistNavigation" "$RESULTS_DIR/artist-items-navigation-log.txt"
     grep -q "Dudu7ArtistItems" "$RESULTS_DIR/artist-items-navigation-log.txt"
     capture "artist-songs-detail"

@@ -45,7 +45,7 @@ constructor(
 
     init {
         viewModelScope.launch {
-            if (browseId.isBlank()) {
+            if (browseId.isBlank() || browseId == "__artist_songs__") {
                 loadArtistSongFallback()
             } else {
                 loadEndpoint(

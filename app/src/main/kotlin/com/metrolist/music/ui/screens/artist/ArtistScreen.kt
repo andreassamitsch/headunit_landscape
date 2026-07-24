@@ -797,11 +797,11 @@ fun ArtistScreen(
                                 isSongSection -> {
                                     {
                                         timber.log.Timber.tag("Dudu7ArtistNavigation").d(
-                                            "Opening artist section title=%s browseId=none fallback=true",
+                                            "Opening artist section title=%s browseId=artist_songs_fallback fallback=true",
                                             section.title,
                                         )
                                         navController.navigate(
-                                            "artist/${viewModel.artistId}/items?browseId=&params=",
+                                            "artist/${viewModel.artistId}/items?browseId=__artist_songs__&params=",
                                         )
                                     }
                                 }
@@ -809,11 +809,64 @@ fun ArtistScreen(
                                 else -> null
                             }
 
+                        val embeddedSectionTapModifier =
+                            if (embeddedInPlayer && openSection != null) {
+                                val sectionClick = openSection
+                                Modifier.pointerInput(section.title, sectionClick) {
+                                    awaitPointerEventScope {
+                                        var downPosition: Offset? = null
+                                        var tapCancelled = false
+                                        while (true) {
+                                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                                            val change = event.changes.firstOrNull() ?: continue
+                                            when {
+                                                change.pressed && !change.previousPressed -> {
+                                                    downPosition = change.position
+                                                    tapCancelled = false
+                                                }
+
+                                                change.pressed && change.previousPressed -> {
+                                                    val start = downPosition
+                                                    if (
+                                                        start == null ||
+                                                        (change.position - start).getDistance() > viewConfiguration.touchSlop
+                                                    ) {
+                                                        tapCancelled = true
+                                                    }
+                                                }
+
+                                                !change.pressed && change.previousPressed -> {
+                                                    val start = downPosition
+                                                    val moved =
+                                                        start == null ||
+                                                            (change.position - start).getDistance() > viewConfiguration.touchSlop
+                                                    if (!tapCancelled && !moved) {
+                                                        change.consume()
+                                                        timber.log.Timber.tag("Dudu7ArtistSectionTap").i(
+                                                            "Embedded artist section tapped title=%s",
+                                                            section.title,
+                                                        )
+                                                        sectionClick.invoke()
+                                                    }
+                                                    downPosition = null
+                                                    tapCancelled = false
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                Modifier
+                            }
+
                         if (section.items.isNotEmpty()) {
                             item(key = "section_${section.title}") {
                                 NavigationTitle(
                                     title = section.title,
-                                    modifier = Modifier.animateItem(),
+                                    modifier =
+                                        Modifier
+                                            .then(embeddedSectionTapModifier)
+                                            .animateItem(),
                                     onClick = openSection,
                                 )
                             }
