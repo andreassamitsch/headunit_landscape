@@ -25,6 +25,7 @@ required = [
     "app/src/dudu7/java/com/android/fmradio/FmNative.java",
     "app/src/dudu7/java/com/android/fmradio/FmService.java",
     "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt",
+    "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmNowPlayingResolver.kt",
     "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmPresetOrderStore.kt",
     "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmStationArtwork.kt",
     "app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt",
@@ -104,6 +105,13 @@ checks = {
         "fun powerOff()",
         "fun seek(up: Boolean)",
     ),
+    "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmNowPlayingResolver.kt": (
+        "object FmNowPlayingResolver",
+        "FmNowPlayingResolver",
+        "YouTube.SearchFilter.FILTER_SONG",
+        "isStrongMatch",
+        "coverUrl = song.thumbnail.resize(1200, 1200)",
+    ),
     "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmPresetOrderStore.kt": (
         "object FmPresetOrderStore",
         "fun ordered(",
@@ -142,9 +150,14 @@ checks = {
         "radio.saveCurrentPreset()",
     ),
     "app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt": (
+        "FmNowPlayingResolver.resolve",
         "FmStationArtwork(",
+        "nowPlaying.coverUrl",
         "radio.tuneAdjacentFavourite(context, next = false)",
         "radio.tuneAdjacentFavourite(context, next = true)",
+        "SearchRoutes.resultRoute",
+        "requestRadioArtistNavigation",
+        "syncUtils.likeSong(updated)",
         "radio.saveCurrentPreset()",
     ),
     "app/src/dudu7/AndroidManifest.xml": (
