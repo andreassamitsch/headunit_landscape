@@ -1,4 +1,4 @@
-name: Validate Metrolist 13.7.2 artist render rebuild
+name: Validate Metrolist 13.7.2 native artist input
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: metrolist-v1372-artist-render-rebuild
+  group: metrolist-v1372-native-artist-input
   cancel-in-progress: true
 
 jobs:
@@ -36,41 +36,37 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Record render rebuild run
+      - name: Record native input run
         run: |
           set -euxo pipefail
           mkdir -p _assistant
           printf 'run_id=%s\nstatus=running\ncommit=%s\n' \
-            "$GITHUB_RUN_ID" "$GITHUB_SHA" > _assistant/v1372_render_rebuild_run.txt
+            "$GITHUB_RUN_ID" "$GITHUB_SHA" > _assistant/v1372_native_artist_input_run.txt
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add _assistant/v1372_render_rebuild_run.txt
-          git commit -m 'test(dudu7): record artist render rebuild [skip ci]'
+          git add _assistant/v1372_native_artist_input_run.txt
+          git commit -m 'test(dudu7): record native artist input run [skip ci]'
           git pull --rebase origin main
           git push
 
-      - name: Apply render rebuild and strict visual test
+      - name: Apply native artist input and strict test
         run: |
           set -euxo pipefail
-          python3 scripts/apply_v1376_artist_render_rebuild.py
-          python3 scripts/apply_v1376b_artist_render_brace_fix.py
-          python3 -m py_compile \
-            scripts/apply_v1376_artist_render_rebuild.py \
-            scripts/apply_v1376b_artist_render_brace_fix.py
+          python3 scripts/apply_v1377_artist_native_pointer.py
+          python3 -m py_compile scripts/apply_v1377_artist_native_pointer.py
           bash -n scripts/dudu7_v1371_regression_smoke.sh
           bash -n scripts/run_dudu7_emulator_ci.sh
           git diff --check
           grep -q 'versionCode = 161' app/build.gradle.kts
           grep -q 'versionName = "13.7.2"' app/build.gradle.kts
-          grep -q 'key(artistRenderRevision)' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
-          grep -q 'artistRenderRevision += 1' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
-          grep -q 'scrollEndHandler = {' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
-          grep -q 'dispatchScrollEnd()' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
-          grep -q 'rightPaneTapTargets\[playAllTapKey\]' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'return@pointerInput' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+          grep -q 'currentPaneRoute?.startsWith("artist/") == true' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+          grep -q 'userScrollEnabled = true' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
           grep -q 'assert_artist_pixels_not_blank' scripts/dudu7_v1371_regression_smoke.sh
+          grep -q 'radio LIVE indicator cleared after Play All' scripts/dudu7_v1371_regression_smoke.sh
           git add -A
           if ! git diff --cached --quiet; then
-            git commit -m 'fix(dudu7): rebuild artist draw tree after drag [skip ci]'
+            git commit -m 'fix(dudu7): give artist screen native pointer input [skip ci]'
             git pull --rebase origin main
             git push
           fi
@@ -146,7 +142,7 @@ jobs:
           available_kb="$(df --output=avail / | tail -n 1 | tr -d ' ')"
           test "$available_kb" -ge 9000000
 
-      - name: Run render rebuild pixel and Play All regression
+      - name: Run native artist scroll and Play All regression
         run: |
           set -euxo pipefail
           cp scripts/dudu7_v1371_regression_smoke.sh scripts/dudu7_ui_smoke.sh
@@ -155,21 +151,20 @@ jobs:
         env:
           ARTIST_SCROLL_ONLY: '1'
 
-      - name: Confirm render and action evidence
+      - name: Confirm native rendering and playback evidence
         run: |
           set -euxo pipefail
           grep -q 'Dudu7 artist scroll regression passed' "$RESULTS_DIR/regression-smoke.log"
           test "$(grep -c 'PASS: artist pane has real rendered pixels after scrolling' "$RESULTS_DIR/regression-smoke.log")" -ge 2
           grep -q 'PASS: real Top Songs detail screen opened' "$RESULTS_DIR/regression-smoke.log"
           grep -q 'Dudu7ArtistAction.*Play all clicked' "$RESULTS_DIR/artist-play-all-log.txt"
-          grep -q 'Dudu7RightPaneTap.*handled=true' "$RESULTS_DIR/artist-play-all-log.txt"
-          grep -q 'Dudu7ArtistRender' "$RESULTS_DIR/right-pane-scroll-log.txt"
+          grep -q 'PASS: radio LIVE indicator cleared after Play All' "$RESULTS_DIR/regression-smoke.log"
 
-      - name: Upload render validation evidence
+      - name: Upload native input evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Metrolist-Dudu7-13.7.2-render-rebuild-${{ github.run_id }}
+          name: Metrolist-Dudu7-13.7.2-native-input-${{ github.run_id }}
           path: |
             artifacts/
             ui-test-results/
