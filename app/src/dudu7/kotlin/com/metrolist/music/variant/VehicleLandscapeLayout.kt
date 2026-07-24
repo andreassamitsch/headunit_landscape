@@ -41,6 +41,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -59,6 +62,8 @@ import com.metrolist.music.LocalPlayerAwareWindowInsets
 import com.metrolist.music.LocalPlayerConnection
 import com.metrolist.music.R
 import com.metrolist.music.ui.component.BottomSheetState
+import com.metrolist.music.ui.component.LocalRightPaneScrollBridge
+import com.metrolist.music.ui.component.RightPaneScrollBridge
 import com.metrolist.music.ui.screens.Screens
 import com.metrolist.music.ui.screens.navigationBuilder
 import com.metrolist.music.ui.screens.radio.WebRadioScreen
@@ -68,6 +73,7 @@ import java.text.Normalizer
 import java.util.Locale
 import timber.log.Timber
 import kotlin.math.max
+import kotlin.math.abs
 
 private const val VEHICLE_QUEUE_ROUTE = "vehicle_queue"
 private const val VEHICLE_WEBRADIO_ROUTE = "vehicle_webradio"
@@ -146,6 +152,7 @@ fun VehicleLandscapeLayout(
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val playerConnection = LocalPlayerConnection.current
     val rightPaneScope = rememberCoroutineScope()
+    val rightPaneScrollBridge = remember { RightPaneScrollBridge() }
 
     LaunchedEffect(currentPaneRoute) {
         VehicleRightPaneTab.entries
@@ -311,6 +318,7 @@ fun VehicleLandscapeLayout(
 
                 CompositionLocalProvider(
                     LocalNavController provides paneNavController,
+                    LocalRightPaneScrollBridge provides rightPaneScrollBridge,
                     LocalPlayerAwareWindowInsets provides
                         WindowInsets(
                             left = 0.dp,
@@ -319,7 +327,65 @@ fun VehicleLandscapeLayout(
                             bottom = 0.dp,
                         ),
                 ) {
-                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .pointerInput(currentPaneRoute, rightPaneScrollBridge.handler) {
+                                    val scrollHandler = rightPaneScrollBridge.handler ?: return@pointerInput
+                                    awaitPointerEventScope {
+                                        var lastPosition: Offset? = null
+                                        var accumulatedX = 0f
+                                        var accumulatedY = 0f
+                                        var verticalDrag = false
+                                        while (true) {
+                                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                                            val change = event.changes.firstOrNull()
+                                            if (change == null || !change.pressed) {
+                                                if (verticalDrag) {
+                                                    Timber.tag("Dudu7RightPaneScroll").i(
+                                                        "Right-pane vertical drag ended route=%s",
+                                                        currentPaneRoute,
+                                                    )
+                                                }
+                                                lastPosition = null
+                                                accumulatedX = 0f
+                                                accumulatedY = 0f
+                                                verticalDrag = false
+                                                continue
+                                            }
+                                            if (!change.previousPressed || lastPosition == null) {
+                                                lastPosition = change.position
+                                                accumulatedX = 0f
+                                                accumulatedY = 0f
+                                                verticalDrag = false
+                                                continue
+                                            }
+                                            val previous = lastPosition ?: change.position
+                                            val delta = change.position - previous
+                                            lastPosition = change.position
+                                            accumulatedX += delta.x
+                                            accumulatedY += delta.y
+                                            if (
+                                                !verticalDrag &&
+                                                abs(accumulatedY) > viewConfiguration.touchSlop &&
+                                                abs(accumulatedY) > abs(accumulatedX)
+                                            ) {
+                                                verticalDrag = true
+                                                Timber.tag("Dudu7RightPaneScroll").i(
+                                                    "Right-pane vertical drag started route=%s",
+                                                    currentPaneRoute,
+                                                )
+                                            }
+                                            if (verticalDrag) {
+                                                change.consume()
+                                                scrollHandler(-delta.y)
+                                            }
+                                        }
+                                    }
+                                },
+                    ) {
                         if (activity != null) {
                             NavHost(
                                 navController = paneNavController,

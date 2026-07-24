@@ -52,6 +52,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
@@ -111,6 +112,7 @@ import com.metrolist.music.ui.component.HideOnScrollFAB
 import com.metrolist.music.ui.component.IconButton
 import com.metrolist.music.ui.component.LinkSegment
 import com.metrolist.music.ui.component.LocalMenuState
+import com.metrolist.music.ui.component.LocalRightPaneScrollBridge
 import com.metrolist.music.ui.component.NavigationTitle
 import com.metrolist.music.ui.component.SongListItem
 import com.metrolist.music.ui.component.YouTubeGridItem
@@ -163,6 +165,8 @@ fun ArtistScreen(
     val showMonthlyListeners by rememberPreference(key = ShowMonthlyListenersKey, defaultValue = true)
 
     val lazyListState = rememberLazyListState()
+    val rightPaneScrollBridge = LocalRightPaneScrollBridge.current
+    val rightPaneScrollOwner = remember { Any() }
     val snackbarHostState = remember { SnackbarHostState() }
     var showLocal by rememberSaveable { mutableStateOf(false) }
     val density = LocalDensity.current
@@ -192,66 +196,19 @@ fun ArtistScreen(
         showLocal = libraryArtist?.artist?.isLocal == true
     }
 
+    DisposableEffect(embeddedInPlayer, rightPaneScrollBridge, lazyListState) {
+        if (embeddedInPlayer && rightPaneScrollBridge != null) {
+            rightPaneScrollBridge.register(rightPaneScrollOwner) { delta ->
+                lazyListState.dispatchRawDelta(delta)
+            }
+        }
+        onDispose {
+            rightPaneScrollBridge?.unregister(rightPaneScrollOwner)
+        }
+    }
+
     BoxWithConstraints(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .then(
-                    if (embeddedInPlayer) {
-                        Modifier.pointerInput(lazyListState) {
-                            awaitPointerEventScope {
-                                var lastPosition: Offset? = null
-                                var accumulatedX = 0f
-                                var accumulatedY = 0f
-                                var verticalDrag = false
-                                while (true) {
-                                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                                    val change = event.changes.firstOrNull()
-                                    if (change == null || !change.pressed) {
-                                        if (verticalDrag) {
-                                            timber.log.Timber.tag("Dudu7ArtistScroll").d(
-                                                "Embedded artist drag ended index=%d offset=%d",
-                                                lazyListState.firstVisibleItemIndex,
-                                                lazyListState.firstVisibleItemScrollOffset,
-                                            )
-                                        }
-                                        lastPosition = null
-                                        accumulatedX = 0f
-                                        accumulatedY = 0f
-                                        verticalDrag = false
-                                        continue
-                                    }
-                                    if (!change.previousPressed || lastPosition == null) {
-                                        lastPosition = change.position
-                                        accumulatedX = 0f
-                                        accumulatedY = 0f
-                                        verticalDrag = false
-                                        continue
-                                    }
-                                    val previous = lastPosition ?: change.position
-                                    val delta = change.position - previous
-                                    lastPosition = change.position
-                                    accumulatedX += delta.x
-                                    accumulatedY += delta.y
-                                    if (
-                                        !verticalDrag &&
-                                        kotlin.math.abs(accumulatedY) > viewConfiguration.touchSlop &&
-                                        kotlin.math.abs(accumulatedY) > kotlin.math.abs(accumulatedX)
-                                    ) {
-                                        verticalDrag = true
-                                        timber.log.Timber.tag("Dudu7ArtistScroll").d("Embedded artist drag started")
-                                    }
-                                    if (verticalDrag) {
-                                        change.consume()
-                                        lazyListState.dispatchRawDelta(-delta.y)
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        Modifier
-                    },
-                ),
+        modifier = Modifier.fillMaxSize(),
     ) {
         val embeddedPaneWidth = maxWidth
         LazyColumn(
