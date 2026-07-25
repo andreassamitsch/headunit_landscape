@@ -19,3 +19,15 @@ internal fun replaceFavoriteStation(
     val replaced = ordered.map { if (it.uuid == selected.uuid) selected else it }
     return if (replaced.any { it.uuid == selected.uuid }) replaced else replaced + selected
 }
+
+/** Return the adjacent saved station without handing the full list to ExoPlayer. */
+internal fun radioFavoriteNeighbor(
+    ordered: List<RadioStation>,
+    currentMediaId: String?,
+    direction: Int,
+): RadioStation? {
+    if (direction != -1 && direction != 1) return null
+    val currentIndex = ordered.indexOfFirst { it.mediaId == currentMediaId }
+    if (currentIndex < 0) return null
+    return ordered.getOrNull(currentIndex + direction)
+}
