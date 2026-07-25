@@ -1,3 +1,5 @@
 run_id=30155267297
-status=running
-workflow_sha=9f663c66c8c80c10f28b98f67a812a7ad7baac67
+status=success
+validated_commit=a768e0d53f634cff963f81da8088e1ff48d307dc
+artifact_name=Metrolist-Dudu7-13.7.1-Round3-30155267297
+apk_sha256=df0607ae1c2ecc87caef8ba2cf647c5a4b904f0d747e05b85eb1aa5b4f4116ce
