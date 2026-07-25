@@ -1,3 +1,5 @@
-run_id=30161549459
-status=failure-emulator
-workflow_sha=d5c8c710e2fcc0fb4417664ed9c99f46d5e305a2
+status=success
+validated_by_run=30161549459
+validated_commit=c9cbd79d6978730081cf082cc65b750f1a6382f7
+arm_artifact_run=30161275480
+apk_sha256=ec8614886547eabff38581446b220a57916c9b4893324f8beaa8d6b9ffbcd36a
