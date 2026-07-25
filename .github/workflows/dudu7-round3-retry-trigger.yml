@@ -55,5 +55,5 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add .github/workflows/dudu7-reliability-round3.yml
-          git commit -m 'Correct round 3 architecture validation [skip ci]'
+          git commit -m 'Correct round 3 architecture validation'
           git push origin HEAD:agent/fm-radio-ui-logos-tabs
