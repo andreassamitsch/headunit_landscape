@@ -50,11 +50,11 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p .build-metadata
-          printf 'run_id=%s\nstatus=running-emulator\nworkflow_sha=%s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" > "$STATUS_FILE"
+          printf 'run_id=%s\nstatus=running-emulator-diagnostic\nworkflow_sha=%s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" > "$STATUS_FILE"
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add "$STATUS_FILE"
-          git commit -m 'Record resumed favorites emulator run [skip ci]'
+          git commit -m 'Record diagnostic favorites emulator run [skip ci]'
           git push origin HEAD:agent/fm-radio-ui-logos-tabs
 
       - uses: actions/setup-java@v4
@@ -130,11 +130,35 @@ jobs:
           sudo udevadm trigger --name-match=kvm || true
           sudo chmod 666 /dev/kvm
 
-      - name: Run deterministic favorites regression
+      - name: Run deterministic favorites regression with diagnostics
         shell: bash
         run: |
           set -euxo pipefail
           cp scripts/dudu7_round3_reliability_smoke.sh scripts/dudu7_ui_smoke.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/dudu7_ui_smoke.sh')
+          text = path.read_text(encoding='utf-8')
+          marker = 'exec > >(tee "$RESULTS_DIR/round3-smoke.log") 2>&1\n'
+          diagnostic = r'''
+
+diagnostic_exit() {
+  local status=$?
+  trap - EXIT
+  adb shell pidof "$PACKAGE_NAME" > "$RESULTS_DIR/app-pid-at-exit.txt" 2>&1 || true
+  adb logcat -d -v threadtime > "$RESULTS_DIR/logcat-at-exit.txt" 2>&1 || true
+  adb shell dumpsys activity activities > "$RESULTS_DIR/activities-at-exit.txt" 2>&1 || true
+  adb shell dumpsys window windows > "$RESULTS_DIR/windows-at-exit.txt" 2>&1 || true
+  adb shell dumpsys package "$PACKAGE_NAME" > "$RESULTS_DIR/package-at-exit.txt" 2>&1 || true
+  capture "exit-state" || true
+  exit "$status"
+}
+trap diagnostic_exit EXIT
+'''
+          if marker not in text:
+              raise SystemExit('smoke log marker missing')
+          path.write_text(text.replace(marker, marker + diagnostic, 1), encoding='utf-8')
+          PY
           chmod +x scripts/run_dudu7_emulator_ci.sh scripts/dudu7_ui_smoke.sh
           scripts/run_dudu7_emulator_ci.sh
 
@@ -145,7 +169,7 @@ jobs:
           grep -q 'PASS: favorite starts immediately and latest selection wins delayed refresh' "$RESULTS_DIR/round3-smoke.log"
           grep -q 'PASS: stale favorite one URL persisted as current station1 URL' "$RESULTS_DIR/round3-smoke.log"
           grep -q 'PASS: stale favorite two URL persisted as current station2 URL' "$RESULTS_DIR/round3-smoke.log"
-          ! grep -E "FATAL EXCEPTION|ANR in ${PACKAGE_NAME}" "$RESULTS_DIR/logcat.txt"
+          ! grep -E "FATAL EXCEPTION|ANR in ${PACKAGE_NAME}" "$RESULTS_DIR/logcat-at-exit.txt"
           cp /tmp/RadioBrowserClient.production.kt app/src/main/kotlin/com/metrolist/music/radio/RadioBrowserClient.kt
           cp /tmp/build.gradle.production.kts app/build.gradle.kts
           rm -f scripts/dudu7_ui_smoke.sh
@@ -179,6 +203,7 @@ jobs:
           name: Metrolist-Dudu7-WebRadio-Favorites-Emulator-${{ github.run_id }}
           path: |
             artifacts/
+            dist/
             ui-test-results-favorites-hotfix/
           if-no-files-found: warn
           retention-days: 14
@@ -192,9 +217,9 @@ jobs:
           git fetch origin agent/fm-radio-ui-logos-tabs
           git checkout -B agent/fm-radio-ui-logos-tabs origin/agent/fm-radio-ui-logos-tabs
           mkdir -p .build-metadata
-          printf 'run_id=%s\nstatus=failure-emulator\nworkflow_sha=%s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" > "$STATUS_FILE"
+          printf 'run_id=%s\nstatus=failure-emulator-diagnostic\nworkflow_sha=%s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" > "$STATUS_FILE"
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add "$STATUS_FILE"
-          git commit -m 'Record failed favorites emulator validation [skip ci]' || exit 0
+          git commit -m 'Record failed diagnostic favorites emulator validation [skip ci]' || exit 0
           git push origin HEAD:agent/fm-radio-ui-logos-tabs
