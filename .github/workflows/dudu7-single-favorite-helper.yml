@@ -1,4 +1,4 @@
-name: Dudu7 focused single-favorite build
+name: Dudu7 focused single-favorite resume
 
 on:
   push:
@@ -15,9 +15,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  targeted-test-build:
+  focused-emulator-and-commit:
     runs-on: ubuntu-22.04
-    timeout-minutes: 55
+    timeout-minutes: 45
     env:
       SOURCE_BRANCH: agent/fm-radio-ui-logos-tabs
       HELPER_BRANCH: agent/webradio-single-favorite-build
@@ -47,30 +47,25 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Record focused run
+      - name: Record resumed run
         shell: bash
         run: |
           set -euxo pipefail
           mkdir -p .build-metadata
-          printf 'run_id=%s\nstatus=running\nhelper_sha=%s\n' "$GITHUB_RUN_ID" "$(git rev-parse HEAD)" > "$STATUS_FILE"
+          printf 'run_id=%s\nstatus=running-resume\nhelper_sha=%s\narm_run=30168680734\n' "$GITHUB_RUN_ID" "$(git rev-parse HEAD)" > "$STATUS_FILE"
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add "$STATUS_FILE"
-          git commit -m 'Record focused WebRadio build [skip ci]'
+          git commit -m 'Record resumed WebRadio test [skip ci]'
           git push origin HEAD:"$HELPER_BRANCH"
 
-      - name: Checkout current source branch
+      - name: Checkout source and apply validated patch
         shell: bash
         run: |
           set -euxo pipefail
           git fetch origin "$SOURCE_BRANCH"
           git checkout -B "$SOURCE_BRANCH" "origin/$SOURCE_BRANCH"
           git submodule update --init --recursive
-
-      - name: Apply agreed architecture
-        shell: bash
-        run: |
-          set -euxo pipefail
           python3 scripts/apply_webradio_single_favorite.py
           git diff --check
           grep -q 'items = listOf(playable.toMediaItem())' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
@@ -85,38 +80,11 @@ jobs:
         with:
           cache-cleanup: on-success
 
-      - name: Test only changed order logic
-        shell: bash
-        run: |
-          set -euxo pipefail
-          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --tests com.metrolist.music.radio.RadioFavoriteNavigationTest
-        env:
-          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
-          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
-
-      - name: Build signed ARM APK
+      - name: Build only x86 test APK
         shell: bash
         run: |
           set -euxo pipefail
           mkdir -p dist artifacts
-          rm -rf app/build
-          ./gradlew --console=plain :app:assembleGmsDudu7Debug --warning-mode summary 2>&1 | tee artifacts/build-arm.log
-          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
-          test -n "$APK"
-          cp "$APK" dist/Metrolist-Dudu7-13.7.2-WebRadio-Favorites.apk
-          aapt dump badging dist/Metrolist-Dudu7-13.7.2-WebRadio-Favorites.apk | grep "package: name='com.metrolist.music.dudu7' versionCode='161'"
-          unzip -l dist/Metrolist-Dudu7-13.7.2-WebRadio-Favorites.apk | grep 'lib/arm64-v8a/'
-          unzip -l dist/Metrolist-Dudu7-13.7.2-WebRadio-Favorites.apk | grep 'lib/armeabi-v7a/'
-          apksigner verify --verbose --print-certs dist/Metrolist-Dudu7-13.7.2-WebRadio-Favorites.apk | tee artifacts/apksigner.txt
-          sha256sum dist/Metrolist-Dudu7-13.7.2-WebRadio-Favorites.apk | tee artifacts/apk-sha256.txt
-        env:
-          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
-          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
-
-      - name: Build x86 test APK
-        shell: bash
-        run: |
-          set -euxo pipefail
           cp app/build.gradle.kts /tmp/build.gradle.production.kts
           python3 - <<'PY'
           from pathlib import Path
@@ -131,6 +99,7 @@ jobs:
           APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
           test -n "$APK"
           cp "$APK" "$APK_PATH"
+          unzip -l "$APK_PATH" | grep 'lib/x86_64/'
         env:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
@@ -148,7 +117,7 @@ jobs:
           for i in {1..30}; do curl -fsS http://127.0.0.1:8000/health && break; sleep 1; done
           curl -fsS http://127.0.0.1:8000/health
 
-      - name: Run only start-next-previous emulator test
+      - name: Run only start-next-previous test
         shell: bash
         run: |
           set -euxo pipefail
@@ -165,7 +134,7 @@ jobs:
           scripts/run_dudu7_emulator_ci.sh
           grep -q 'PASS: single favorite start, next and previous' "$RESULTS_DIR/smoke.log"
 
-      - name: Commit validated production source
+      - name: Commit tested production source
         shell: bash
         run: |
           set -euxo pipefail
@@ -183,13 +152,12 @@ jobs:
           git pull --rebase origin "$SOURCE_BRANCH"
           git push origin HEAD:"$SOURCE_BRANCH"
 
-      - name: Upload APK and focused evidence
+      - name: Upload focused evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Metrolist-Dudu7-13.7.2-WebRadio-Favorites-${{ github.run_id }}
+          name: Metrolist-Dudu7-WebRadio-Single-Favorite-Resume-${{ github.run_id }}
           path: |
-            dist/Metrolist-Dudu7-13.7.2-WebRadio-Favorites.apk
             artifacts/
             ui-test-results-single-favorite/
           if-no-files-found: warn
