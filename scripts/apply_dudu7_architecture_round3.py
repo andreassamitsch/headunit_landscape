@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 from pathlib import Path
 
-path = Path(__file__).resolve().parents[1] / "scripts/verify_dudu7_architecture.py"
+root = Path(__file__).resolve().parents[1]
+path = root / "scripts/verify_dudu7_architecture.py"
 text = path.read_text(encoding="utf-8")
 replacements = [
     (
@@ -51,4 +52,22 @@ for old, new in replacements:
         raise SystemExit(f"Expected architecture token not found: {old[:120]!r}")
     text = text.replace(old, new, 1)
 path.write_text(text, encoding="utf-8")
-print("Updated Dudu7 architecture checks for round 3")
+
+# The app test source set uses JUnit directly rather than kotlin.test.
+test_import_fixes = {
+    root / "app/src/test/kotlin/com/metrolist/music/radio/RadioFavoriteQueueTest.kt": (
+        "import kotlin.test.Test\nimport kotlin.test.assertEquals",
+        "import org.junit.Assert.assertEquals\nimport org.junit.Test",
+    ),
+    root / "app/src/test/kotlin/com/metrolist/music/playback/LatestRequestGateTest.kt": (
+        "import kotlin.test.Test\nimport kotlin.test.assertFalse\nimport kotlin.test.assertTrue",
+        "import org.junit.Assert.assertFalse\nimport org.junit.Assert.assertTrue\nimport org.junit.Test",
+    ),
+}
+for test_path, (old, new) in test_import_fixes.items():
+    test_text = test_path.read_text(encoding="utf-8")
+    if old not in test_text:
+        raise SystemExit(f"Expected test imports not found in {test_path}")
+    test_path.write_text(test_text.replace(old, new, 1), encoding="utf-8")
+
+print("Updated Dudu7 architecture checks and JUnit imports for round 3")
