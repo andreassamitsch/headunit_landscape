@@ -61,9 +61,9 @@ jobs:
           set -euxo pipefail
           grep -q 'get() = listOf(Home, Search, ListenTogether, Library)' app/src/main/kotlin/com/metrolist/music/ui/screens/Screens.kt
           grep -q 'assertNotSame(first, second)' app/src/test/kotlin/com/metrolist/music/ui/screens/ScreensInitializationTest.kt
-          keytool -list -v -keystore app/keystore/dudu7-debug.keystore -storepass android -alias androiddebugkey \
-            | tee certificate.txt
-          grep -q 'SHA256: D5:84:2D:91:77:A6:4C:29:45:7C:57:03:9E:EA:DA:D8:13:3A:72:F6:A4:D3:64:98:72:5E:DF:3F:58:B3:B3:77' certificate.txt
+          CERT_SHA="$(keytool -exportcert -keystore app/keystore/dudu7-debug.keystore -storepass android -alias androiddebugkey \
+            | openssl dgst -sha256 | awk '{print $NF}')"
+          test "$CERT_SHA" = 'd5842d9177a64c29457c57039eeadad8133a72f6a4d36498725edf3f58b3b377'
 
       - name: Run targeted regression test
         shell: bash
