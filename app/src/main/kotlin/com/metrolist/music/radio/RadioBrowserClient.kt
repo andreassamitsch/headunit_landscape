@@ -20,6 +20,7 @@ import java.util.UUID
 object RadioBrowserClient {
     private const val USER_AGENT = "MetrolistHU/13.7.1 (Android WebRadio)"
     private const val SEARCH_ENDPOINT = "https://all.api.radio-browser.info/json/stations/search"
+    private const val STATION_BY_UUID_ENDPOINT = "https://all.api.radio-browser.info/json/stations/byuuid"
 
     data class SearchFilters(
         val country: String = "",
@@ -109,6 +110,40 @@ object RadioBrowserClient {
         }
     }
 
+    /**
+     * Refresh a saved Radio Browser entry before playback. Radio Browser's
+     * url_resolved can change while the station UUID remains stable, so a saved
+     * favorite must not keep using a stale resolved URL forever.
+     */
+    suspend fun refreshStation(station: RadioStation): Result<RadioStation> =
+        runCatching {
+            withContext(Dispatchers.IO) {
+                require(station.uuid.isNotBlank()) { "Sender-ID fehlt" }
+                val endpoint = URL("$STATION_BY_UUID_ENDPOINT/${encode(station.uuid)}")
+                val array = JSONArray(readText(endpoint, connectTimeoutMs = 2_500, readTimeoutMs = 3_500))
+                require(array.length() > 0) { "Sender ist nicht mehr im Radio-Browser-Verzeichnis" }
+                val item = array.getJSONObject(0)
+                val streamUrl = item.optString("url_resolved").ifBlank { item.optString("url") }
+                require(streamUrl.isNotBlank()) { "Aktuelle Stream-Adresse fehlt" }
+                station.copy(
+                    name = item.optString("name").trim().ifBlank { station.name },
+                    streamUrl = streamUrl,
+                    homepage = item.optString("homepage").ifBlank { station.homepage },
+                    favicon =
+                        if (station.manualFavicon) {
+                            station.favicon
+                        } else {
+                            item.optString("favicon").ifBlank { station.favicon }
+                        },
+                    country = item.optString("country").ifBlank { station.country },
+                    language = item.optString("language").ifBlank { station.language },
+                    tags = item.optString("tags").ifBlank { station.tags },
+                    codec = item.optString("codec").ifBlank { station.codec },
+                    bitrate = item.optInt("bitrate", station.bitrate),
+                )
+            }
+        }
+
     private fun normalizeCountry(value: String): String =
         when (value.trim().lowercase()) {
             "österreich", "oesterreich" -> "Austria"
@@ -160,10 +195,14 @@ object RadioBrowserClient {
             }
         }
 
-    private fun readText(url: URL): String {
+    private fun readText(
+        url: URL,
+        connectTimeoutMs: Int = 12_000,
+        readTimeoutMs: Int = 15_000,
+    ): String {
         val connection = (url.openConnection() as HttpURLConnection).apply {
-            connectTimeout = 12_000
-            readTimeout = 15_000
+            connectTimeout = connectTimeoutMs
+            readTimeout = readTimeoutMs
             instanceFollowRedirects = true
             setRequestProperty("User-Agent", USER_AGENT)
             setRequestProperty("Accept", "application/json, audio/x-mpegurl, audio/x-scpls, */*")

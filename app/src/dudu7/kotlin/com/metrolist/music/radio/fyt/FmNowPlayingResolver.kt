@@ -3,6 +3,7 @@ package com.metrolist.music.radio.fyt
 import com.metrolist.innertube.YouTube
 import com.metrolist.innertube.models.SongItem
 import com.metrolist.music.ui.utils.resize
+import com.metrolist.shazamkit.models.RecognitionResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -88,6 +89,54 @@ object FmNowPlayingResolver {
             }
     }
 
+    /** Apply a Shazam-compatible audio fingerprint result to physical FM. */
+    fun applyRecognized(
+        stationName: String,
+        result: RecognitionResult,
+    ) {
+        lookupJob?.cancel()
+        val artist = result.artist.trim()
+        val title = result.title.trim()
+        if (artist.isBlank() || title.isBlank()) return
+        val preferredCover = result.coverArtHqUrl ?: result.coverArtUrl
+        val key =
+            "fingerprint|${normalizeTrackText(stationName)}|" +
+                "${normalizeTrackText(artist)}|${normalizeTrackText(title)}"
+        _state.value =
+            NowPlaying(
+                key = key,
+                stationName = stationName,
+                rawText = "$artist - $title",
+                title = title,
+                artist = artist,
+                coverUrl = preferredCover,
+                hasTrackMetadata = true,
+                resolving = true,
+            )
+
+        val lookupKey = "${normalizeTrackText(artist)}|${normalizeTrackText(title)}"
+        if (cache.containsKey(lookupKey)) {
+            applyResolved(key, cache[lookupKey], preferredCover)
+            return
+        }
+        lookupJob =
+            scope.launch {
+                val song =
+                    runCatching {
+                        YouTube
+                            .search("$artist - $title", YouTube.SearchFilter.FILTER_SONG)
+                            .getOrNull()
+                            ?.items
+                            ?.filterIsInstance<SongItem>()
+                            ?.firstOrNull { candidate -> isStrongMatch(candidate, artist, title) }
+                    }.onFailure {
+                        Timber.tag(TAG).w(it, "FM fingerprint YTM lookup failed for %s - %s", artist, title)
+                    }.getOrNull()
+                cache[lookupKey] = song
+                applyResolved(key, song, preferredCover)
+            }
+    }
+
     fun clear() {
         lookupJob?.cancel()
         lookupJob = null
@@ -97,6 +146,7 @@ object FmNowPlayingResolver {
     private fun applyResolved(
         key: String,
         song: SongItem?,
+        preferredCover: String? = null,
     ) {
         val current = _state.value
         if (current.key != key) return
@@ -106,11 +156,14 @@ object FmNowPlayingResolver {
                     title = song.title,
                     artist = song.artists.joinToString(", ") { it.name }.ifBlank { current.artist },
                     resolvedSong = song,
-                    coverUrl = song.thumbnail.resize(1200, 1200),
+                    coverUrl = preferredCover ?: song.thumbnail.resize(1200, 1200),
                     resolving = false,
                 )
             } else {
-                current.copy(resolving = false)
+                current.copy(
+                    coverUrl = preferredCover ?: current.coverUrl,
+                    resolving = false,
+                )
             }
     }
 

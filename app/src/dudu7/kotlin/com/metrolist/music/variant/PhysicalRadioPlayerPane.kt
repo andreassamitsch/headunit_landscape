@@ -1,8 +1,14 @@
 package com.metrolist.music.variant
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,7 +29,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,6 +44,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.content.ContextCompat
 import coil3.compose.AsyncImage
 import com.metrolist.music.LocalSyncUtils
 import com.metrolist.music.R
@@ -42,13 +52,17 @@ import com.metrolist.music.db.entities.Song
 import com.metrolist.music.db.entities.SongEntity
 import com.metrolist.music.models.toMediaMetadata
 import com.metrolist.music.playback.PlayerConnection
+import com.metrolist.music.recognition.MusicRecognitionService
 import com.metrolist.music.radio.fyt.FmNowPlayingResolver
 import com.metrolist.music.radio.fyt.FmPresetOrderStore
 import com.metrolist.music.radio.fyt.FmStationArtwork
 import com.metrolist.music.radio.fyt.FytPhysicalRadio
 import com.metrolist.music.radio.fyt.tuneAdjacentFavourite
 import com.metrolist.music.utils.SearchRoutes
+import com.metrolist.shazamkit.models.RecognitionStatus
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 @Composable
 fun PhysicalRadioPlayerPane(
@@ -59,6 +73,66 @@ fun PhysicalRadioPlayerPane(
     val syncUtils = LocalSyncUtils.current
     val state by radio.state.collectAsStateWithLifecycle()
     val nowPlaying by FmNowPlayingResolver.state.collectAsStateWithLifecycle()
+    val recognitionStatus by MusicRecognitionService.recognitionStatus.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    var recognitionRequested by remember { mutableStateOf(false) }
+    var recognitionFrequency by remember { mutableStateOf<Float?>(null) }
+    val recognitionInProgress =
+        recognitionRequested &&
+            (recognitionStatus is RecognitionStatus.Listening || recognitionStatus is RecognitionStatus.Processing)
+
+    val beginFmRecognition: () -> Unit = {
+        recognitionRequested = true
+        recognitionFrequency = state.frequency
+        MusicRecognitionService.reset()
+        scope.launch { MusicRecognitionService.recognize(context) }
+        Unit
+    }
+    val recordPermissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                beginFmRecognition()
+            } else {
+                Toast.makeText(context, "Mikrofonberechtigung für Musikerkennung fehlt", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+    LaunchedEffect(recognitionStatus, recognitionRequested, state.frequency, state.isActive) {
+        if (!recognitionRequested) return@LaunchedEffect
+        when (val status = recognitionStatus) {
+            is RecognitionStatus.Success -> {
+                val requestedFrequency = recognitionFrequency
+                if (state.isActive && requestedFrequency != null && abs(state.frequency - requestedFrequency) < 0.05f) {
+                    FmNowPlayingResolver.applyRecognized(state.displayStation, status.result)
+                    Toast
+                        .makeText(
+                            context,
+                            "Erkannt: ${status.result.artist} – ${status.result.title}",
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                }
+                recognitionRequested = false
+                recognitionFrequency = null
+                MusicRecognitionService.reset()
+            }
+
+            is RecognitionStatus.NoMatch -> {
+                Toast.makeText(context, "Titel konnte nicht erkannt werden", Toast.LENGTH_SHORT).show()
+                recognitionRequested = false
+                recognitionFrequency = null
+                MusicRecognitionService.reset()
+            }
+
+            is RecognitionStatus.Error -> {
+                Toast.makeText(context, status.message, Toast.LENGTH_SHORT).show()
+                recognitionRequested = false
+                recognitionFrequency = null
+                MusicRecognitionService.reset()
+            }
+
+            else -> Unit
+        }
+    }
     val isStationFavourite =
         remember(state.frequency, state.presets) {
             state.presets.any { FmPresetOrderStore.sameFrequency(it.frequency, state.frequency) }
@@ -100,10 +174,12 @@ fun PhysicalRadioPlayerPane(
         verticalArrangement = Arrangement.Center,
         modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 8.dp),
     ) {
-        Box(
+        BoxWithConstraints(
             contentAlignment = Alignment.Center,
             modifier = Modifier.weight(1f).fillMaxWidth(),
         ) {
+            // Match the large WebRadio artwork footprint instead of the old 190 dp FM tile.
+            val artworkSize = minOf(maxWidth, maxHeight).coerceAtMost(320.dp)
             if (!nowPlaying.coverUrl.isNullOrBlank()) {
                 AsyncImage(
                     model = nowPlaying.coverUrl,
@@ -113,14 +189,14 @@ fun PhysicalRadioPlayerPane(
                     fallback = painterResource(R.drawable.radio),
                     modifier =
                         Modifier
-                            .size(190.dp)
+                            .size(artworkSize)
                             .clip(RoundedCornerShape(26.dp)),
                 )
             } else {
                 FmStationArtwork(
                     stationName = state.displayStation,
                     frequency = state.frequency,
-                    size = 190.dp,
+                    size = artworkSize,
                 )
             }
             if (nowPlaying.resolving) {
@@ -284,6 +360,27 @@ fun PhysicalRadioPlayerPane(
                         MaterialTheme.colorScheme.primary
                     },
             )
+            IconButton(
+                onClick = {
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                        PackageManager.PERMISSION_GRANTED
+                    ) {
+                        beginFmRecognition()
+                    } else {
+                        recordPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    }
+                },
+                enabled = state.isActive && !recognitionInProgress,
+            ) {
+                if (recognitionInProgress) {
+                    CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+                } else {
+                    Icon(
+                        painter = painterResource(R.drawable.search),
+                        contentDescription = "FM-Musik erkennen",
+                    )
+                }
+            }
             IconButton(
                 onClick = {
                     val matchedSong = resolvedSong ?: return@IconButton

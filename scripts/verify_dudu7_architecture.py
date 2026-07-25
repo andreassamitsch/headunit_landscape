@@ -30,6 +30,7 @@ required = [
     "app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt",
     "app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleTabOrderStore.kt",
     "app/src/main/kotlin/com/metrolist/music/ui/screens/artist/EmbeddedArtistScreen.kt",
+    "app/src/main/kotlin/com/metrolist/music/ui/screens/artist/EmbeddedArtistItemsScreen.kt",
     "app/src/dudu7/res/drawable/stop.xml",
 ]
 for source_set in ("standard", "dudu7"):
@@ -82,6 +83,7 @@ checks = {
     ),
     "app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt": (
         "EmbeddedArtistScreen(navController)",
+        "EmbeddedArtistItemsScreen(navController)",
         "if (embeddedInPlayer)",
     ),
     "app/src/main/kotlin/com/metrolist/music/ui/screens/artist/EmbeddedArtistScreen.kt": (
@@ -138,7 +140,8 @@ checks = {
         "FmNowPlayingResolver",
         "YouTube.SearchFilter.FILTER_SONG",
         "isStrongMatch",
-        "coverUrl = song.thumbnail.resize(1200, 1200)",
+        "preferredCover ?: song.thumbnail.resize(1200, 1200)",
+        "fun applyRecognized(",
     ),
     "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmPresetOrderStore.kt": (
         "object FmPresetOrderStore",
@@ -194,6 +197,8 @@ checks = {
         "requestRadioArtistNavigation",
         "syncUtils.likeSong(updated)",
         "radio.saveCurrentPreset()",
+        "FM-Musik erkennen",
+        "MusicRecognitionService.recognize(context)",
     ),
     "app/src/dudu7/AndroidManifest.xml": (
         "android.permission.MODIFY_AUDIO_SETTINGS",
@@ -222,6 +227,12 @@ checks = {
     "app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt": (
         "database.withTransaction",
         "incrementTotalPlayTime(mediaItem.mediaId, playbackStats.totalPlayTimeMs)",
+        "explicitQueueRequestGate.isCurrent",
+    ),
+    "app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt": (
+        "RadioBrowserClient.refreshStation",
+        "mergeSavedStationUpdates",
+        "replaceFavoriteStation",
     ),
     "app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt": (
         "var onUserSongSelection: (() -> Unit)? = null",
