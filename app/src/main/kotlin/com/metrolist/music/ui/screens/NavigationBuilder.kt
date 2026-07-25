@@ -30,6 +30,7 @@ import com.metrolist.music.ui.screens.artist.ArtistItemsScreen
 import com.metrolist.music.ui.screens.artist.ArtistScreen
 import com.metrolist.music.ui.screens.artist.EmbeddedArtistScreen
 import com.metrolist.music.ui.screens.artist.EmbeddedArtistScreen
+import com.metrolist.music.ui.screens.artist.EmbeddedArtistScreen
 import com.metrolist.music.ui.screens.artist.ArtistSongsScreen
 import com.metrolist.music.ui.screens.equalizer.EqScreen
 import com.metrolist.music.ui.screens.equalizer.wizard.WizardScreen
