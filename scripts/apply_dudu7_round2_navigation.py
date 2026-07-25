@@ -82,3 +82,26 @@ elif "if (state.afEnabled) append" not in player_text:
 
 player.write_text(player_text, encoding="utf-8")
 print("Dudu7 FM player now shows AF, PTY, TP and TA")
+
+radio = Path("app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt")
+radio_text = radio.read_text(encoding="utf-8")
+old_scan = '''                var frequencies =
+                    raw
+                        .mapNotNull { decodeFrequency(it.toFloat()) }
+                        .distinctBy { (it * 10).roundToInt() }
+                        .sorted()
+'''
+new_scan = '''                var frequencies =
+                    raw
+                        .asSequence()
+                        .mapNotNull { decodeFrequency(it.toFloat()) }
+                        .distinctBy { (it * 10).roundToInt() }
+                        .sorted()
+                        .toList()
+'''
+if old_scan in radio_text:
+    radio_text = radio_text.replace(old_scan, new_scan, 1)
+elif ".asSequence()\n                        .mapNotNull" not in radio_text:
+    raise SystemExit("Native FM scan mapping block not found")
+radio.write_text(radio_text, encoding="utf-8")
+print("Native ShortArray scan results normalized to a Kotlin sequence")
