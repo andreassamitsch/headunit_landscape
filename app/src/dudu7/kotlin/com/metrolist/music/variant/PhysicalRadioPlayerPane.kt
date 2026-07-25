@@ -274,10 +274,15 @@ fun PhysicalRadioPlayerPane(
                 )
             }
             Text(
-                text = "●  FM LIVE",
+                text = if (state.ta && state.taEnabled) "●  TA VERKEHR" else "●  FM LIVE",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
+                color =
+                    if (state.ta && state.taEnabled) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
             )
             IconButton(
                 onClick = {
@@ -320,7 +325,11 @@ fun PhysicalRadioPlayerPane(
                     append("${state.displayStation} • RSSI ${state.rssi}")
                     append(if (state.stereo) " • Stereo" else " • Mono")
                     if (state.pi != 0) append(" • PI ${state.pi.toString(16).uppercase()}")
-                    if (state.pty != 0) append(" • PTY ${state.pty}")
+                    val pty = FytPhysicalRadio.ptyLabel(state.pty)
+                    if (pty.isNotBlank()) append(" • $pty")
+                    if (state.afEnabled) append(" • AF")
+                    if (state.tp) append(" • TP")
+                    if (state.ta && state.taEnabled) append(" • TA")
                 },
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
