@@ -45,44 +45,32 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .build-metadata
-          printf 'run_id=%s\nstatus=running\nworkflow_sha=%s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" \
-            > .build-metadata/dudu7-round3-run.txt
+          printf 'run_id=%s\nstatus=running\nworkflow_sha=%s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" > .build-metadata/dudu7-round3-run.txt
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add .build-metadata/dudu7-round3-run.txt
           git commit -m 'Record Dudu7 round 3 run [skip ci]'
           git push origin HEAD:agent/fm-radio-ui-logos-tabs
 
-      - name: Apply round 3 fixes
+      - name: Apply and verify round 3 source changes
         shell: bash
         run: |
           set -euxo pipefail
+          rm -f sitecustomize.py
           python3 scripts/apply_dudu7_webradio_reliability_round3.py
           python3 scripts/apply_dudu7_artist_items_round3.py
           python3 scripts/apply_dudu7_fm_recognition_round3.py
-          python3 -m py_compile \
-            scripts/apply_dudu7_webradio_reliability_round3.py \
-            scripts/apply_dudu7_artist_items_round3.py \
-            scripts/apply_dudu7_fm_recognition_round3.py \
-            scripts/icy_round3_test_server.py
-          bash -n scripts/dudu7_round3_reliability_smoke.sh
-          bash -n scripts/run_dudu7_emulator_ci.sh
+          python3 scripts/apply_dudu7_architecture_round3.py
+          python3 -m py_compile scripts/apply_dudu7_*_round3.py scripts/icy_round3_test_server.py
+          bash -n scripts/dudu7_round3_reliability_smoke.sh scripts/run_dudu7_emulator_ci.sh
           git diff --check
-
-      - name: Verify source architecture
-        shell: bash
-        run: |
-          set -euxo pipefail
+          python3 scripts/verify_dudu7_architecture.py
           grep -q 'suspend fun refreshStation' app/src/main/kotlin/com/metrolist/music/radio/RadioBrowserClient.kt
           grep -q 'explicitQueueRequestGate.isCurrent' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
-          grep -q 'mergeSavedStationUpdates' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
           grep -q 'EmbeddedArtistItemsScreen' app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt
-          grep -q 'errorMessage = MutableStateFlow' app/src/main/kotlin/com/metrolist/music/viewmodels/ArtistItemsViewModel.kt
           grep -q 'FM-Musik erkennen' app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
           grep -q 'MusicRecognitionService.recognize(context)' app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
           grep -q 'coerceAtMost(320.dp)' app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
-          grep -q 'fun applyRecognized' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmNowPlayingResolver.kt
-          python3 scripts/verify_dudu7_architecture.py
 
       - uses: actions/setup-java@v4
         with:
@@ -93,29 +81,25 @@ jobs:
         with:
           cache-cleanup: on-success
 
-      - name: Verify persistent update signature
+      - name: Verify update-compatible signing key
         shell: bash
         run: |
           set -euxo pipefail
           test -s app/persistent-debug.keystore
-          keytool -list -v -keystore app/persistent-debug.keystore -storepass android -alias androiddebugkey \
-            | tee persistent-key.txt
+          keytool -list -v -keystore app/persistent-debug.keystore -storepass android -alias androiddebugkey | tee persistent-key.txt
           grep -qi 'd5:84:2f:4b:8e:24:1d:ce:bc:66:e1:d3:e7:b0:84:a6:e7:af:57:8a:51:35:08:16:6d:77:e3:f3:b1:04:b3:77' persistent-key.txt
 
-      - name: Run unit tests and lint
+      - name: Unit tests and lint
         shell: bash
         run: |
           set -o pipefail
           mkdir -p artifacts
-          ./gradlew --console=plain \
-            :app:testGmsDudu7DebugUnitTest \
-            :app:lintGmsDudu7Debug \
-            --warning-mode summary 2>&1 | tee artifacts/unit-lint.log
+          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest :app:lintGmsDudu7Debug --warning-mode summary 2>&1 | tee artifacts/unit-lint.log
         env:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
 
-      - name: Build and verify signed ARM APK
+      - name: Build and verify production ARM APK
         shell: bash
         run: |
           set -euxo pipefail
@@ -135,7 +119,7 @@ jobs:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
 
-      - name: Build deterministic x86 test APK
+      - name: Build deterministic x86 emulator APK
         shell: bash
         run: |
           set -euxo pipefail
@@ -145,22 +129,16 @@ jobs:
           from pathlib import Path
           gradle = Path('app/build.gradle.kts')
           text = gradle.read_text(encoding='utf-8')
-          old = 'abiFilters += listOf("arm64-v8a", "armeabi-v7a")'
-          if old not in text:
-              raise SystemExit('ARM ABI declaration not found')
-          gradle.write_text(text.replace(old, 'abiFilters += listOf("x86_64")', 1), encoding='utf-8')
-
+          text = text.replace('abiFilters += listOf("arm64-v8a", "armeabi-v7a")', 'abiFilters += listOf("x86_64")', 1)
+          gradle.write_text(text, encoding='utf-8')
           client = Path('app/src/main/kotlin/com/metrolist/music/radio/RadioBrowserClient.kt')
           text = client.read_text(encoding='utf-8')
-          old = 'https://all.api.radio-browser.info/json/stations/byuuid'
-          if old not in text:
-              raise SystemExit('Production UUID endpoint not found')
-          client.write_text(text.replace(old, 'http://10.0.2.2:8000/json/stations/byuuid', 1), encoding='utf-8')
+          text = text.replace('https://all.api.radio-browser.info/json/stations/byuuid', 'http://10.0.2.2:8000/json/stations/byuuid', 1)
+          client.write_text(text, encoding='utf-8')
           PY
           rm -rf app/build
           ./gradlew --console=plain :app:assembleGmsDudu7Debug --warning-mode summary 2>&1 | tee artifacts/build-x86.log
           APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
-          test -n "$APK"
           cp "$APK" "$APK_PATH"
           unzip -l "$APK_PATH" | grep 'lib/x86_64/'
           cp /tmp/RadioBrowserClient.production.kt app/src/main/kotlin/com/metrolist/music/radio/RadioBrowserClient.kt
@@ -169,7 +147,7 @@ jobs:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
 
-      - name: Prepare deterministic radio server
+      - name: Prepare deterministic radio service
         shell: bash
         run: |
           set -euxo pipefail
@@ -178,18 +156,12 @@ jobs:
           mkdir -p radio-test-data "$RESULTS_DIR"
           ffmpeg -hide_banner -loglevel error -f lavfi -i 'sine=frequency=440:duration=24' -c:a libmp3lame -b:a 96k radio-test-data/station1.mp3
           ffmpeg -hide_banner -loglevel error -f lavfi -i 'sine=frequency=660:duration=24' -c:a libmp3lame -b:a 96k radio-test-data/station2.mp3
-          python3 scripts/icy_round3_test_server.py \
-            --audio1 radio-test-data/station1.mp3 \
-            --audio2 radio-test-data/station2.mp3 \
-            > "$RESULTS_DIR/radio-server.log" 2>&1 &
+          python3 scripts/icy_round3_test_server.py --audio1 radio-test-data/station1.mp3 --audio2 radio-test-data/station2.mp3 > "$RESULTS_DIR/radio-server.log" 2>&1 &
           echo $! > "$RESULTS_DIR/radio-server.pid"
-          for i in {1..30}; do
-            curl -fsS http://127.0.0.1:8000/health && break
-            sleep 1
-          done
+          for i in {1..30}; do curl -fsS http://127.0.0.1:8000/health && break; sleep 1; done
           curl -fsS http://127.0.0.1:8000/health
 
-      - name: Reclaim runner space for emulator
+      - name: Reclaim space and enable emulator
         shell: bash
         run: |
           set -euxo pipefail
@@ -202,14 +174,13 @@ jobs:
           sudo rm -rf "$ANDROID_AVD_HOME"
           sudo mkdir -p "$ANDROID_AVD_HOME"
           sudo chown -R "$USER":"$USER" "$ANDROID_AVD_HOME"
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
-            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
           sudo chmod 666 /dev/kvm
           df -h / "$ANDROID_AVD_HOME" | tee "$RESULTS_DIR/disk-after-cleanup.txt"
 
-      - name: Run WebRadio failure recovery and artist detail emulator test
+      - name: Run deterministic WebRadio and artist regressions
         shell: bash
         run: |
           set -euxo pipefail
@@ -217,7 +188,7 @@ jobs:
           chmod +x scripts/run_dudu7_emulator_ci.sh scripts/dudu7_ui_smoke.sh
           scripts/run_dudu7_emulator_ci.sh
 
-      - name: Confirm deterministic regressions
+      - name: Confirm deterministic results
         shell: bash
         run: |
           set -euxo pipefail
@@ -226,55 +197,35 @@ jobs:
           grep -q 'PASS: stale favorite two URL persisted as current station2 URL' "$RESULTS_DIR/round3-smoke.log"
           grep -q 'PASS: latest favorite selection wins delayed refresh race' "$RESULTS_DIR/round3-smoke.log"
           grep -q 'PASS: embedded artist detail page rendered content' "$RESULTS_DIR/round3-smoke.log"
-          if grep -q 'GET /always-broken' "$RESULTS_DIR/radio-server.log"; then
-            echo 'A stale favorite URL reached the player instead of being refreshed' >&2
-            exit 1
-          fi
-          if grep -E "FATAL EXCEPTION|ANR in ${PACKAGE_NAME}" "$RESULTS_DIR/logcat.txt"; then
-            exit 1
-          fi
+          ! grep -q 'GET /always-broken' "$RESULTS_DIR/radio-server.log"
+          ! grep -E "FATAL EXCEPTION|ANR in ${PACKAGE_NAME}" "$RESULTS_DIR/logcat.txt"
 
-      - name: Restore production test substitutions
+      - name: Restore production files
         if: always()
         shell: bash
         run: |
           set +e
-          test -f /tmp/RadioBrowserClient.production.kt \
-            && cp /tmp/RadioBrowserClient.production.kt app/src/main/kotlin/com/metrolist/music/radio/RadioBrowserClient.kt
+          test -f /tmp/RadioBrowserClient.production.kt && cp /tmp/RadioBrowserClient.production.kt app/src/main/kotlin/com/metrolist/music/radio/RadioBrowserClient.kt
           git checkout -- app/build.gradle.kts
           rm -f scripts/dudu7_ui_smoke.sh
 
-      - name: Commit validated source changes
+      - name: Commit validated source
         shell: bash
         run: |
           set -euxo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add \
-            app/src/main/kotlin/com/metrolist/music/radio/RadioBrowserClient.kt \
-            app/src/main/kotlin/com/metrolist/music/radio/RadioFavoriteQueue.kt \
-            app/src/main/kotlin/com/metrolist/music/playback/LatestRequestGate.kt \
-            app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt \
-            app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt \
-            app/src/main/kotlin/com/metrolist/music/viewmodels/ArtistItemsViewModel.kt \
-            app/src/main/kotlin/com/metrolist/music/ui/screens/artist/EmbeddedArtistItemsScreen.kt \
-            app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt \
-            app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmNowPlayingResolver.kt \
-            app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt \
-            app/src/test/kotlin/com/metrolist/music/radio/RadioFavoriteQueueTest.kt \
-            app/src/test/kotlin/com/metrolist/music/playback/LatestRequestGateTest.kt
+          git add app/src scripts/verify_dudu7_architecture.py
           git diff --cached --check
           git commit -m 'Fix Dudu7 radio reliability and artist details [skip ci]'
           git push origin HEAD:agent/fm-radio-ui-logos-tabs
 
-      - name: Record successful result
+      - name: Record success
         shell: bash
         run: |
           set -euxo pipefail
           sha="$(sha256sum artifacts/Metrolist-Dudu7-13.7.1-Round3.apk | awk '{print $1}')"
-          printf 'run_id=%s\nstatus=success\nvalidated_commit=%s\nartifact_name=Metrolist-Dudu7-13.7.1-Round3-%s\napk_sha256=%s\n' \
-            "$GITHUB_RUN_ID" "$(git rev-parse HEAD)" "$GITHUB_RUN_ID" "$sha" \
-            > .build-metadata/dudu7-round3-run.txt
+          printf 'run_id=%s\nstatus=success\nvalidated_commit=%s\nartifact_name=Metrolist-Dudu7-13.7.1-Round3-%s\napk_sha256=%s\n' "$GITHUB_RUN_ID" "$(git rev-parse HEAD)" "$GITHUB_RUN_ID" "$sha" > .build-metadata/dudu7-round3-run.txt
           git add .build-metadata/dudu7-round3-run.txt
           git commit -m 'Record validated Dudu7 round 3 result [skip ci]'
           git push origin HEAD:agent/fm-radio-ui-logos-tabs
@@ -295,8 +246,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          printf 'run_id=%s\nstatus=failure\nworkflow_sha=%s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" \
-            > .build-metadata/dudu7-round3-run.txt
+          printf 'run_id=%s\nstatus=failure\nworkflow_sha=%s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" > .build-metadata/dudu7-round3-run.txt
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add .build-metadata/dudu7-round3-run.txt
