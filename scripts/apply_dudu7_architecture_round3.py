@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import shutil
 
 root = Path(__file__).resolve().parents[1]
 path = root / "scripts/verify_dudu7_architecture.py"
@@ -70,4 +71,11 @@ for test_path, (old, new) in test_import_fixes.items():
         raise SystemExit(f"Expected test imports not found in {test_path}")
     test_path.write_text(test_text.replace(old, new, 1), encoding="utf-8")
 
-print("Updated Dudu7 architecture checks and JUnit imports for round 3")
+# Android Gradle resolves a relative workflow keystore path from the app module.
+# Mirror the already committed Dudu7 key into that expected temporary location.
+source_key = root / "app/keystore/dudu7-debug.keystore"
+module_relative_key = root / "app/app/keystore/dudu7-debug.keystore"
+module_relative_key.parent.mkdir(parents=True, exist_ok=True)
+shutil.copy2(source_key, module_relative_key)
+
+print("Updated Dudu7 architecture, JUnit imports and signing path for round 3")
