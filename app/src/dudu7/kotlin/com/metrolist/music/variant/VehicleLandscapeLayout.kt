@@ -19,11 +19,13 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -35,6 +37,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -43,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -50,6 +54,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -64,6 +69,7 @@ import com.metrolist.music.LocalNavController
 import com.metrolist.music.LocalPlayerAwareWindowInsets
 import com.metrolist.music.LocalPlayerConnection
 import com.metrolist.music.R
+import com.metrolist.music.extensions.move
 import com.metrolist.music.radio.fyt.FytPhysicalRadio
 import com.metrolist.music.ui.component.BottomSheetState
 import com.metrolist.music.ui.component.LocalRightPaneScrollBridge
@@ -74,6 +80,8 @@ import com.metrolist.music.ui.screens.radio.PhysicalRadioScreen
 import com.metrolist.music.ui.screens.radio.WebRadioScreen
 import com.metrolist.music.utils.SearchRoutes
 import kotlinx.coroutines.launch
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import timber.log.Timber
 import java.text.Normalizer
 import java.util.Locale
@@ -89,12 +97,12 @@ private enum class VehicleRightPaneTab(
     val icon: Int,
     val route: String,
 ) {
+    QUEUE("Warteschlange", R.drawable.queue_music, VEHICLE_QUEUE_ROUTE),
     LIBRARY("Bibliothek", R.drawable.library_music_outlined, Screens.Library.route),
     WEBRADIO("WebRadio", R.drawable.radio, VEHICLE_WEBRADIO_ROUTE),
     PHYSICAL_RADIO("FM", R.drawable.radio, VEHICLE_PHYSICAL_RADIO_ROUTE),
     SEARCH("Suche", R.drawable.search, Screens.Search.route),
     HISTORY("Hörverlauf", R.drawable.history, "history"),
-    QUEUE("Warteschlange", R.drawable.queue_music, VEHICLE_QUEUE_ROUTE),
 }
 
 private fun normalizeArtistName(value: String): String =
@@ -155,6 +163,7 @@ fun VehicleLandscapeLayout(
     var selectedTab by rememberSaveable { mutableStateOf(VehicleRightPaneTab.QUEUE) }
     val context = LocalContext.current
     val activity = context.findActivity()
+    val haptic = LocalHapticFeedback.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val playerConnection = LocalPlayerConnection.current
@@ -167,6 +176,41 @@ fun VehicleLandscapeLayout(
     val rightPaneScope = rememberCoroutineScope()
     val rightPaneScrollBridge = remember { RightPaneScrollBridge() }
     var rightPaneOriginInRoot by remember { mutableStateOf(Offset.Zero) }
+
+    val orderedTabs =
+        remember(context) {
+            mutableStateListOf<VehicleRightPaneTab>().apply {
+                val byName = VehicleRightPaneTab.entries.associateBy { it.name }
+                addAll(
+                    VehicleTabOrderStore
+                        .read(context, byName.keys)
+                        .mapNotNull(byName::get),
+                )
+            }
+        }
+    val tabListState = rememberLazyListState()
+    val tabReorderState =
+        rememberReorderableLazyListState(tabListState) { from, to ->
+            if (from.index in orderedTabs.indices && to.index in orderedTabs.indices) {
+                orderedTabs.move(from.index, to.index)
+            }
+        }
+    val isTabDragging = tabReorderState.isAnyItemDragging
+    var wasTabDragging by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isTabDragging) {
+        if (wasTabDragging && !isTabDragging) {
+            VehicleTabOrderStore.persist(context, orderedTabs.map { it.name })
+        }
+        wasTabDragging = isTabDragging
+    }
+
+    LaunchedEffect(selectedTab, orderedTabs.toList()) {
+        val index = orderedTabs.indexOf(selectedTab)
+        if (index >= 0) {
+            tabListState.animateScrollToItem(index)
+        }
+    }
 
     LaunchedEffect(currentPaneRoute) {
         VehicleRightPaneTab.entries
@@ -184,9 +228,6 @@ fun VehicleLandscapeLayout(
         paneNavController.popBackStack()
     }
 
-    // User selections happen on the main UI thread. Use a direct callback so
-    // the right pane returns immediately and no event can be dropped or consumed
-    // by a stale collector during service/player recomposition.
     DisposableEffect(playerConnection, paneNavController) {
         val activeConnection = playerConnection
         val returnToQueue: () -> Unit = {
@@ -236,8 +277,6 @@ fun VehicleLandscapeLayout(
                     bestMatch?.title ?: "search results",
                     bestMatch?.id ?: "no exact artist",
                 )
-                // Keep WebRadio in the pane back stack. Back from the artist
-                // page now returns to the station list instead of the queue root.
                 paneNavController.navigate(route) {
                     launchSingleTop = true
                 }
@@ -308,46 +347,58 @@ fun VehicleLandscapeLayout(
                     .padding(start = 6.dp, end = 8.dp),
         ) {
             Column(Modifier.fillMaxSize()) {
-                ScrollableTabRow(
-                    selectedTabIndex = selectedTab.ordinal,
-                    edgePadding = 0.dp,
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    divider = {},
+                LazyRow(
+                    state = tabListState,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(64.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    VehicleRightPaneTab.entries.forEach { tab ->
-                        Tab(
-                            selected = selectedTab == tab,
-                            onClick = {
-                                if (tab == VehicleRightPaneTab.WEBRADIO && physicalRadio.state.value.isActive) {
-                                    // Release the FYT hardware source before ExoPlayer prepares the
-                                    // WebRadio stream. Waiting for isPlaying is too late and can leave
-                                    // a favourite tap apparently without effect because FM still owns
-                                    // the firmware audio route.
-                                    physicalRadio.powerOff()
-                                }
-                                if (selectedTab != tab || currentPaneRoute != tab.route) {
-                                    selectedTab = tab
-                                    val restoredExistingTab =
-                                        paneNavController.popBackStack(tab.route, inclusive = false)
-                                    if (!restoredExistingTab) {
-                                        paneNavController.popBackStack(VEHICLE_QUEUE_ROUTE, inclusive = false)
-                                        if (tab != VehicleRightPaneTab.QUEUE) {
-                                            paneNavController.navigate(tab.route) {
-                                                launchSingleTop = true
+                    itemsIndexed(
+                        items = orderedTabs,
+                        key = { _, tab -> tab.name },
+                    ) { _, tab ->
+                        ReorderableItem(tabReorderState, key = tab.name) { isDragging ->
+                            Tab(
+                                selected = selectedTab == tab,
+                                onClick = {
+                                    if (!isDragging) {
+                                        if (tab == VehicleRightPaneTab.WEBRADIO && physicalRadio.state.value.isActive) {
+                                            physicalRadio.powerOff()
+                                        }
+                                        if (selectedTab != tab || currentPaneRoute != tab.route) {
+                                            selectedTab = tab
+                                            val restoredExistingTab =
+                                                paneNavController.popBackStack(tab.route, inclusive = false)
+                                            if (!restoredExistingTab) {
+                                                paneNavController.popBackStack(VEHICLE_QUEUE_ROUTE, inclusive = false)
+                                                if (tab != VehicleRightPaneTab.QUEUE) {
+                                                    paneNavController.navigate(tab.route) {
+                                                        launchSingleTop = true
+                                                    }
+                                                }
                                             }
                                         }
                                     }
-                                }
-                            },
-                            icon = {
-                                Icon(
-                                    painter = painterResource(tab.icon),
-                                    contentDescription = tab.title,
-                                )
-                            },
-                            text = { Text(tab.title, maxLines = 1) },
-                            modifier = Modifier.height(64.dp),
-                        )
+                                },
+                                icon = {
+                                    Icon(
+                                        painter = painterResource(tab.icon),
+                                        contentDescription = tab.title,
+                                    )
+                                },
+                                text = { Text(tab.title, maxLines = 1) },
+                                modifier =
+                                    Modifier
+                                        .height(64.dp)
+                                        .longPressDraggableHandle(
+                                            onDragStarted = {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            },
+                                        ),
+                            )
+                        }
                     }
                 }
 
@@ -383,8 +434,6 @@ fun VehicleLandscapeLayout(
                                         var accumulatedY = 0f
                                         var verticalDrag = false
                                         while (true) {
-                                            // Child controls get Initial/Main first. The bridge only
-                                            // handles scrolling or taps that remained unconsumed.
                                             val event = awaitPointerEvent(PointerEventPass.Final)
                                             val change = event.changes.firstOrNull() ?: continue
                                             if (change.pressed && !change.previousPressed) {
