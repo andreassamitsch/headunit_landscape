@@ -1,5 +1,5 @@
-# One-time validation trigger: 2026-07-24 attempt 4
-name: One-time Dudu7 FM final validation
+# One-time validation trigger: 2026-07-25 round 2
+name: One-time Dudu7 round-two validation
 
 on:
   push:
@@ -11,19 +11,19 @@ permissions:
   contents: write
 
 concurrency:
-  group: dudu7-fm-final-validation
+  group: dudu7-round-two-validation
   cancel-in-progress: true
 
 jobs:
   validate-build-test:
-    name: Validate, test and package Dudu7 FM APK
+    name: Validate Dudu7 tabs, artist and FM scan
     runs-on: ubuntu-22.04
     timeout-minutes: 90
     env:
       PACKAGE_NAME: com.metrolist.music.dudu7
       ACTIVITY_NAME: com.metrolist.music.MainActivity
       RESULTS_DIR: ui-test-results
-      APK_PATH: dist/Metrolist-Dudu7-13.7.1-emulator.apk
+      APK_PATH: dist/Metrolist-Dudu7-round2-emulator.apk
       API_LEVEL: "33"
       SYSTEM_TARGET: google_apis
       DATA_PARTITION_SIZE: 1536M
@@ -54,20 +54,22 @@ jobs:
         with:
           cache-cleanup: on-success
 
-      - name: Apply deterministic artist-control fix
+      - name: Apply Dudu7 round-two routing
         run: |
           set -euxo pipefail
-          python3 scripts/fix_dudu7_artist_controls.py
-          ! grep -q 'pointerInput(radioEndpoint)' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
-          ! grep -q 'pointerInput(shuffleEndpoint)' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          mkdir -p artifacts "$RESULTS_DIR" dist
+          python3 scripts/apply_dudu7_round2_navigation.py
+          grep -q 'EmbeddedArtistScreen(navController)' app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt
+          grep -q 'TA VERKEHR' app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
           git diff --check
-          git diff -- app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt > artifacts-artist-controls.patch
+          git diff -- \
+            app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt \
+            app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt \
+            > artifacts/round-two-runtime-patch.diff
 
       - name: Static architecture and signing checks
         run: |
           set -euxo pipefail
-          mkdir -p artifacts "$RESULTS_DIR" dist
-          mv artifacts-artist-controls.patch artifacts/artist-controls.patch
           chmod +x gradlew scripts/run_dudu7_emulator_ci.sh scripts/dudu7_webradio_reliability_smoke.sh
           python3 scripts/verify_dudu7_architecture.py | tee artifacts/architecture-check.txt
           bash -n scripts/run_dudu7_emulator_ci.sh
@@ -99,17 +101,17 @@ jobs:
           set -euxo pipefail
           APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
           test -n "$APK"
-          cp "$APK" artifacts/Metrolist-Dudu7-13.7.1-FM-WebRadio.apk
+          cp "$APK" artifacts/Metrolist-Dudu7-13.7.1-Round2.apk
           build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
-          "$build_tools/aapt" dump badging artifacts/Metrolist-Dudu7-13.7.1-FM-WebRadio.apk \
+          "$build_tools/aapt" dump badging artifacts/Metrolist-Dudu7-13.7.1-Round2.apk \
             | tee artifacts/apk-badging.txt
           "$build_tools/apksigner" verify --verbose --print-certs \
-            artifacts/Metrolist-Dudu7-13.7.1-FM-WebRadio.apk \
+            artifacts/Metrolist-Dudu7-13.7.1-Round2.apk \
             | tee artifacts/apk-signature.txt
           grep -q "package: name='com.metrolist.music.dudu7' versionCode='160' versionName='13.7.1-dudu7'" artifacts/apk-badging.txt
-          unzip -l artifacts/Metrolist-Dudu7-13.7.1-FM-WebRadio.apk | grep 'lib/arm64-v8a/'
-          unzip -l artifacts/Metrolist-Dudu7-13.7.1-FM-WebRadio.apk | grep 'lib/armeabi-v7a/'
-          sha256sum artifacts/Metrolist-Dudu7-13.7.1-FM-WebRadio.apk \
+          unzip -l artifacts/Metrolist-Dudu7-13.7.1-Round2.apk | grep 'lib/arm64-v8a/'
+          unzip -l artifacts/Metrolist-Dudu7-13.7.1-Round2.apk | grep 'lib/armeabi-v7a/'
+          sha256sum artifacts/Metrolist-Dudu7-13.7.1-Round2.apk \
             | tee artifacts/SHA256SUMS.txt
 
       - name: Prepare x86_64 emulator build
@@ -183,14 +185,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: Metrolist-Dudu7-13.7.1-FM-WebRadio-${{ github.run_id }}
+          name: Metrolist-Dudu7-Round2-${{ github.run_id }}
           path: |
             artifacts/
             ui-test-results/
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Record tested source and validation run
+      - name: Record tested round-two source
         if: always()
         run: |
           set -euo pipefail
@@ -202,7 +204,8 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add \
-            app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt \
+            app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt \
+            app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt \
             .build-metadata/fm-final-run.txt
-          git commit -m "Record tested FM validation $GITHUB_RUN_ID [skip ci]" || exit 0
+          git commit -m "Record Dudu7 round-two validation $GITHUB_RUN_ID [skip ci]" || exit 0
           git push origin HEAD:agent/fm-radio-ui-logos-tabs
