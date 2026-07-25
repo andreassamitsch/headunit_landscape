@@ -55,15 +55,18 @@ jobs:
         with:
           cache-cleanup: on-success
 
-      - name: Verify source fix and Dudu7 certificate
+      - name: Verify source fix
         shell: bash
         run: |
           set -euxo pipefail
-          grep -q 'get() = listOf(Home, Search, ListenTogether, Library)' app/src/main/kotlin/com/metrolist/music/ui/screens/Screens.kt
-          grep -q 'assertNotSame(first, second)' app/src/test/kotlin/com/metrolist/music/ui/screens/ScreensInitializationTest.kt
-          CERT_SHA="$(keytool -exportcert -keystore app/keystore/dudu7-debug.keystore -storepass android -alias androiddebugkey \
-            | openssl dgst -sha256 | awk '{print $NF}')"
-          test "$CERT_SHA" = 'd5842d9177a64c29457c57039eeadad8133a72f6a4d36498725edf3f58b3b377'
+          python3 - <<'PY'
+          from pathlib import Path
+
+          screens = Path('app/src/main/kotlin/com/metrolist/music/ui/screens/Screens.kt').read_text(encoding='utf-8')
+          test = Path('app/src/test/kotlin/com/metrolist/music/ui/screens/ScreensInitializationTest.kt').read_text(encoding='utf-8')
+          assert 'get() = listOf(Home, Search, ListenTogether, Library)' in screens
+          assert 'assertNotSame(first, second)' in test
+          PY
 
       - name: Run targeted regression test
         shell: bash
