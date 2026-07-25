@@ -357,9 +357,11 @@ object FytPhysicalRadio {
 
                 var frequencies =
                     raw
+                        .asSequence()
                         .mapNotNull { decodeFrequency(it.toFloat()) }
                         .distinctBy { (it * 10).roundToInt() }
                         .sorted()
+                        .toList()
                 if (frequencies.isEmpty()) {
                     frequencies = softwareBandScan(fm)
                 }
