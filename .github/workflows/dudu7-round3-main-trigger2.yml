@@ -1,0 +1,42 @@
+name: Patch and trigger Dudu7 round 3 main workflow
+
+on:
+  push:
+    branches:
+      - agent/fm-radio-ui-logos-tabs
+    paths:
+      - .github/workflows/dudu7-round3-main-trigger2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-main:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/fm-radio-ui-logos-tabs
+          fetch-depth: 0
+      - name: Insert verified architecture patch
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/dudu7-reliability-round3.yml')
+          text = path.read_text(encoding='utf-8')
+          old = '          python3 scripts/apply_dudu7_fm_recognition_round3.py\n'
+          new = old + '          python3 scripts/apply_dudu7_architecture_round3.py\n'
+          if 'python3 scripts/apply_dudu7_architecture_round3.py' not in text:
+              if old not in text:
+                  raise SystemExit('FM patch line missing')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+          git diff --check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .github/workflows/dudu7-reliability-round3.yml
+          git commit -m 'Run verified architecture patch in round 3 validation'
+          git push origin HEAD:agent/fm-radio-ui-logos-tabs
