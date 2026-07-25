@@ -175,4 +175,26 @@ echo "PASS: favorite starts immediately and latest selection wins delayed refres
 '''
 replace_once(smoke, old_race, new_race)
 
+# Always preserve process state and logcat when the emulator smoke exits early.
+# This is intentionally part of the reusable smoke test so a foreground switch or
+# headless-emulator crash cannot hide the real failure behind a missing UI label.
+smoke_text = smoke.read_text(encoding="utf-8")
+if "diagnostic_exit()" not in smoke_text:
+    marker = 'exec > >(tee "$RESULTS_DIR/round3-smoke.log") 2>&1\n'
+    diagnostic = '''\n
+diagnostic_exit() {
+  local status=$?
+  trap - EXIT
+  adb shell pidof "$PACKAGE_NAME" > "$RESULTS_DIR/app-pid-at-exit.txt" 2>&1 || true
+  adb logcat -d -v threadtime > "$RESULTS_DIR/logcat-at-exit.txt" 2>&1 || true
+  adb shell dumpsys activity activities > "$RESULTS_DIR/activities-at-exit.txt" 2>&1 || true
+  adb shell dumpsys window windows > "$RESULTS_DIR/windows-at-exit.txt" 2>&1 || true
+  adb shell dumpsys package "$PACKAGE_NAME" > "$RESULTS_DIR/package-at-exit.txt" 2>&1 || true
+  capture "exit-state" || true
+  exit "$status"
+}
+trap diagnostic_exit EXIT
+'''
+    replace_once(smoke, marker, marker + diagnostic)
+
 print("Applied immediate WebRadio favorite playback fix and deterministic regression")
