@@ -11,6 +11,20 @@ DUDU_DENSITY="${DUDU_DENSITY:-200}"
 mkdir -p "$RESULTS_DIR"
 exec > >(tee "$RESULTS_DIR/round3-smoke.log") 2>&1
 
+
+diagnostic_exit() {
+  local status=$?
+  trap - EXIT
+  adb shell pidof "$PACKAGE_NAME" > "$RESULTS_DIR/app-pid-at-exit.txt" 2>&1 || true
+  adb logcat -d -v threadtime > "$RESULTS_DIR/logcat-at-exit.txt" 2>&1 || true
+  adb shell dumpsys activity activities > "$RESULTS_DIR/activities-at-exit.txt" 2>&1 || true
+  adb shell dumpsys window windows > "$RESULTS_DIR/windows-at-exit.txt" 2>&1 || true
+  adb shell dumpsys package "$PACKAGE_NAME" > "$RESULTS_DIR/package-at-exit.txt" 2>&1 || true
+  capture "exit-state" || true
+  exit "$status"
+}
+trap diagnostic_exit EXIT
+
 capture() {
   local name="$1"
   adb exec-out screencap -p > "$RESULTS_DIR/${name}.png" || true
@@ -130,7 +144,7 @@ import html, json
 stations = [
  {"uuid":"stale-one","name":"Stale Radio One","streamUrl":"http://10.0.2.2:8000/always-broken","homepage":"","favicon":"","manualFavicon":False,"country":"Austria","language":"German","tags":"Rock","codec":"MP3","bitrate":96},
  {"uuid":"stale-two","name":"Stale Radio Two","streamUrl":"http://10.0.2.2:8000/always-broken","homepage":"","favicon":"","manualFavicon":False,"country":"Austria","language":"German","tags":"Pop","codec":"MP3","bitrate":96},
- {"uuid":"slow-one","name":"Slow Old Radio","streamUrl":"http://10.0.2.2:8000/always-broken","homepage":"","favicon":"","manualFavicon":False,"country":"Austria","language":"German","tags":"Rock","codec":"MP3","bitrate":96}
+ {"uuid":"slow-one","name":"Slow Old Radio","streamUrl":"http://10.0.2.2:8000/station1","homepage":"","favicon":"","manualFavicon":False,"country":"Austria","language":"German","tags":"Rock","codec":"MP3","bitrate":96}
 ]
 raw=json.dumps(stations,separators=(',',':'))
 print('<?xml version="1.0" encoding="utf-8" standalone="yes" ?>')
@@ -194,15 +208,25 @@ assert station['streamUrl'].endswith('/station2'), station
 print('PASS: stale favorite two URL persisted as current station2 URL')
 PY
 
-# The first UUID refresh intentionally blocks for six seconds. A newer favorite
-# selection must win and must still be active after the old request returns.
-tap_text "slow old favorite" 1 "=Slow Old Radio"
-sleep 1
+# The UUID refresh for Slow Old Radio intentionally blocks for six seconds, but
+# its already saved stream URL is valid. Playback must start immediately instead
+# of waiting for refreshStation()/resolveStreamUrl(). This reproduces the device
+# problem where repeated favorite taps cancelled every pending network job.
+tap_text "slow favorite starts immediately" 1 "=Slow Old Radio"
+sleep 2
+assert_text "favorite playback does not wait for refresh" 0 "=Never Gonna Give You Up"
+assert_station_active "Slow Old Radio"
+
+# A newer favorite selection must also start immediately and remain selected when
+# the old six-second refresh eventually returns.
 tap_text "newer favorite two" 1 "=Test Radio Two" "=Stale Radio Two"
-sleep 10
-assert_text "newer selection survives delayed old request" 0 "=Test Track Two"
+sleep 2
+assert_text "rapid newer favorite starts immediately" 0 "=Test Track Two"
 assert_station_active "Test Radio Two"
-echo "PASS: latest favorite selection wins delayed refresh race"
+sleep 8
+assert_text "newer selection survives delayed old refresh" 0 "=Test Track Two"
+assert_station_active "Test Radio Two"
+echo "PASS: favorite starts immediately and latest selection wins delayed refresh"
 
 # Reopen the refreshed Rick Astley station and test the embedded artist detail
 # page that previously became white after 'Alle anzeigen'.

@@ -173,10 +173,33 @@ fun WebRadioScreen() {
         favoriteRequestId += 1L
         val requestId = favoriteRequestId
         favoritePlayJob?.cancel()
+
+        fun startFavorite(playable: RadioStation) {
+            val orderedSnapshot = orderedSavedStations.toList().ifEmpty { savedStations }
+            val effectiveStations = replaceFavoriteStation(orderedSnapshot, playable)
+            val startIndex = effectiveStations.indexOfFirst { it.uuid == playable.uuid }.coerceAtLeast(0)
+            playerConnection.playQueue(
+                queue =
+                    ListQueue(
+                        title = "WebRadio",
+                        items = effectiveStations.map { it.toMediaItem() },
+                        startIndex = startIndex,
+                    ),
+                notifyUserSelection = false,
+            )
+        }
+
+        // A favorite tap is a playback command, not a network-refresh command.
+        // Start immediately with the saved URL so rapid taps cannot cancel every
+        // request before playQueue() is reached. A cached fresh URL may be used,
+        // but the background refresh below never blocks the initial start.
+        val now = System.currentTimeMillis()
+        val cached = refreshedFavoriteCache[station.uuid]?.takeIf { now - it.first < 5 * 60_000L }?.second
+        val initialPlayable = cached ?: station
+        startFavorite(initialPlayable)
+
         favoritePlayJob =
             scope.launch {
-                val now = System.currentTimeMillis()
-                val cached = refreshedFavoriteCache[station.uuid]?.takeIf { now - it.first < 5 * 60_000L }?.second
                 val looksLikeRadioBrowserEntry =
                     station.country.isNotBlank() ||
                         station.language.isNotBlank() ||
@@ -201,21 +224,22 @@ fun WebRadioScreen() {
                 if (requestId != favoriteRequestId) return@launch
 
                 val playable = candidate.copy(streamUrl = resolvedUrl)
-                refreshedFavoriteCache[station.uuid] = now to playable
+                refreshedFavoriteCache[station.uuid] = System.currentTimeMillis() to playable
                 if (playable != station) store.addOrUpdate(playable)
 
-                val orderedSnapshot = orderedSavedStations.toList().ifEmpty { savedStations }
-                val effectiveStations = replaceFavoriteStation(orderedSnapshot, playable)
-                val startIndex = effectiveStations.indexOfFirst { it.uuid == playable.uuid }.coerceAtLeast(0)
-                playerConnection.playQueue(
-                    queue =
-                        ListQueue(
-                            title = "WebRadio",
-                            items = effectiveStations.map { it.toMediaItem() },
-                            startIndex = startIndex,
-                        ),
-                    notifyUserSelection = false,
-                )
+                // Do not interrupt a stream that already became ready. Retry only
+                // when the same selected favorite still failed or is still stuck
+                // after the refresh/playlist resolution completed.
+                if (playable.streamUrl != initialPlayable.streamUrl) {
+                    val player = runCatching { playerConnection.player }.getOrNull()
+                    val sameStation = player?.currentMediaItem?.mediaId == station.mediaId
+                    val needsRetry =
+                        sameStation &&
+                            (player.playerError != null || player.playbackState != Player.STATE_READY)
+                    if (requestId == favoriteRequestId && needsRetry) {
+                        startFavorite(playable)
+                    }
+                }
             }
     }
 
