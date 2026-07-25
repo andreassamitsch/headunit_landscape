@@ -26,6 +26,7 @@ jobs:
       METROLIST_DEBUG_KEY_ALIAS: androiddebugkey
       METROLIST_DEBUG_KEY_PASSWORD: android
       STATUS_FILE: .build-metadata/dudu7-screens-crash-fix-run.txt
+      OUTPUT_APK: artifacts/Metrolist-Dudu7-13.7.1-Screens-Crash-Fix.apk
 
     steps:
       - uses: actions/checkout@v4
@@ -77,23 +78,56 @@ jobs:
             --tests com.metrolist.music.ui.screens.ScreensInitializationTest \
             --warning-mode summary
 
-      - name: Build and verify update-compatible ARM APK
+      - name: Build update-compatible ARM APK
         shell: bash
         run: |
           set -euxo pipefail
           mkdir -p artifacts
           ./gradlew --console=plain :app:assembleGmsDudu7Debug --warning-mode summary
-          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
-          test -n "$APK"
-          cp "$APK" artifacts/Metrolist-Dudu7-13.7.1-Screens-Crash-Fix.apk
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil
+
+          candidates = [
+              path for path in Path('app/build/outputs/apk').rglob('*.apk')
+              if 'dudu7' in str(path).lower() and 'debug' in str(path).lower()
+          ]
+          if not candidates:
+              raise SystemExit('No Dudu7 debug APK found')
+          candidates.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+          output = Path('artifacts/Metrolist-Dudu7-13.7.1-Screens-Crash-Fix.apk')
+          shutil.copy2(candidates[0], output)
+          print(f'Copied {candidates[0]} -> {output}')
+          PY
+
+      - name: Verify package, signature and ARM ABIs
+        shell: bash
+        run: |
+          set -euxo pipefail
           BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
-          "$BUILD_TOOLS/aapt" dump badging artifacts/Metrolist-Dudu7-13.7.1-Screens-Crash-Fix.apk | tee artifacts/apk-badging.txt
-          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs artifacts/Metrolist-Dudu7-13.7.1-Screens-Crash-Fix.apk | tee artifacts/apk-signature.txt
-          grep -q "package: name='com.metrolist.music.dudu7' versionCode='160'" artifacts/apk-badging.txt
-          grep -q 'Signer #1 certificate SHA-256 digest: d5842d9177a64c29457c57039eeadad8133a72f6a4d36498725edf3f58b3b377' artifacts/apk-signature.txt
-          unzip -l artifacts/Metrolist-Dudu7-13.7.1-Screens-Crash-Fix.apk | grep 'lib/arm64-v8a/'
-          unzip -l artifacts/Metrolist-Dudu7-13.7.1-Screens-Crash-Fix.apk | grep 'lib/armeabi-v7a/'
-          sha256sum artifacts/Metrolist-Dudu7-13.7.1-Screens-Crash-Fix.apk | tee artifacts/SHA256SUMS.txt
+          "$BUILD_TOOLS/aapt" dump badging "$OUTPUT_APK" > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$OUTPUT_APK" > artifacts/apk-signature.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import zipfile
+
+          badging = Path('artifacts/apk-badging.txt').read_text(encoding='utf-8', errors='replace')
+          match = re.search(r"package: name='([^']+)' versionCode='([^']+)'", badging)
+          assert match, badging[:500]
+          assert match.group(1) == 'com.metrolist.music.dudu7', match.groups()
+          assert match.group(2) == '160', match.groups()
+
+          signature = Path('artifacts/apk-signature.txt').read_text(encoding='utf-8', errors='replace').lower()
+          expected = 'd5842d9177a64c29457c57039eeadad8133a72f6a4d36498725edf3f58b3b377'
+          assert expected in signature, signature
+
+          with zipfile.ZipFile('artifacts/Metrolist-Dudu7-13.7.1-Screens-Crash-Fix.apk') as archive:
+              names = archive.namelist()
+          assert any(name.startswith('lib/arm64-v8a/') for name in names)
+          assert any(name.startswith('lib/armeabi-v7a/') for name in names)
+          PY
+          sha256sum "$OUTPUT_APK" | tee artifacts/SHA256SUMS.txt
 
       - name: Record successful result
         shell: bash
@@ -107,12 +141,13 @@ jobs:
           git pull --rebase origin agent/fm-radio-ui-logos-tabs
           git push origin HEAD:agent/fm-radio-ui-logos-tabs
 
-      - name: Upload APK
+      - name: Upload APK and evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Metrolist-Dudu7-Screens-Crash-Fix-${{ github.run_id }}
           path: artifacts/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
 
       - name: Record failure
