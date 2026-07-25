@@ -13,6 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import java.lang.reflect.Method
 import kotlin.math.abs
@@ -36,13 +38,28 @@ object FytPhysicalRadio {
     private const val PREFS = "dudu7_physical_radio"
     private const val KEY_FREQUENCY = "frequency"
     private const val KEY_PRESETS = "presets"
+    private const val KEY_AF = "af_enabled"
+    private const val KEY_TA = "ta_enabled"
+    private const val KEY_REG = "reg_enabled"
     private const val FM_MIN = 87.5f
     private const val FM_MAX = 108.0f
     private const val FM_STEP = 0.1f
+    private const val SEEK_RSSI_THRESHOLD = 38
+    private const val SCAN_RSSI_THRESHOLD = 36
 
     data class Preset(
         val frequency: Float,
         val name: String,
+    )
+
+    data class ScanResult(
+        val frequency: Float,
+        val name: String,
+        val rssi: Int,
+        val stereo: Boolean,
+        val pi: Int,
+        val pty: Int,
+        val tp: Boolean,
     )
 
     data class State(
@@ -51,6 +68,9 @@ object FytPhysicalRadio {
         val isActive: Boolean = false,
         val isMuted: Boolean = false,
         val isBusy: Boolean = false,
+        val isScanning: Boolean = false,
+        val scanProgress: Float = 0f,
+        val scanResults: List<ScanResult> = emptyList(),
         val frequency: Float = 99.7f,
         val ps: String = "",
         val rt: String = "",
@@ -60,6 +80,10 @@ object FytPhysicalRadio {
         val pty: Int = 0,
         val tp: Boolean = false,
         val ta: Boolean = false,
+        val afEnabled: Boolean = true,
+        val taEnabled: Boolean = true,
+        val regEnabled: Boolean = false,
+        val afSupported: Boolean = true,
         val presets: List<Preset> = emptyList(),
         val radioType: String = "",
         val platform: String = "",
@@ -78,8 +102,10 @@ object FytPhysicalRadio {
     private var native: FmNative? = null
     private var twUtil: TwUtilBridge? = null
     private var pollingJob: Job? = null
+    private var scanJob: Job? = null
     private var audioManager: AudioManager? = null
     private var focusRequest: AudioFocusRequest? = null
+    private var lastAfAttemptAt = 0L
 
     fun get(context: Context): FytPhysicalRadio {
         initialize(context)
@@ -104,6 +130,9 @@ object FytPhysicalRadio {
                     libraryLoaded = FmNative.isLibraryLoaded(),
                     frequency = frequency,
                     presets = readPresets(prefs.getString(KEY_PRESETS, null)),
+                    afEnabled = prefs.getBoolean(KEY_AF, true),
+                    taEnabled = prefs.getBoolean(KEY_TA, true),
+                    regEnabled = prefs.getBoolean(KEY_REG, false),
                     radioType = systemProperty("sys.fyt.radio_type"),
                     platform = systemProperty("ro.product.board").ifBlank { systemProperty("ro.board.platform") },
                     error = if (FmNative.isLibraryLoaded()) null else "FYT-Firmwarebibliothek libfmjni.so konnte nicht geladen werden",
@@ -149,6 +178,7 @@ object FytPhysicalRadio {
                 FmNative.setFirmwareFmVolumeEnabled(true)
                 runCatching { fm.setEuropeArea() }
                 runCatching { fm.setRds(true) }
+                applyRegionalConfig(fm, _state.value.regEnabled)
 
                 if (!openOk || !powerOk || !tuneOk) {
                     error("Tuner-Initialisierung fehlgeschlagen (open=$openOk, power=$powerOk, tune=$tuneOk)")
@@ -180,6 +210,7 @@ object FytPhysicalRadio {
 
     fun powerOff() {
         scope.launch {
+            stopAutoScan()
             synchronized(lock) {
                 if (_state.value.isBusy && !_state.value.isActive) return@launch
                 _state.update { it.copy(isBusy = true) }
@@ -190,6 +221,8 @@ object FytPhysicalRadio {
                     isActive = false,
                     isMuted = false,
                     isBusy = false,
+                    isScanning = false,
+                    scanProgress = 0f,
                     ps = "",
                     rt = "",
                     rssi = 0,
@@ -211,6 +244,7 @@ object FytPhysicalRadio {
             return
         }
         scope.launch {
+            if (_state.value.isScanning) stopAutoScan()
             _state.update { it.copy(isBusy = true, error = null, ps = "", rt = "", pi = 0, pty = 0) }
             val success = runCatching { native?.tune(target) == true }.getOrDefault(false)
             if (success) {
@@ -240,7 +274,7 @@ object FytPhysicalRadio {
             return
         }
         scope.launch {
-            if (_state.value.isBusy) return@launch
+            if (_state.value.isBusy || _state.value.isScanning) return@launch
             _state.update { it.copy(isBusy = true, error = null, ps = "", rt = "") }
             val fm = native
             if (fm == null) {
@@ -249,7 +283,7 @@ object FytPhysicalRadio {
             }
 
             val nativeResult = runCatching { fm.seek(_state.value.frequency, up) }.getOrNull()
-            val nativeFrequency = nativeResult?.firstOrNull()?.takeIf { it in FM_MIN..FM_MAX }
+            val nativeFrequency = nativeResult?.firstOrNull()?.let(::decodeFrequency)
             val found =
                 if (nativeFrequency != null && abs(nativeFrequency - _state.value.frequency) >= 0.05f) {
                     normalizeFrequency(nativeFrequency)
@@ -265,6 +299,147 @@ object FytPhysicalRadio {
                 _state.update { it.copy(isBusy = false, error = "Kein weiterer Sender gefunden") }
             }
         }
+    }
+
+    fun startAutoScan() {
+        if (_state.value.isScanning) return
+        scanJob?.cancel()
+        scanJob =
+            scope.launch {
+                val originalFrequency = _state.value.frequency
+                if (!_state.value.isActive) {
+                    powerOn(originalFrequency)
+                    var attempts = 0
+                    while (!_state.value.isActive && _state.value.error == null && attempts < 50) {
+                        delay(100)
+                        attempts++
+                    }
+                }
+                val fm = native
+                if (fm == null || !_state.value.isActive) {
+                    _state.update { it.copy(error = "Tuner konnte für den Suchlauf nicht gestartet werden") }
+                    return@launch
+                }
+
+                _state.update {
+                    it.copy(
+                        isScanning = true,
+                        isBusy = true,
+                        scanProgress = 0.01f,
+                        scanResults = emptyList(),
+                        error = null,
+                    )
+                }
+
+                val progressJob =
+                    launch {
+                        var progress = 0.03f
+                        while (isActive && _state.value.isScanning && progress < 0.48f) {
+                            delay(350)
+                            progress = (progress + 0.018f).coerceAtMost(0.48f)
+                            _state.update { it.copy(scanProgress = progress) }
+                        }
+                    }
+
+                val rawDeferred =
+                    async(Dispatchers.IO) {
+                        runCatching { FmNative.autoScan(0) }
+                            .onFailure { Timber.tag(TAG).w(it, "Native autoScan failed") }
+                            .getOrDefault(shortArrayOf())
+                    }
+                val raw =
+                    withTimeoutOrNull(18_000) { rawDeferred.await() }
+                        ?: run {
+                            runCatching { fm.stopScan() }
+                            shortArrayOf()
+                        }
+                progressJob.cancel()
+
+                var frequencies =
+                    raw
+                        .mapNotNull { decodeFrequency(it.toFloat()) }
+                        .distinctBy { (it * 10).roundToInt() }
+                        .sorted()
+                if (frequencies.isEmpty()) {
+                    frequencies = softwareBandScan(fm)
+                }
+
+                val results = mutableListOf<ScanResult>()
+                frequencies.forEachIndexed { index, frequency ->
+                    if (!isActive || !_state.value.isScanning) return@forEachIndexed
+                    _state.update {
+                        it.copy(
+                            scanProgress = 0.5f + (index.toFloat() / frequencies.size.coerceAtLeast(1)) * 0.48f,
+                            frequency = frequency,
+                            ps = "",
+                            rt = "",
+                            pi = 0,
+                            pty = 0,
+                            tp = false,
+                            ta = false,
+                        )
+                    }
+                    if (!fm.tune(frequency)) return@forEachIndexed
+                    delay(520)
+                    repeat(2) {
+                        runCatching { fm.readRds() }
+                        delay(90)
+                    }
+                    val name = runCatching { fm.psString }.getOrDefault("").trim()
+                    val rssi = runCatching { fm.rssi }.getOrDefault(0)
+                    val stereo = runCatching { fm.isStereoReceiving }.getOrDefault(false)
+                    val snapshot = _state.value
+                    results +=
+                        ScanResult(
+                            frequency = frequency,
+                            name = name.ifBlank { "FM ${formatFrequency(frequency)}" },
+                            rssi = rssi,
+                            stereo = stereo,
+                            pi = snapshot.pi,
+                            pty = snapshot.pty,
+                            tp = snapshot.tp,
+                        )
+                    _state.update { it.copy(scanResults = results.toList()) }
+                }
+
+                runCatching { fm.tune(originalFrequency) }
+                persistFrequency(originalFrequency)
+                _state.update {
+                    it.copy(
+                        isScanning = false,
+                        isBusy = false,
+                        scanProgress = 1f,
+                        scanResults = results
+                            .distinctBy { result -> (result.frequency * 10).roundToInt() }
+                            .sortedWith(compareByDescending<ScanResult> { result -> result.rssi }.thenBy { result -> result.frequency }),
+                        frequency = originalFrequency,
+                    )
+                }
+                triggerRdsRead()
+                Timber.tag(TAG).i("FM scan completed with %d stations", results.size)
+            }
+    }
+
+    fun stopAutoScan() {
+        scanJob?.cancel()
+        scanJob = null
+        runCatching { native?.stopScan() }
+        _state.update { it.copy(isScanning = false, isBusy = false, scanProgress = 0f) }
+    }
+
+    fun clearScanResults() {
+        _state.update { it.copy(scanResults = emptyList(), scanProgress = 0f) }
+    }
+
+    fun saveScanResults(results: Collection<ScanResult>) {
+        if (results.isEmpty()) return
+        val additions = results.map { Preset(it.frequency, it.name) }
+        val updated =
+            (_state.value.presets + additions)
+                .distinctBy { (it.frequency * 10).roundToInt() }
+                .sortedBy { it.frequency }
+        persistPresets(updated)
+        _state.update { it.copy(presets = updated) }
     }
 
     fun toggleMute() {
@@ -284,6 +459,50 @@ object FytPhysicalRadio {
         scope.launch {
             runCatching { native?.setRds(true) }
             triggerRdsRead()
+        }
+    }
+
+    fun setAfEnabled(enabled: Boolean) {
+        persistBoolean(KEY_AF, enabled)
+        _state.update { it.copy(afEnabled = enabled) }
+        if (enabled) requestAlternativeFrequency()
+    }
+
+    fun setTaEnabled(enabled: Boolean) {
+        persistBoolean(KEY_TA, enabled)
+        _state.update { it.copy(taEnabled = enabled) }
+    }
+
+    fun setRegEnabled(enabled: Boolean) {
+        persistBoolean(KEY_REG, enabled)
+        _state.update { it.copy(regEnabled = enabled) }
+        native?.let { applyRegionalConfig(it, enabled) }
+    }
+
+    fun requestAlternativeFrequency() {
+        scope.launch {
+            val fm = native ?: return@launch
+            if (!_state.value.isActive || !_state.value.afEnabled || _state.value.isScanning) return@launch
+            val raw = runCatching { fm.activeAf() }.getOrElse {
+                Timber.tag(TAG).w(it, "AF request failed")
+                _state.update { state -> state.copy(afSupported = false) }
+                return@launch
+            }
+            val frequency = decodeFrequency(raw.toFloat())
+            if (frequency != null && abs(frequency - _state.value.frequency) >= 0.05f) {
+                Timber.tag(TAG).i("AF switched %.1f -> %.1f", _state.value.frequency, frequency)
+                persistFrequency(frequency)
+                _state.update {
+                    it.copy(
+                        frequency = frequency,
+                        ps = "",
+                        rt = "",
+                        pi = 0,
+                        pty = 0,
+                    )
+                }
+                triggerRdsRead()
+            }
         }
     }
 
@@ -315,9 +534,31 @@ object FytPhysicalRadio {
             if (!fm.tune(candidate)) return@repeat
             delay(45)
             val rssi = fm.getRssi()
-            if (rssi >= 38) return candidate
+            if (rssi >= SEEK_RSSI_THRESHOLD) return candidate
         }
         return null
+    }
+
+    private suspend fun softwareBandScan(fm: FmNative): List<Float> {
+        val results = mutableListOf<Float>()
+        val steps = ((FM_MAX - FM_MIN) / FM_STEP).roundToInt()
+        for (index in 0..steps) {
+            if (!_state.value.isScanning) break
+            val frequency = normalizeFrequency(FM_MIN + index * FM_STEP)
+            if (!fm.tune(frequency)) continue
+            delay(58)
+            val rssi = fm.getRssi()
+            if (rssi >= SCAN_RSSI_THRESHOLD) {
+                val previous = results.lastOrNull()
+                if (previous == null || abs(previous - frequency) >= 0.15f) {
+                    results += frequency
+                } else {
+                    results[results.lastIndex] = frequency
+                }
+            }
+            _state.update { it.copy(scanProgress = 0.05f + (index.toFloat() / steps.coerceAtLeast(1)) * 0.42f) }
+        }
+        return results
     }
 
     private fun installRdsListener() {
@@ -338,6 +579,17 @@ object FytPhysicalRadio {
             scope.launch {
                 while (isActive && _state.value.isActive) {
                     pollTuner()
+                    val snapshot = _state.value
+                    val now = System.currentTimeMillis()
+                    if (
+                        snapshot.afEnabled &&
+                        !snapshot.isScanning &&
+                        snapshot.rssi in 1..29 &&
+                        now - lastAfAttemptAt >= 8_000
+                    ) {
+                        lastAfAttemptAt = now
+                        requestAlternativeFrequency()
+                    }
                     delay(850)
                 }
             }
@@ -352,7 +604,7 @@ object FytPhysicalRadio {
 
     private fun pollTuner() {
         val fm = native ?: return
-        if (!_state.value.isActive) return
+        if (!_state.value.isActive || _state.value.isScanning) return
         runCatching { fm.readRds() }
         val ps = runCatching { fm.psString }.getOrDefault("")
         val rt = runCatching { fm.radioText }.getOrDefault("")
@@ -368,9 +620,18 @@ object FytPhysicalRadio {
         }
     }
 
+    private fun applyRegionalConfig(fm: FmNative, enabled: Boolean) {
+        runCatching {
+            val result = fm.setconfig("reg=${if (enabled) 1 else 0}")
+            Timber.tag(TAG).d("REG config result=%d enabled=%s", result, enabled)
+        }.onFailure { Timber.tag(TAG).w(it, "REG config unavailable") }
+    }
+
     private fun cleanupHardware() {
         pollingJob?.cancel()
         pollingJob = null
+        scanJob?.cancel()
+        scanJob = null
         FmService.setRdsListener(null)
         runCatching { native?.setMute(true) }
         runCatching { native?.setRds(false) }
@@ -423,6 +684,14 @@ object FytPhysicalRadio {
             ?.apply()
     }
 
+    private fun persistBoolean(key: String, value: Boolean) {
+        appContext
+            ?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            ?.edit()
+            ?.putBoolean(key, value)
+            ?.apply()
+    }
+
     private fun persistPresets(presets: List<Preset>) {
         val encoded =
             presets.joinToString("\n") { preset ->
@@ -447,6 +716,18 @@ object FytPhysicalRadio {
             .sortedBy { it.frequency }
             .toList()
 
+    private fun decodeFrequency(value: Float): Float? {
+        val decoded =
+            when {
+                value in FM_MIN..FM_MAX -> value
+                value in 875f..1080f -> value / 10f
+                value in 8750f..10800f -> value / 100f
+                value in 87500f..108000f -> value / 1000f
+                else -> return null
+            }
+        return normalizeFrequency(decoded).takeIf { it in FM_MIN..FM_MAX }
+    }
+
     private fun normalizeFrequency(value: Float): Float =
         ((value.coerceIn(FM_MIN, FM_MAX) * 10f).roundToInt() / 10f)
 
@@ -458,6 +739,42 @@ object FytPhysicalRadio {
         }.getOrDefault("")
 
     fun formatFrequency(value: Float): String = String.format(java.util.Locale.GERMANY, "%.1f", value)
+
+    fun ptyLabel(pty: Int): String =
+        when (pty) {
+            1 -> "Nachrichten"
+            2 -> "Aktuelles"
+            3 -> "Information"
+            4 -> "Sport"
+            5 -> "Bildung"
+            6 -> "Hörspiel"
+            7 -> "Kultur"
+            8 -> "Wissenschaft"
+            9 -> "Verschiedenes"
+            10 -> "Pop"
+            11 -> "Rock"
+            12 -> "Unterhaltung"
+            13 -> "Leichte Klassik"
+            14 -> "Klassik"
+            15 -> "Sonstige Musik"
+            16 -> "Wetter"
+            17 -> "Wirtschaft"
+            18 -> "Kinder"
+            19 -> "Gesellschaft"
+            20 -> "Religion"
+            21 -> "Telefon"
+            22 -> "Reise"
+            23 -> "Freizeit"
+            24 -> "Jazz"
+            25 -> "Country"
+            26 -> "Volksmusik"
+            27 -> "Oldies"
+            28 -> "Folk"
+            29 -> "Dokumentation"
+            30 -> "Alarmtest"
+            31 -> "Alarm"
+            else -> ""
+        }
 
     private object FytAudioRouter {
         private const val SYU_MUSIC = "com.syu.music"
