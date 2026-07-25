@@ -21,6 +21,10 @@ jobs:
     env:
       METROLIST_APPLICATION_ID: com.metrolist.music
       METROLIST_APP_NAME: Metrolist
+      METROLIST_DEBUG_KEYSTORE_PATH: app/keystore/dudu7-debug.keystore
+      METROLIST_DEBUG_KEYSTORE_PASSWORD: android
+      METROLIST_DEBUG_KEY_ALIAS: androiddebugkey
+      METROLIST_DEBUG_KEY_PASSWORD: android
       PACKAGE_NAME: com.metrolist.music.dudu7
       ACTIVITY_NAME: com.metrolist.music.MainActivity
       RESULTS_DIR: ui-test-results-round3
@@ -85,9 +89,9 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          test -s app/persistent-debug.keystore
-          keytool -list -v -keystore app/persistent-debug.keystore -storepass android -alias androiddebugkey | tee persistent-key.txt
-          grep -qi 'd5:84:2f:4b:8e:24:1d:ce:bc:66:e1:d3:e7:b0:84:a6:e7:af:57:8a:51:35:08:16:6d:77:e3:f3:b1:04:b3:77' persistent-key.txt
+          test -s app/keystore/dudu7-debug.keystore
+          keytool -list -v -keystore app/keystore/dudu7-debug.keystore -storepass android -alias androiddebugkey | tee dudu7-key.txt
+          grep -qi 'd5:84:2f:4b:8e:24:1d:ce:bc:66:e1:d3:e7:b0:84:a6:e7:af:57:8a:51:35:08:16:6d:77:e3:f3:b1:04:b3:77' dudu7-key.txt
 
       - name: Unit tests and lint
         shell: bash
