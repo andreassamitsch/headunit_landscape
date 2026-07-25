@@ -1,5 +1,0 @@
-status=success
-validated_by_run=30161549459
-validated_commit=c9cbd79d6978730081cf082cc65b750f1a6382f7
-arm_artifact_run=30161275480
-apk_sha256=ec8614886547eabff38581446b220a57916c9b4893324f8beaa8d6b9ffbcd36a
