@@ -8,7 +8,7 @@ on:
       - .github/workflows/dudu7-screens-crash-fix.yml
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: dudu7-screens-startup-fix
@@ -25,6 +25,7 @@ jobs:
       METROLIST_DEBUG_KEYSTORE_PASSWORD: android
       METROLIST_DEBUG_KEY_ALIAS: androiddebugkey
       METROLIST_DEBUG_KEY_PASSWORD: android
+      STATUS_FILE: .build-metadata/dudu7-screens-crash-fix-run.txt
 
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +33,18 @@ jobs:
           ref: agent/fm-radio-ui-logos-tabs
           submodules: recursive
           fetch-depth: 0
+
+      - name: Record running workflow
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p .build-metadata
+          printf 'run_id=%s\nstatus=running\nworkflow_sha=%s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" > "$STATUS_FILE"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$STATUS_FILE"
+          git commit -m 'Record Dudu7 Screens crash fix run [skip ci]'
+          git push origin HEAD:agent/fm-radio-ui-logos-tabs
 
       - uses: actions/setup-java@v4
         with:
@@ -52,7 +65,7 @@ jobs:
             | tee certificate.txt
           grep -q 'SHA256: D5:84:2D:91:77:A6:4C:29:45:7C:57:03:9E:EA:DA:D8:13:3A:72:F6:A4:D3:64:98:72:5E:DF:3F:58:B3:B3:77' certificate.txt
 
-      - name: Run targeted regression and Dudu7 unit tests
+      - name: Run targeted regression test
         shell: bash
         run: |
           set -euxo pipefail
@@ -79,6 +92,18 @@ jobs:
           unzip -l artifacts/Metrolist-Dudu7-13.7.1-Screens-Crash-Fix.apk | grep 'lib/armeabi-v7a/'
           sha256sum artifacts/Metrolist-Dudu7-13.7.1-Screens-Crash-Fix.apk | tee artifacts/SHA256SUMS.txt
 
+      - name: Record successful result
+        shell: bash
+        run: |
+          set -euxo pipefail
+          APK_SHA="$(cut -d' ' -f1 artifacts/SHA256SUMS.txt)"
+          printf 'run_id=%s\nstatus=success\nvalidated_commit=%s\nartifact_name=Metrolist-Dudu7-Screens-Crash-Fix-%s\napk_sha256=%s\n' \
+            "$GITHUB_RUN_ID" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$APK_SHA" > "$STATUS_FILE"
+          git add "$STATUS_FILE"
+          git commit -m 'Record successful Dudu7 Screens crash fix build [skip ci]'
+          git pull --rebase origin agent/fm-radio-ui-logos-tabs
+          git push origin HEAD:agent/fm-radio-ui-logos-tabs
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
@@ -86,3 +111,19 @@ jobs:
           path: artifacts/
           if-no-files-found: error
           retention-days: 14
+
+      - name: Record failure
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git reset --hard
+          git fetch origin agent/fm-radio-ui-logos-tabs
+          git checkout -B agent/fm-radio-ui-logos-tabs origin/agent/fm-radio-ui-logos-tabs
+          mkdir -p .build-metadata
+          printf 'run_id=%s\nstatus=failure\nworkflow_sha=%s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" > "$STATUS_FILE"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$STATUS_FILE"
+          git commit -m 'Record failed Dudu7 Screens crash fix build [skip ci]' || exit 0
+          git push origin HEAD:agent/fm-radio-ui-logos-tabs
