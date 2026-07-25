@@ -1,3 +1,4 @@
-run_id=30168680734
-status=running
-helper_sha=906f63bc77bd910555475470044dbf3a43288ff1
+run_id=30169089070
+status=running-resume
+helper_sha=757c0e8db77b01432134e6ded8c4872549355ffb
+arm_run=30168680734
