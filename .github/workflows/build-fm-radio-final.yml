@@ -1,4 +1,4 @@
-# One-time validation trigger: 2026-07-25 round 2
+# One-time validation trigger: 2026-07-25 round 2 attempt 2
 name: One-time Dudu7 round-two validation
 
 on:
@@ -61,10 +61,12 @@ jobs:
           python3 scripts/apply_dudu7_round2_navigation.py
           grep -q 'EmbeddedArtistScreen(navController)' app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt
           grep -q 'TA VERKEHR' app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
+          grep -q '.asSequence()' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
           git diff --check
           git diff -- \
             app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt \
             app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt \
+            app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt \
             > artifacts/round-two-runtime-patch.diff
 
       - name: Static architecture and signing checks
@@ -206,6 +208,7 @@ jobs:
           git add \
             app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt \
             app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt \
+            app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt \
             .build-metadata/fm-final-run.txt
           git commit -m "Record Dudu7 round-two validation $GITHUB_RUN_ID [skip ci]" || exit 0
           git push origin HEAD:agent/fm-radio-ui-logos-tabs
