@@ -62,6 +62,7 @@ import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_FOR_UNSET_LENGTH_REQUESTS
 import androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -3426,6 +3427,11 @@ class MusicService :
                 CacheDataSource
                     .Factory()
                     .setCache(playerCache)
+                    // HLS playlists and live chunks normally use LENGTH_UNSET. They
+                    // must bypass the finite-song cache completely; otherwise a
+                    // cached media playlist is replayed until its old segment list
+                    // ends and every restart begins with the same stale sequence.
+                    .setFlags(FLAG_IGNORE_CACHE_ON_ERROR or FLAG_IGNORE_CACHE_FOR_UNSET_LENGTH_REQUESTS)
                     .setUpstreamDataSourceFactory(
                         DefaultDataSource.Factory(
                             this,
@@ -3445,7 +3451,7 @@ class MusicService :
                         ),
                     ),
             ).setCacheWriteDataSinkFactory(null)
-            .setFlags(FLAG_IGNORE_CACHE_ON_ERROR)
+            .setFlags(FLAG_IGNORE_CACHE_ON_ERROR or FLAG_IGNORE_CACHE_FOR_UNSET_LENGTH_REQUESTS)
 
     private var isSilenceSkipping = false
 

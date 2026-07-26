@@ -1,4 +1,51 @@
-package com.metrolist.music.radio
+from pathlib import Path
+
+
+def replace_once(path: str, old: str, new: str) -> None:
+    file = Path(path)
+    text = file.read_text(encoding="utf-8")
+    if new in text:
+        return
+    if old not in text:
+        raise SystemExit(f"Patch marker missing in {path}: {old[:120]!r}")
+    file.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+
+replace_once(
+    "app/build.gradle.kts",
+    '        versionCode = 165\n        versionName = "13.7.6"',
+    '        versionCode = 166\n        versionName = "13.7.7"',
+)
+
+replace_once(
+    "app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt",
+    "import androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR\n",
+    "import androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_FOR_UNSET_LENGTH_REQUESTS\n"
+    "import androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR\n",
+)
+
+replace_once(
+    "app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt",
+    """                    .setCache(playerCache)
+                    .setUpstreamDataSourceFactory(
+""",
+    """                    .setCache(playerCache)
+                    // HLS playlists and live chunks normally use LENGTH_UNSET. They
+                    // must bypass the finite-song cache completely; otherwise a
+                    // cached media playlist is replayed until its old segment list
+                    // ends and every restart begins with the same stale sequence.
+                    .setFlags(FLAG_IGNORE_CACHE_ON_ERROR or FLAG_IGNORE_CACHE_FOR_UNSET_LENGTH_REQUESTS)
+                    .setUpstreamDataSourceFactory(
+""",
+)
+
+replace_once(
+    "app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt",
+    "            ).setCacheWriteDataSinkFactory(null)\n            .setFlags(FLAG_IGNORE_CACHE_ON_ERROR)\n",
+    "            ).setCacheWriteDataSinkFactory(null)\n            .setFlags(FLAG_IGNORE_CACHE_ON_ERROR or FLAG_IGNORE_CACHE_FOR_UNSET_LENGTH_REQUESTS)\n",
+)
+
+logo_search = r'''package com.metrolist.music.radio
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -231,3 +278,10 @@ object RadioStationLogoSearch {
         value.startsWith("https://", ignoreCase = true) ||
             value.startsWith("http://", ignoreCase = true)
 }
+'''
+
+logo_search_path = Path("app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt")
+if not logo_search_path.exists() or logo_search_path.read_text(encoding="utf-8") != logo_search:
+    logo_search_path.write_text(logo_search, encoding="utf-8")
+
+print("Applied Dudu7 13.7.7 HLS cache bypass and station-logo alias search fixes")

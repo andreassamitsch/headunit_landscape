@@ -1,4 +1,4 @@
-name: Build Dudu7 13.7.6 Live Edge Logo Search
+name: Build Dudu7 13.7.7 HLS Cache Logo Alias
 
 on:
   pull_request:
@@ -19,40 +19,42 @@ jobs:
           submodules: recursive
           ref: ${{ github.head_ref || github.ref }}
 
-      - name: Apply and verify focused 13.7.6 fixes
+      - name: Apply and verify focused 13.7.7 fixes
         shell: bash
         run: |
           set -euxo pipefail
-          python3 scripts/apply_dudu7_1376_live_edge_logo_search.py
-          python3 -m py_compile scripts/apply_dudu7_1376_live_edge_logo_search.py
+          python3 scripts/apply_dudu7_1377_hls_cache_logo_alias.py
+          python3 -m py_compile scripts/apply_dudu7_1377_hls_cache_logo_alias.py
           git diff --check
 
-          grep -q 'versionCode = 165' app/build.gradle.kts
-          grep -q 'versionName = "13.7.6"' app/build.gradle.kts
+          grep -q 'versionCode = 166' app/build.gradle.kts
+          grep -q 'versionName = "13.7.7"' app/build.gradle.kts
 
-          # Preserve the full Dudu7 UI, FM integration and 13.7.5 recognition path.
+          # Preserve the complete Dudu7 UI, FM integration and working HLS recognition.
           grep -q 'rememberReorderableLazyListState' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'VehicleTabOrderStore.persist' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'VEHICLE_PHYSICAL_RADIO_ROUTE' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'HlsRecognitionDecoder.decode' app/src/main/kotlin/com/metrolist/music/recognition/MusicRecognitionService.kt
           grep -q 'TeeAudioProcessor' app/src/main/kotlin/com/metrolist/music/recognition/HlsRecognitionDecoder.kt
 
-          # HLS playback starts at the media-defined live position and stays near live edge.
+          # Keep HLS at the live edge and bypass both nested finite-song caches.
           grep -q 'C.TIME_UNSET' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
           grep -q 'setLiveConfiguration' app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt
-          grep -q 'setTargetOffsetMs(8_000L)' app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt
+          grep -q 'FLAG_IGNORE_CACHE_FOR_UNSET_LENGTH_REQUESTS' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          test "$(grep -c 'setFlags(FLAG_IGNORE_CACHE_ON_ERROR or FLAG_IGNORE_CACHE_FOR_UNSET_LENGTH_REQUESTS)' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt)" -ge 2
 
-          # Ordinary MP3/AAC WebRadio resolver remains untouched.
+          # Ordinary MP3/AAC and YouTube cache-key paths remain present.
           grep -q 'builder.setCustomCacheKey(mediaId)' app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt
           grep -q 'if (dataSpec.key == null)' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
           grep -q 'val mediaId = dataSpec.key ?: error("No media id")' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
 
-          # Logo search now has multiple sources and the player has an immutable station-art fallback.
-          grep -q 'RadioStationLogoSearch.search' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
-          grep -q 'commons.wikimedia.org/w/api.php' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
+          # Logo search strips technical suffixes and directly checks likely Commons titles.
+          grep -q 'stationAliases(query)' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
+          grep -q 'hq|hls|aac|mp3' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
+          grep -q 'File:$query 2024.svg' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
+          grep -q 'commonsJobs.awaitAll' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
           grep -q 'RadioStationLogoResolver.resolve' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
           grep -q 'stableRadioArtwork' app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt
-          grep -q 'radio_favicon' app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt
 
       - name: Commit applied source fixes
         if: github.event_name == 'pull_request'
@@ -65,12 +67,9 @@ jobs:
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git add \
               app/build.gradle.kts \
-              app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt \
-              app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt \
               app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt \
-              app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt \
-              app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt
-            git commit -m 'fix(dudu7): start HLS live and expand logo search [skip ci]'
+              app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
+            git commit -m 'fix(dudu7): bypass stale HLS cache and improve logo aliases [skip ci]'
             git push origin HEAD:${GITHUB_HEAD_REF}
           fi
 
@@ -96,17 +95,17 @@ jobs:
           mkdir -p dist
           APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
           test -n "$APK"
-          cp "$APK" dist/MetroList-Dudu7-13.7.6-Live-Edge-Logo-Search.apk
+          cp "$APK" dist/MetroList-Dudu7-13.7.7-HLS-Cache-Logo-Alias.apk
           build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
-          "$build_tools/aapt" dump badging dist/MetroList-Dudu7-13.7.6-Live-Edge-Logo-Search.apk > dist/apk-badging.txt
-          "$build_tools/apksigner" verify --verbose --print-certs dist/MetroList-Dudu7-13.7.6-Live-Edge-Logo-Search.apk > dist/apk-signature.txt
-          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='165'" dist/apk-badging.txt
-          unzip -l dist/MetroList-Dudu7-13.7.6-Live-Edge-Logo-Search.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
-          sha256sum dist/MetroList-Dudu7-13.7.6-Live-Edge-Logo-Search.apk > dist/MetroList-Dudu7-13.7.6-Live-Edge-Logo-Search.apk.sha256
+          "$build_tools/aapt" dump badging dist/MetroList-Dudu7-13.7.7-HLS-Cache-Logo-Alias.apk > dist/apk-badging.txt
+          "$build_tools/apksigner" verify --verbose --print-certs dist/MetroList-Dudu7-13.7.7-HLS-Cache-Logo-Alias.apk > dist/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='166'" dist/apk-badging.txt
+          unzip -l dist/MetroList-Dudu7-13.7.7-HLS-Cache-Logo-Alias.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
+          sha256sum dist/MetroList-Dudu7-13.7.7-HLS-Cache-Logo-Alias.apk > dist/MetroList-Dudu7-13.7.7-HLS-Cache-Logo-Alias.apk.sha256
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MetroList-Dudu7-13.7.6-Live-Edge-Logo-Search
+          name: MetroList-Dudu7-13.7.7-HLS-Cache-Logo-Alias
           path: dist/*
           if-no-files-found: error
           retention-days: 14
