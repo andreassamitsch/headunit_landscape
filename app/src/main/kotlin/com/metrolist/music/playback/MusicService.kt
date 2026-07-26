@@ -3725,26 +3725,24 @@ class MusicService :
 
     private fun createDataSourceFactory(): DataSource.Factory {
         return ResolvingDataSource.Factory(createCacheDataSource()) { dataSpec ->
-            val activeHlsRadioId =
-                if (::player.isInitialized) {
-                    player.currentMediaItem
-                        ?.takeIf { item ->
-                            isRadioMediaId(item.mediaId) &&
-                                (
-                                    item.localConfiguration?.mimeType ==
-                                        androidx.media3.common.MimeTypes.APPLICATION_M3U8 ||
-                                        item.localConfiguration
-                                            ?.uri
-                                            ?.toString()
-                                            ?.substringBefore('#')
-                                            ?.substringBefore('?')
-                                            ?.endsWith(".m3u8", ignoreCase = true) == true
-                                )
-                        }?.mediaId
-                } else {
-                    null
-                }
-            val mediaId = activeHlsRadioId ?: dataSpec.key ?: error("No media id")
+            if (dataSpec.key == null) {
+                // HLS manifests and media segments are keyless. Keep this path
+                // independent from ExoPlayer state so it is safe on loader threads.
+                return@Factory dataSpec
+                    .withRequestHeaders(
+                        dataSpec.httpRequestHeaders +
+                            mapOf(
+                                "User-Agent" to "MetrolistHU/13.7.4",
+                                "Cache-Control" to "no-cache",
+                            ),
+                    ).buildUpon()
+                    .setFlags(dataSpec.flags or DataSpec.FLAG_DONT_CACHE_IF_LENGTH_UNKNOWN)
+                    .build()
+            }
+
+            // Existing MP3/AAC WebRadio and YouTube path: the custom key remains
+            // the sole discriminator, exactly as before HLS support was added.
+            val mediaId = dataSpec.key ?: error("No media id")
 
             if (isRadioMediaId(mediaId)) {
                 // Keep the mediaId only long enough to identify this as radio.
@@ -3756,7 +3754,7 @@ class MusicService :
                         dataSpec.httpRequestHeaders +
                             mapOf(
                                 "Icy-MetaData" to "1",
-                                "User-Agent" to "MetrolistHU/13.7.3",
+                                "User-Agent" to "MetrolistHU/13.7.4",
                                 "Cache-Control" to "no-cache",
                             ),
                     ).buildUpon()
