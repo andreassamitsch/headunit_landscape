@@ -1,4 +1,4 @@
-name: Build Dudu7 13.7.5 Logo HLS Recognition
+name: Build Dudu7 13.7.6 Live Edge Logo Search
 
 on:
   pull_request:
@@ -19,42 +19,40 @@ jobs:
           submodules: recursive
           ref: ${{ github.head_ref || github.ref }}
 
-      - name: Apply and verify focused 13.7.5 fixes
+      - name: Apply and verify focused 13.7.6 fixes
         shell: bash
         run: |
           set -euxo pipefail
-          python3 scripts/apply_dudu7_1375_logo_hls_recognition.py
-          python3 scripts/apply_dudu7_1375_compile_fix.py
+          python3 scripts/apply_dudu7_1376_live_edge_logo_search.py
+          python3 -m py_compile scripts/apply_dudu7_1376_live_edge_logo_search.py
           git diff --check
 
-          grep -q 'versionCode = 164' app/build.gradle.kts
-          grep -q 'versionName = "13.7.5"' app/build.gradle.kts
+          grep -q 'versionCode = 165' app/build.gradle.kts
+          grep -q 'versionName = "13.7.6"' app/build.gradle.kts
 
-          # Existing Dudu7 architecture and ordinary WebRadio playback remain unchanged.
+          # Preserve the full Dudu7 UI, FM integration and 13.7.5 recognition path.
           grep -q 'rememberReorderableLazyListState' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'VehicleTabOrderStore.persist' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'VEHICLE_PHYSICAL_RADIO_ROUTE' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
-          grep -q 'if (!playbackUrl.isHlsStreamUrl())' app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt
+          grep -q 'HlsRecognitionDecoder.decode' app/src/main/kotlin/com/metrolist/music/recognition/MusicRecognitionService.kt
+          grep -q 'TeeAudioProcessor' app/src/main/kotlin/com/metrolist/music/recognition/HlsRecognitionDecoder.kt
+
+          # HLS playback starts at the media-defined live position and stays near live edge.
+          grep -q 'C.TIME_UNSET' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          grep -q 'setLiveConfiguration' app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt
+          grep -q 'setTargetOffsetMs(8_000L)' app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt
+
+          # Ordinary MP3/AAC WebRadio resolver remains untouched.
           grep -q 'builder.setCustomCacheKey(mediaId)' app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt
           grep -q 'if (dataSpec.key == null)' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
           grep -q 'val mediaId = dataSpec.key ?: error("No media id")' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
 
-          # Editor logo controls are visible, scrollable and persist local artwork.
-          grep -q 'import androidx.compose.foundation.layout.heightIn' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
-          grep -q 'import androidx.compose.foundation.rememberScrollState' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
-          grep -q '.verticalScroll(scrollState)' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
-          grep -q 'Text("Bild auswählen")' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
-          grep -q 'rememberLauncherForActivityResult' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
-          grep -q 'object RadioStationLogoCache' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoCache.kt
-          grep -q 'withStoredRadioArtwork' app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt
-
-          # HLS fingerprinting uses a separate muted audio-only Media3 decoder.
-          grep -q 'TeeAudioProcessor' app/src/main/kotlin/com/metrolist/music/recognition/HlsRecognitionDecoder.kt
-          grep -q 'setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true)' app/src/main/kotlin/com/metrolist/music/recognition/HlsRecognitionDecoder.kt
-          grep -q 'player.volume = 0f' app/src/main/kotlin/com/metrolist/music/recognition/HlsRecognitionDecoder.kt
-          grep -q 'HlsRecognitionDecoder.decode' app/src/main/kotlin/com/metrolist/music/recognition/MusicRecognitionService.kt
-          grep -q 'decodeRadioStream(streamUrl)' app/src/main/kotlin/com/metrolist/music/recognition/MusicRecognitionService.kt
-          grep -q 'currentMediaItem?.localConfiguration?.uri' app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt
+          # Logo search now has multiple sources and the player has an immutable station-art fallback.
+          grep -q 'RadioStationLogoSearch.search' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
+          grep -q 'commons.wikimedia.org/w/api.php' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
+          grep -q 'RadioStationLogoResolver.resolve' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
+          grep -q 'stableRadioArtwork' app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt
+          grep -q 'radio_favicon' app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt
 
       - name: Commit applied source fixes
         if: github.event_name == 'pull_request'
@@ -67,14 +65,12 @@ jobs:
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git add \
               app/build.gradle.kts \
-              app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoCache.kt \
-              app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoResolver.kt \
+              app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt \
+              app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt \
+              app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt \
               app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt \
-              app/src/main/kotlin/com/metrolist/music/recognition/HlsRecognitionDecoder.kt \
-              app/src/main/kotlin/com/metrolist/music/recognition/MusicRecognitionService.kt \
-              app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt \
-              app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt
-            git commit -m 'fix(dudu7): expose fixed logos and decode HLS recognition [skip ci]'
+              app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt
+            git commit -m 'fix(dudu7): start HLS live and expand logo search [skip ci]'
             git push origin HEAD:${GITHUB_HEAD_REF}
           fi
 
@@ -89,27 +85,9 @@ jobs:
       - name: Build GMS Dudu7 ARM APK
         shell: bash
         run: |
-          set -uo pipefail
+          set -euxo pipefail
           chmod +x gradlew
-          set +e
-          ./gradlew :app:assembleGmsDudu7Debug --no-daemon --stacktrace > build-output.log 2>&1
-          status=$?
-          set -e
-          if [ "$status" -ne 0 ]; then
-            mkdir -p _assistant
-            grep -E '(^e: | error: |Compilation error|FAILURE:)' build-output.log | tail -n 240 > _assistant/dudu7-1375-build-errors.txt || true
-            if [ ! -s _assistant/dudu7-1375-build-errors.txt ]; then
-              tail -n 240 build-output.log > _assistant/dudu7-1375-build-errors.txt
-            fi
-            cat _assistant/dudu7-1375-build-errors.txt
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add _assistant/dudu7-1375-build-errors.txt
-            git commit -m 'diag(dudu7): capture 13.7.5 compiler errors [skip ci]' || true
-            git push origin HEAD:${GITHUB_HEAD_REF} || true
-            exit "$status"
-          fi
-          cat build-output.log
+          ./gradlew :app:assembleGmsDudu7Debug --no-daemon --stacktrace
 
       - name: Verify and collect APK
         shell: bash
@@ -118,17 +96,17 @@ jobs:
           mkdir -p dist
           APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
           test -n "$APK"
-          cp "$APK" dist/MetroList-Dudu7-13.7.5-Logo-HLS-Recognition.apk
+          cp "$APK" dist/MetroList-Dudu7-13.7.6-Live-Edge-Logo-Search.apk
           build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
-          "$build_tools/aapt" dump badging dist/MetroList-Dudu7-13.7.5-Logo-HLS-Recognition.apk > dist/apk-badging.txt
-          "$build_tools/apksigner" verify --verbose --print-certs dist/MetroList-Dudu7-13.7.5-Logo-HLS-Recognition.apk > dist/apk-signature.txt
-          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='164'" dist/apk-badging.txt
-          unzip -l dist/MetroList-Dudu7-13.7.5-Logo-HLS-Recognition.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
-          sha256sum dist/MetroList-Dudu7-13.7.5-Logo-HLS-Recognition.apk > dist/MetroList-Dudu7-13.7.5-Logo-HLS-Recognition.apk.sha256
+          "$build_tools/aapt" dump badging dist/MetroList-Dudu7-13.7.6-Live-Edge-Logo-Search.apk > dist/apk-badging.txt
+          "$build_tools/apksigner" verify --verbose --print-certs dist/MetroList-Dudu7-13.7.6-Live-Edge-Logo-Search.apk > dist/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='165'" dist/apk-badging.txt
+          unzip -l dist/MetroList-Dudu7-13.7.6-Live-Edge-Logo-Search.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
+          sha256sum dist/MetroList-Dudu7-13.7.6-Live-Edge-Logo-Search.apk > dist/MetroList-Dudu7-13.7.6-Live-Edge-Logo-Search.apk.sha256
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MetroList-Dudu7-13.7.5-Logo-HLS-Recognition
+          name: MetroList-Dudu7-13.7.6-Live-Edge-Logo-Search
           path: dist/*
           if-no-files-found: error
           retention-days: 14
