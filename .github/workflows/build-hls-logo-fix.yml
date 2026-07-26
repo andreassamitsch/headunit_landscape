@@ -1,5 +1,6 @@
 name: Build Dudu7 HLS Logo Fix
 
+# Triggered once after the workflow was installed on main.
 on:
   push:
     branches: [main]
