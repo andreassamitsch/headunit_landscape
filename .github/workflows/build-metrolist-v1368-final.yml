@@ -1,3 +1,4 @@
+# Release trigger merged through PR so GitHub emits a normal main push event.
 name: Build Dudu7 HLS Logo Fix APK
 
 on:
