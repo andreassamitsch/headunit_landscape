@@ -20,6 +20,20 @@ private fun String.isHlsStreamUrl(): Boolean {
     return normalized.endsWith(".m3u8") || normalized.contains("/playlist.m3u8") || normalized.contains("/manifest.m3u8")
 }
 
+private fun String.normalizedRadioPlaybackUrl(): String {
+    val value = trim()
+    return if (
+        value.contains(
+            "orf-live-oe3.mdn.ors.at/out/u/oe3/q4a/manifest.m3u8",
+            ignoreCase = true,
+        )
+    ) {
+        "https://orf-live-oe3.mdn.ors.at/out/u/oe3/qxa/manifest.m3u8"
+    } else {
+        value
+    }
+}
+
 data class RadioStation(
     val uuid: String,
     val name: String,
@@ -36,6 +50,7 @@ data class RadioStation(
     val mediaId: String get() = "$RADIO_MEDIA_ID_PREFIX$uuid"
 
     fun toMediaItem(): MediaItem {
+        val playbackUrl = streamUrl.normalizedRadioPlaybackUrl()
         val appMetadata =
             MediaMetadata(
                 id = mediaId,
@@ -49,8 +64,7 @@ data class RadioStation(
         val builder =
             MediaItem.Builder()
                 .setMediaId(mediaId)
-                .setUri(streamUrl)
-                .setCustomCacheKey(mediaId)
+                .setUri(playbackUrl)
                 .setTag(appMetadata)
                 .setMediaMetadata(
                     androidx.media3.common.MediaMetadata.Builder()
@@ -74,9 +88,15 @@ data class RadioStation(
                         ).build(),
                 )
 
-        // Explicitly mark HLS playlists. This also covers signed/query-string URLs where
-        // automatic content-type inference is unreliable on some head-unit firmwares.
-        if (streamUrl.isHlsStreamUrl()) {
+        // Normal MP3/AAC streams retain the original radio cache key. The playback
+        // resolver depends on it to recognize the request as WebRadio.
+        if (!playbackUrl.isHlsStreamUrl()) {
+            builder.setCustomCacheKey(mediaId)
+        }
+
+        // HLS has a separate Media3 module and a separate request path. Do not give
+        // every manifest/segment the same custom cache key.
+        if (playbackUrl.isHlsStreamUrl()) {
             builder.setMimeType(MimeTypes.APPLICATION_M3U8)
         }
 

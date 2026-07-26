@@ -12,7 +12,13 @@ def write(path: str, text: str) -> None:
     (ROOT / path).write_text(text, encoding="utf-8")
 
 
-# Keep the normal ExoPlayer module and add HLS as an additional module.
+# Build 13.7.3 over the confirmed 13.7.2 Dudu7 feature baseline.
+build_path = "app/build.gradle.kts"
+build = read(build_path)
+build = build.replace("versionCode = 161", "versionCode = 162", 1)
+build = build.replace('versionName = "13.7.2"', 'versionName = "13.7.3"', 1)
+
+# Keep the existing ExoPlayer dependency untouched and add HLS separately.
 catalog_path = "gradle/libs.versions.toml"
 catalog = read(catalog_path)
 if "media3-hls =" not in catalog:
@@ -24,8 +30,6 @@ if "media3-hls =" not in catalog:
     )
 write(catalog_path, catalog)
 
-build_path = "app/build.gradle.kts"
-build = read(build_path)
 if "implementation(libs.media3.hls)" not in build:
     build = build.replace(
         "    implementation(libs.media3)\n",
@@ -34,9 +38,9 @@ if "implementation(libs.media3.hls)" not in build:
     )
 write(build_path, build)
 
-# Radio MediaItems must not share one cache key across an endless stream or HLS
-# playlist/segments. Also migrate the obsolete OE3 q4a URL to the current qxa
-# HLS endpoint while keeping the station entry itself intact.
+# Preserve the exact legacy MediaItem/cache-key path for ordinary MP3/AAC
+# WebRadio streams. Only HLS MediaItems omit the custom cache key, because an
+# HLS playlist consists of many independent manifest/segment requests.
 radio_path = "app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt"
 radio = read(radio_path)
 if "normalizedRadioPlaybackUrl" not in radio:
@@ -71,43 +75,86 @@ if "val playbackUrl = streamUrl.normalizedRadioPlaybackUrl()" not in radio:
         1,
     )
 
+radio = radio.replace(".setUri(streamUrl)", ".setUri(playbackUrl)", 1)
+
+# Remove the unconditional cache key and re-add it only for non-HLS streams.
 radio = radio.replace(
-    '''                .setUri(streamUrl)
+    '''                .setUri(playbackUrl)
                 .setCustomCacheKey(mediaId)
                 .setTag(appMetadata)''',
     '''                .setUri(playbackUrl)
                 .setTag(appMetadata)''',
     1,
 )
-radio = radio.replace('putString("radio_stream_url", streamUrl)', 'putString("radio_stream_url", playbackUrl)', 1)
-radio = radio.replace('if (streamUrl.isHlsStreamUrl()) {', 'if (playbackUrl.isHlsStreamUrl()) {', 1)
+
+hls_marker = '''
+        // Explicitly mark HLS playlists. This also covers signed/query-string URLs where
+        // automatic content-type inference is unreliable on some head-unit firmwares.
+        if (streamUrl.isHlsStreamUrl()) {
+            builder.setMimeType(MimeTypes.APPLICATION_M3U8)
+        }
+'''
+hls_replacement = '''
+        // Normal MP3/AAC streams retain the original radio cache key. The playback
+        // resolver depends on it to recognize the request as WebRadio.
+        if (!playbackUrl.isHlsStreamUrl()) {
+            builder.setCustomCacheKey(mediaId)
+        }
+
+        // HLS has a separate Media3 module and a separate request path. Do not give
+        // every manifest/segment the same custom cache key.
+        if (playbackUrl.isHlsStreamUrl()) {
+            builder.setMimeType(MimeTypes.APPLICATION_M3U8)
+        }
+'''
+if hls_marker in radio:
+    radio = radio.replace(hls_marker, hls_replacement, 1)
+elif "if (!playbackUrl.isHlsStreamUrl())" not in radio:
+    raise SystemExit("RadioStation conditional cache-key insertion point missing")
+
+# Keep the original configured stream URL in station metadata/editor state. Only
+# the URI actually handed to the player is normalized.
+radio = radio.replace('putString("radio_stream_url", playbackUrl)', 'putString("radio_stream_url", streamUrl)', 1)
 write(radio_path, radio)
 
-# HLS opens the manifest and media segments as separate DataSpecs. Segment
-# requests can have no custom key, so inherit the active radio media id instead
-# of throwing "No media id". All radio requests stay outside the song cache.
+# The old direct-stream path remains: dataSpec.key must contain radio:<uuid>.
+# Only while the active item is explicitly HLS may keyless manifest/segment
+# requests inherit the active radio id.
 service_path = "app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt"
 service = read(service_path)
 old_media_id = '            val mediaId = dataSpec.key ?: error("No media id")\n\n            if (isRadioMediaId(mediaId)) {'
-new_media_id = '''            val mediaId =
-                dataSpec.key
-                    ?: if (::player.isInitialized) {
-                        player.currentMediaItem?.mediaId?.takeIf { isRadioMediaId(it) }
-                    } else {
-                        null
-                    }
-                    ?: error("No media id")
+new_media_id = '''            val activeHlsRadioId =
+                if (::player.isInitialized) {
+                    player.currentMediaItem
+                        ?.takeIf { item ->
+                            isRadioMediaId(item.mediaId) &&
+                                (
+                                    item.localConfiguration?.mimeType ==
+                                        androidx.media3.common.MimeTypes.APPLICATION_M3U8 ||
+                                        item.localConfiguration
+                                            ?.uri
+                                            ?.toString()
+                                            ?.substringBefore('#')
+                                            ?.substringBefore('?')
+                                            ?.endsWith(".m3u8", ignoreCase = true) == true
+                                )
+                        }?.mediaId
+                } else {
+                    null
+                }
+            val mediaId = activeHlsRadioId ?: dataSpec.key ?: error("No media id")
 
             if (isRadioMediaId(mediaId)) {'''
 if old_media_id in service:
     service = service.replace(old_media_id, new_media_id, 1)
-elif "player.currentMediaItem?.mediaId?.takeIf { isRadioMediaId(it) }" not in service:
+elif "val activeHlsRadioId =" not in service:
     raise SystemExit("MusicService DataSpec media-id marker missing")
 
-service = service.replace('"User-Agent" to "MetrolistHU/13.6.5",', '"User-Agent" to "MetrolistHU/13.7.2",', 1)
+service = service.replace('"User-Agent" to "MetrolistHU/13.6.5",', '"User-Agent" to "MetrolistHU/13.7.3",', 1)
+service = service.replace('"User-Agent" to "MetrolistHU/13.7.2",', '"User-Agent" to "MetrolistHU/13.7.3",', 1)
 
-# Preserve the station favicon when live metadata changes title/artist but does
-# not contain artwork.
+# Preserve the station favicon when live ICY/HLS metadata updates title/artist
+# without providing artwork.
 old_events = '''        if (events.containsAny(EVENT_TIMELINE_CHANGED, EVENT_POSITION_DISCONTINUITY)) {
             currentMediaMetadata.value = player.currentMetadata
         }
@@ -144,17 +191,26 @@ elif "val radioItemMetadata =" not in service:
 write(service_path, service)
 
 checks = {
+    build_path: [
+        "versionCode = 162",
+        'versionName = "13.7.3"',
+        "implementation(libs.media3)",
+        "implementation(libs.media3.hls)",
+    ],
     catalog_path: ["media3-exoplayer", "media3-exoplayer-hls"],
-    build_path: ["implementation(libs.media3)", "implementation(libs.media3.hls)"],
     radio_path: [
         "normalizedRadioPlaybackUrl",
         "qxa/manifest.m3u8",
         ".setUri(playbackUrl)",
+        "if (!playbackUrl.isHlsStreamUrl())",
+        "builder.setCustomCacheKey(mediaId)",
         "MimeTypes.APPLICATION_M3U8",
+        'putString("radio_stream_url", streamUrl)',
     ],
     service_path: [
-        "player.currentMediaItem?.mediaId?.takeIf { isRadioMediaId(it) }",
-        '"User-Agent" to "MetrolistHU/13.7.2"',
+        "val activeHlsRadioId =",
+        "val mediaId = activeHlsRadioId ?: dataSpec.key",
+        '"User-Agent" to "MetrolistHU/13.7.3"',
         "val radioItemMetadata =",
     ],
 }
@@ -164,4 +220,12 @@ for path, needles in checks.items():
     if missing:
         raise SystemExit(f"{path}: missing {missing}")
 
-print("Dudu7 13.7.2 HLS regression patch applied successfully")
+# Regression guard: the direct-stream discriminator must still exist, and it
+# must be conditional rather than removed globally as in the broken 13.7.2 APK.
+radio_text = read(radio_path)
+if radio_text.count("builder.setCustomCacheKey(mediaId)") != 1:
+    raise SystemExit("Direct WebRadio cache-key regression guard failed")
+if "if (!playbackUrl.isHlsStreamUrl())" not in radio_text:
+    raise SystemExit("Normal WebRadio path is not isolated from HLS")
+
+print("Dudu7 13.7.3 WebRadio-safe HLS patch applied successfully")

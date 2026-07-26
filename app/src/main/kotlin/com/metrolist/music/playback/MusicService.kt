@@ -2737,7 +2737,28 @@ class MusicService :
             }
         }
         if (events.containsAny(EVENT_TIMELINE_CHANGED, EVENT_POSITION_DISCONTINUITY)) {
-            currentMediaMetadata.value = player.currentMetadata
+            val resolvedMetadata = player.currentMetadata
+            val radioItemMetadata =
+                player.currentMediaItem?.localConfiguration?.tag as? com.metrolist.music.models.MediaMetadata
+            val previousMetadata = currentMediaMetadata.value
+            currentMediaMetadata.value =
+                if (
+                    resolvedMetadata != null &&
+                    isRadioMediaId(resolvedMetadata.id) &&
+                    resolvedMetadata.thumbnailUrl.isNullOrBlank()
+                ) {
+                    resolvedMetadata.copy(
+                        thumbnailUrl =
+                            radioItemMetadata
+                                ?.takeIf { it.id == resolvedMetadata.id }
+                                ?.thumbnailUrl
+                                ?: previousMetadata
+                                    ?.takeIf { it.id == resolvedMetadata.id }
+                                    ?.thumbnailUrl,
+                    )
+                } else {
+                    resolvedMetadata
+                }
         }
 
         if (events.containsAny(Player.EVENT_IS_PLAYING_CHANGED)) {
@@ -3704,7 +3725,26 @@ class MusicService :
 
     private fun createDataSourceFactory(): DataSource.Factory {
         return ResolvingDataSource.Factory(createCacheDataSource()) { dataSpec ->
-            val mediaId = dataSpec.key ?: error("No media id")
+            val activeHlsRadioId =
+                if (::player.isInitialized) {
+                    player.currentMediaItem
+                        ?.takeIf { item ->
+                            isRadioMediaId(item.mediaId) &&
+                                (
+                                    item.localConfiguration?.mimeType ==
+                                        androidx.media3.common.MimeTypes.APPLICATION_M3U8 ||
+                                        item.localConfiguration
+                                            ?.uri
+                                            ?.toString()
+                                            ?.substringBefore('#')
+                                            ?.substringBefore('?')
+                                            ?.endsWith(".m3u8", ignoreCase = true) == true
+                                )
+                        }?.mediaId
+                } else {
+                    null
+                }
+            val mediaId = activeHlsRadioId ?: dataSpec.key ?: error("No media id")
 
             if (isRadioMediaId(mediaId)) {
                 // Keep the mediaId only long enough to identify this as radio.
@@ -3716,7 +3756,7 @@ class MusicService :
                         dataSpec.httpRequestHeaders +
                             mapOf(
                                 "Icy-MetaData" to "1",
-                                "User-Agent" to "MetrolistHU/13.6.5",
+                                "User-Agent" to "MetrolistHU/13.7.3",
                                 "Cache-Control" to "no-cache",
                             ),
                     ).buildUpon()
