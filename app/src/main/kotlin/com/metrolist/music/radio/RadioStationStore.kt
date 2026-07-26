@@ -21,7 +21,20 @@ class RadioStationStore private constructor(context: Context) {
     fun addOrUpdate(station: RadioStation) {
         val list = _stations.value.toMutableList()
         val index = list.indexOfFirst { it.uuid == station.uuid }
-        if (index >= 0) list[index] = station else list.add(station)
+        if (index >= 0) {
+            val previous = list[index]
+            val stableStation =
+                when {
+                    previous.manualFavicon && previous.favicon.isNotBlank() ->
+                        station.copy(favicon = previous.favicon, manualFavicon = true)
+                    station.favicon.isBlank() && previous.favicon.isNotBlank() ->
+                        station.copy(favicon = previous.favicon)
+                    else -> station
+                }
+            list[index] = stableStation
+        } else {
+            list.add(station)
+        }
         persist(list)
     }
 
