@@ -13,10 +13,6 @@ import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.request.allowHardware
-import coil3.request.diskCachePolicy
-import coil3.request.memoryCachePolicy
-import coil3.request.scale
-import coil3.request.size
 import coil3.size.Scale
 import coil3.toBitmap
 import kotlinx.coroutines.Dispatchers
