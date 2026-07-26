@@ -50,6 +50,8 @@ object FytPhysicalRadio {
     data class Preset(
         val frequency: Float,
         val name: String,
+        val pi: Int = 0,
+        val ecc: String = "",
     )
 
     data class ScanResult(
@@ -435,7 +437,7 @@ object FytPhysicalRadio {
 
     fun saveScanResults(results: Collection<ScanResult>) {
         if (results.isEmpty()) return
-        val additions = results.map { Preset(it.frequency, it.name) }
+        val additions = results.map { Preset(it.frequency, it.name, it.pi) }
         val updated =
             (_state.value.presets + additions)
                 .distinctBy { (it.frequency * 10).roundToInt() }
@@ -510,7 +512,7 @@ object FytPhysicalRadio {
 
     fun saveCurrentPreset() {
         val snapshot = _state.value
-        val preset = Preset(snapshot.frequency, snapshot.ps.ifBlank { "FM ${formatFrequency(snapshot.frequency)}" })
+        val preset = Preset(snapshot.frequency, snapshot.ps.ifBlank { "FM ${formatFrequency(snapshot.frequency)}" }, snapshot.pi)
         val updated =
             (snapshot.presets.filterNot { abs(it.frequency - preset.frequency) < 0.05f } + preset)
                 .sortedBy { it.frequency }
@@ -570,7 +572,10 @@ object FytPhysicalRadio {
                 2, 7 -> _state.update { it.copy(pty = value1) }
                 6 -> _state.update { it.copy(ta = value1 != 0) }
                 10, 11 -> triggerRdsRead()
-                14 -> _state.update { it.copy(pi = value1) }
+                14 -> {
+                    _state.update { it.copy(pi = value1) }
+                    updateCurrentPresetIdentity()
+                }
             }
         }
     }
@@ -620,6 +625,7 @@ object FytPhysicalRadio {
                 stereo = stereo,
             )
         }
+        updateCurrentPresetIdentity()
     }
 
     private fun applyRegionalConfig(fm: FmNative, enabled: Boolean) {
@@ -694,10 +700,31 @@ object FytPhysicalRadio {
             ?.apply()
     }
 
+    private fun updateCurrentPresetIdentity() {
+        val snapshot = _state.value
+        if (snapshot.pi <= 0) return
+        var changed = false
+        val updated =
+            snapshot.presets.map { preset ->
+                if (abs(preset.frequency - snapshot.frequency) >= 0.05f) {
+                    preset
+                } else {
+                    val updatedName = snapshot.ps.trim().takeIf { it.isNotBlank() } ?: preset.name
+                    val updatedPreset = preset.copy(name = updatedName, pi = snapshot.pi)
+                    if (updatedPreset != preset) changed = true
+                    updatedPreset
+                }
+            }
+        if (changed) {
+            persistPresets(updated)
+            _state.update { it.copy(presets = updated) }
+        }
+    }
+
     private fun persistPresets(presets: List<Preset>) {
         val encoded =
             presets.joinToString("\n") { preset ->
-                "${preset.frequency}\t${preset.name.replace('\n', ' ').replace('\t', ' ')}"
+                "${preset.frequency}\t${preset.name.replace('\n', ' ').replace('\t', ' ')}\t${preset.pi}\t${preset.ecc}"
             }
         appContext
             ?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -711,9 +738,14 @@ object FytPhysicalRadio {
             .orEmpty()
             .lineSequence()
             .mapNotNull { line ->
-                val parts = line.split('\t', limit = 2)
+                val parts = line.split('\t', limit = 4)
                 val frequency = parts.firstOrNull()?.toFloatOrNull() ?: return@mapNotNull null
-                Preset(normalizeFrequency(frequency), parts.getOrNull(1).orEmpty().ifBlank { "FM ${formatFrequency(frequency)}" })
+                Preset(
+                    frequency = normalizeFrequency(frequency),
+                    name = parts.getOrNull(1).orEmpty().ifBlank { "FM ${formatFrequency(frequency)}" },
+                    pi = parts.getOrNull(2)?.toIntOrNull() ?: 0,
+                    ecc = parts.getOrNull(3).orEmpty(),
+                )
             }.distinctBy { it.frequency }
             .sortedBy { it.frequency }
             .toList()

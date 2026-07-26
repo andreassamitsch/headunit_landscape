@@ -86,9 +86,9 @@ object RadioStationLogoResolver {
                     }
                 }
 
-            // Coil in this build does not consistently decode SVG station favicons.
-            // Prefer a clean initials fallback over persisting a known-broken vector URL.
-            null
+            // SVG support is installed globally and the local logo cache rasterises
+            // vectors into the same square PNG format as all other station artwork.
+            vectorFallback
         }
 
     private fun candidateScore(candidate: Candidate): Int =
