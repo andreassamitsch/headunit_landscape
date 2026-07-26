@@ -1,4 +1,4 @@
-name: Build Dudu7 13.7.3 WebRadio Safe HLS
+name: Build Dudu7 13.7.4 Radio Resolver Fix
 
 on:
   pull_request:
@@ -19,29 +19,40 @@ jobs:
           submodules: recursive
           ref: ${{ github.head_ref || github.ref }}
 
-      - name: Apply focused WebRadio-safe HLS patch
+      - name: Apply and verify thread-safe radio resolver fix
         shell: bash
         run: |
           set -euxo pipefail
-          python3 scripts/apply_dudu7_1372_hls_final.py
+          python3 scripts/apply_dudu7_1374_resolver_fix.py
           git diff --check
 
-          # Full Dudu7 feature baseline must remain present.
-          grep -q 'versionCode = 162' app/build.gradle.kts
-          grep -q 'versionName = "13.7.3"' app/build.gradle.kts
+          # Full Dudu7 feature baseline remains present.
+          grep -q 'versionCode = 163' app/build.gradle.kts
+          grep -q 'versionName = "13.7.4"' app/build.gradle.kts
           grep -q 'rememberReorderableLazyListState' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'VehicleTabOrderStore.persist' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'VEHICLE_PHYSICAL_RADIO_ROUTE' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
 
-          # HLS is additive, while normal MP3/AAC radio keeps its old discriminator.
+          # Existing MP3/AAC path and additive HLS support both remain.
           grep -q 'media3-exoplayer-hls' gradle/libs.versions.toml
           grep -q 'if (!playbackUrl.isHlsStreamUrl())' app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt
           grep -q 'builder.setCustomCacheKey(mediaId)' app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt
-          grep -q 'val activeHlsRadioId =' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
-          grep -q 'val mediaId = activeHlsRadioId ?: dataSpec.key' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
-          grep -q 'qxa/manifest.m3u8' app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt
+          grep -q 'if (dataSpec.key == null)' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          grep -q 'val mediaId = dataSpec.key ?: error("No media id")' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          ! grep -q 'val activeHlsRadioId =' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
 
-      - name: Commit applied source patch
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt').read_text()
+          start = text.index('private fun createDataSourceFactory')
+          end = text.index('private fun createMediaSourceFactory', start)
+          resolver = text[start:end]
+          for forbidden in ('player.currentMediaItem', 'player.currentMediaItemIndex', 'activeHlsRadioId'):
+              assert forbidden not in resolver, forbidden
+          print('Resolver contains no ExoPlayer state access')
+          PY
+
+      - name: Commit applied source fix
         if: github.event_name == 'pull_request'
         shell: bash
         run: |
@@ -52,10 +63,8 @@ jobs:
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git add \
               app/build.gradle.kts \
-              gradle/libs.versions.toml \
-              app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt \
               app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
-            git commit -m 'fix(dudu7): isolate HLS and restore normal WebRadio [skip ci]'
+            git commit -m 'fix(dudu7): keep radio resolver off player thread [skip ci]'
             git push origin HEAD:${GITHUB_HEAD_REF}
           fi
 
@@ -81,17 +90,17 @@ jobs:
           mkdir -p dist
           APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
           test -n "$APK"
-          cp "$APK" dist/MetroList-Dudu7-13.7.3-WebRadio-Safe-HLS.apk
+          cp "$APK" dist/MetroList-Dudu7-13.7.4-Radio-Resolver-Fix.apk
           build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
-          "$build_tools/aapt" dump badging dist/MetroList-Dudu7-13.7.3-WebRadio-Safe-HLS.apk > dist/apk-badging.txt
-          "$build_tools/apksigner" verify --verbose --print-certs dist/MetroList-Dudu7-13.7.3-WebRadio-Safe-HLS.apk > dist/apk-signature.txt
-          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='162'" dist/apk-badging.txt
-          unzip -l dist/MetroList-Dudu7-13.7.3-WebRadio-Safe-HLS.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
-          sha256sum dist/MetroList-Dudu7-13.7.3-WebRadio-Safe-HLS.apk > dist/MetroList-Dudu7-13.7.3-WebRadio-Safe-HLS.apk.sha256
+          "$build_tools/aapt" dump badging dist/MetroList-Dudu7-13.7.4-Radio-Resolver-Fix.apk > dist/apk-badging.txt
+          "$build_tools/apksigner" verify --verbose --print-certs dist/MetroList-Dudu7-13.7.4-Radio-Resolver-Fix.apk > dist/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='163'" dist/apk-badging.txt
+          unzip -l dist/MetroList-Dudu7-13.7.4-Radio-Resolver-Fix.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
+          sha256sum dist/MetroList-Dudu7-13.7.4-Radio-Resolver-Fix.apk > dist/MetroList-Dudu7-13.7.4-Radio-Resolver-Fix.apk.sha256
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MetroList-Dudu7-13.7.3-WebRadio-Safe-HLS
+          name: MetroList-Dudu7-13.7.4-Radio-Resolver-Fix
           path: dist/*
           if-no-files-found: error
           retention-days: 14
