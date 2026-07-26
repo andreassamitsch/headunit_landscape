@@ -53,7 +53,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APK="$(find app/build/outputs/apk/foss/dudu7/debug -type f -name '*.apk' -print -quit)"
+          APK="$(find app/build/outputs/apk -type f -name '*.apk' -print -quit)"
           test -n "$APK"
           mkdir -p dist
           cp "$APK" dist/MetroList-Dudu7-HLS-LogoFix.apk
