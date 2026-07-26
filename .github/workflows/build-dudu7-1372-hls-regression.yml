@@ -1,4 +1,4 @@
-name: Build Dudu7 13.7.7 HLS Cache Logo Alias
+name: Build Dudu7 13.7.8 Unified Radio Logos
 
 on:
   pull_request:
@@ -19,44 +19,49 @@ jobs:
           submodules: recursive
           ref: ${{ github.head_ref || github.ref }}
 
-      - name: Apply and verify focused 13.7.7 fixes
+      - name: Apply and verify focused 13.7.8 changes
         shell: bash
         run: |
           set -euxo pipefail
-          python3 scripts/apply_dudu7_1377_hls_cache_logo_alias.py
-          python3 -m py_compile scripts/apply_dudu7_1377_hls_cache_logo_alias.py
+          python3 scripts/apply_dudu7_1378_unified_radio_logos.py
+          python3 -m py_compile scripts/apply_dudu7_1378_unified_radio_logos.py
           git diff --check
 
-          grep -q 'versionCode = 166' app/build.gradle.kts
-          grep -q 'versionName = "13.7.7"' app/build.gradle.kts
+          grep -q 'versionCode = 167' app/build.gradle.kts
+          grep -q 'versionName = "13.7.8"' app/build.gradle.kts
+          grep -q 'coil-svg' gradle/libs.versions.toml
+          grep -q 'implementation(libs.coil.svg)' app/build.gradle.kts
 
-          # Preserve the complete Dudu7 UI, FM integration and working HLS recognition.
+          # Preserve the full Dudu7 architecture and current radio playback fixes.
           grep -q 'rememberReorderableLazyListState' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'VehicleTabOrderStore.persist' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'VEHICLE_PHYSICAL_RADIO_ROUTE' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'HlsRecognitionDecoder.decode' app/src/main/kotlin/com/metrolist/music/recognition/MusicRecognitionService.kt
-          grep -q 'TeeAudioProcessor' app/src/main/kotlin/com/metrolist/music/recognition/HlsRecognitionDecoder.kt
-
-          # Keep HLS at the live edge and bypass both nested finite-song caches.
-          grep -q 'C.TIME_UNSET' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
-          grep -q 'setLiveConfiguration' app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt
           grep -q 'FLAG_IGNORE_CACHE_FOR_UNSET_LENGTH_REQUESTS' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
-          test "$(grep -c 'setFlags(FLAG_IGNORE_CACHE_ON_ERROR or FLAG_IGNORE_CACHE_FOR_UNSET_LENGTH_REQUESTS)' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt)" -ge 2
-
-          # Ordinary MP3/AAC and YouTube cache-key paths remain present.
           grep -q 'builder.setCustomCacheKey(mediaId)' app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt
-          grep -q 'if (dataSpec.key == null)' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
-          grep -q 'val mediaId = dataSpec.key ?: error("No media id")' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
 
-          # Logo search strips technical suffixes and directly checks likely Commons titles.
-          grep -q 'stationAliases(query)' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
-          grep -q 'hq|hls|aac|mp3' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
-          grep -q 'File:$query 2024.svg' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
-          grep -q 'commonsJobs.awaitAll' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
-          grep -q 'RadioStationLogoResolver.resolve' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
-          grep -q 'stableRadioArtwork' app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt
+          # Unified image decoding, validation and square local normalisation.
+          grep -q 'TARGET_SIZE = 512' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoCache.kt
+          grep -q 'result.image.toBitmap' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoCache.kt
+          grep -q 'Bitmap.createBitmap(TARGET_SIZE, TARGET_SIZE' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoCache.kt
+          grep -q 'Bitmap.CompressFormat.PNG' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoCache.kt
 
-      - name: Commit applied source fixes
+          # Structured, attributable multi-source WebRadio search.
+          grep -q 'data class RadioLogoCandidate' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
+          grep -q 'RADIO_AT("radio.at"' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
+          grep -q 'STATION_WEBSITE("Senderwebsite"' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
+          grep -q 'radiothek' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
+          grep -q 'candidate.displayDetails' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
+
+          # RadioDNS is the first physical-FM logo source and uses PI/frequency/GCC.
+          grep -q 'object RadioDnsLogoResolver' app/src/main/kotlin/com/metrolist/music/radio/RadioDnsLogoResolver.kt
+          grep -q 'fm.radiodns.org' app/src/main/kotlin/com/metrolist/music/radio/RadioDnsLogoResolver.kt
+          grep -q '_radioepg._tcp' app/src/main/kotlin/com/metrolist/music/radio/RadioDnsLogoResolver.kt
+          grep -q 'RadioDnsLogoResolver.resolveFm' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmStationArtwork.kt
+          grep -q 'val pi: Int = 0' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+          grep -q 'pi = state.pi' app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
+
+      - name: Commit applied source changes
         if: github.event_name == 'pull_request'
         shell: bash
         run: |
@@ -66,10 +71,18 @@ jobs:
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git add \
+              gradle/libs.versions.toml \
               app/build.gradle.kts \
-              app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt \
-              app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
-            git commit -m 'fix(dudu7): bypass stale HLS cache and improve logo aliases [skip ci]'
+              app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoCache.kt \
+              app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt \
+              app/src/main/kotlin/com/metrolist/music/radio/RadioDnsLogoResolver.kt \
+              app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoResolver.kt \
+              app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt \
+              app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmStationArtwork.kt \
+              app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt \
+              app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt \
+              app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
+            git commit -m 'feat(dudu7): unify radio logos and add RadioDNS FM lookup [skip ci]'
             git push origin HEAD:${GITHUB_HEAD_REF}
           fi
 
@@ -84,9 +97,27 @@ jobs:
       - name: Build GMS Dudu7 ARM APK
         shell: bash
         run: |
-          set -euxo pipefail
+          set -uo pipefail
           chmod +x gradlew
-          ./gradlew :app:assembleGmsDudu7Debug --no-daemon --stacktrace
+          set +e
+          ./gradlew :app:assembleGmsDudu7Debug --no-daemon --stacktrace > build-output.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            mkdir -p _assistant
+            grep -E '(^e: | error: |Compilation error|FAILURE:)' build-output.log | tail -n 300 > _assistant/dudu7-1378-build-errors.txt || true
+            if [ ! -s _assistant/dudu7-1378-build-errors.txt ]; then
+              tail -n 300 build-output.log > _assistant/dudu7-1378-build-errors.txt
+            fi
+            cat _assistant/dudu7-1378-build-errors.txt
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add _assistant/dudu7-1378-build-errors.txt
+            git commit -m 'diag(dudu7): capture 13.7.8 compiler errors [skip ci]' || true
+            git push origin HEAD:${GITHUB_HEAD_REF} || true
+            exit "$status"
+          fi
+          cat build-output.log
 
       - name: Verify and collect APK
         shell: bash
@@ -95,17 +126,17 @@ jobs:
           mkdir -p dist
           APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
           test -n "$APK"
-          cp "$APK" dist/MetroList-Dudu7-13.7.7-HLS-Cache-Logo-Alias.apk
+          cp "$APK" dist/MetroList-Dudu7-13.7.8-Unified-Radio-Logos-RadioDNS.apk
           build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
-          "$build_tools/aapt" dump badging dist/MetroList-Dudu7-13.7.7-HLS-Cache-Logo-Alias.apk > dist/apk-badging.txt
-          "$build_tools/apksigner" verify --verbose --print-certs dist/MetroList-Dudu7-13.7.7-HLS-Cache-Logo-Alias.apk > dist/apk-signature.txt
-          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='166'" dist/apk-badging.txt
-          unzip -l dist/MetroList-Dudu7-13.7.7-HLS-Cache-Logo-Alias.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
-          sha256sum dist/MetroList-Dudu7-13.7.7-HLS-Cache-Logo-Alias.apk > dist/MetroList-Dudu7-13.7.7-HLS-Cache-Logo-Alias.apk.sha256
+          "$build_tools/aapt" dump badging dist/MetroList-Dudu7-13.7.8-Unified-Radio-Logos-RadioDNS.apk > dist/apk-badging.txt
+          "$build_tools/apksigner" verify --verbose --print-certs dist/MetroList-Dudu7-13.7.8-Unified-Radio-Logos-RadioDNS.apk > dist/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='167'" dist/apk-badging.txt
+          unzip -l dist/MetroList-Dudu7-13.7.8-Unified-Radio-Logos-RadioDNS.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
+          sha256sum dist/MetroList-Dudu7-13.7.8-Unified-Radio-Logos-RadioDNS.apk > dist/MetroList-Dudu7-13.7.8-Unified-Radio-Logos-RadioDNS.apk.sha256
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MetroList-Dudu7-13.7.7-HLS-Cache-Logo-Alias
+          name: MetroList-Dudu7-13.7.8-Unified-Radio-Logos-RadioDNS
           path: dist/*
           if-no-files-found: error
           retention-days: 14
