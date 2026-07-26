@@ -24,6 +24,7 @@ jobs:
         run: |
           set -euxo pipefail
           python3 scripts/apply_dudu7_1375_logo_hls_recognition.py
+          python3 scripts/apply_dudu7_1375_compile_fix.py
           git diff --check
 
           grep -q 'versionCode = 164' app/build.gradle.kts
@@ -39,6 +40,8 @@ jobs:
           grep -q 'val mediaId = dataSpec.key ?: error("No media id")' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
 
           # Editor logo controls are visible, scrollable and persist local artwork.
+          grep -q 'import androidx.compose.foundation.layout.heightIn' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
+          grep -q 'import androidx.compose.foundation.rememberScrollState' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
           grep -q '.verticalScroll(scrollState)' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
           grep -q 'Text("Bild auswählen")' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
           grep -q 'rememberLauncherForActivityResult' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
