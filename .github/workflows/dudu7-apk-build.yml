@@ -4,9 +4,14 @@ on:
   push:
     branches:
       - agent/fm-radio-ui-logos-tabs
+    paths-ignore:
+      - 'releases/**'
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 concurrency:
   group: dudu7-apk-${{ github.event.pull_request.number || github.ref }}
@@ -54,10 +59,27 @@ jobs:
           cp "$APK" dist/MetroList-Dudu7-HLS-LogoFix.apk
           sha256sum dist/MetroList-Dudu7-HLS-LogoFix.apk > dist/MetroList-Dudu7-HLS-LogoFix.apk.sha256
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: MetroList-Dudu7-HLS-LogoFix
           path: dist/*
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish APK to branch
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p releases
+          cp dist/MetroList-Dudu7-HLS-LogoFix.apk releases/MetroList-Dudu7-HLS-LogoFix.apk
+          cp dist/MetroList-Dudu7-HLS-LogoFix.apk.sha256 releases/MetroList-Dudu7-HLS-LogoFix.apk.sha256
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add releases/MetroList-Dudu7-HLS-LogoFix.apk releases/MetroList-Dudu7-HLS-LogoFix.apk.sha256
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Publish Dudu7 HLS and logo fix APK"
+          git push origin HEAD:agent/fm-radio-ui-logos-tabs
