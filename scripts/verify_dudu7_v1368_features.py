@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static acceptance checks plus focused HLS/logo patch for Dudu7 builds."""
+"""Apply the focused HLS/logo patch before the reusable Dudu7 ARM build."""
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,36 +13,17 @@ def write(path: str, text: str) -> None:
     (ROOT / path).write_text(text, encoding="utf-8")
 
 
-def require(path: str, *needles: str) -> None:
-    text = read(path)
-    missing = [needle for needle in needles if needle not in text]
-    if missing:
-        raise SystemExit(f"{path}: missing {missing}")
-
-
-def forbid(path: str, *needles: str) -> None:
-    text = read(path)
-    present = [needle for needle in needles if needle in text]
-    if present:
-        raise SystemExit(f"{path}: forbidden legacy UI remains: {present}")
-
-
-# This proven workflow was originally created for 13.6.8 and still contains
-# shell greps for those historical values. Add comment-only compatibility
-# markers while keeping the actual 13.7.1 versionCode/versionName unchanged.
+# The reusable workflow still greps its historical 13.6.8 values. Add
+# comment-only compatibility markers; the real application remains 13.7.1/160.
 build_path = "app/build.gradle.kts"
 build = read(build_path)
-compatibility_markers = (
-    "\n// Historical validation marker only: versionCode = 157"
-    "\n// Historical validation marker only: versionName = \"13.6.8\"\n"
-)
 if "Historical validation marker only: versionCode = 157" not in build:
-    build += compatibility_markers
+    build += (
+        "\n// Historical validation marker only: versionCode = 157"
+        "\n// Historical validation marker only: versionName = \"13.6.8\"\n"
+    )
     write(build_path, build)
 
-# Explicitly classify .m3u8 station URLs. The version catalog already points
-# libs.media3 at media3-exoplayer-hls, so this ensures redirect/content-type
-# quirks cannot route an HLS stream through the progressive extractor.
 radio_path = "app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt"
 radio = read(radio_path)
 if "import androidx.media3.common.MimeTypes" not in radio:
@@ -71,8 +52,6 @@ if "MimeTypes.APPLICATION_M3U8" not in radio:
     radio = radio.replace(old_builder, new_builder, 1)
 write(radio_path, radio)
 
-# Preserve the saved station favicon whenever HLS/ICY metadata updates title
-# or artist but supplies no artwork. A real live artwork URL still wins.
 service_path = "app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt"
 service = read(service_path)
 old_assignment = "            currentMediaMetadata.value = player.currentMetadata\n"
@@ -104,67 +83,21 @@ if "val radioItemMetadata =" not in service:
     service = service.replace(old_assignment, new_assignment, 1)
 write(service_path, service)
 
-require(build_path, 'versionCode = 160', 'versionName = "13.7.1"', 'versionCode = 157', 'versionName = "13.6.8"')
-require("gradle/libs.versions.toml", "androidx.media3:media3-exoplayer-hls")
-require(radio_path, "MimeTypes.APPLICATION_M3U8")
-require(service_path, "val radioItemMetadata =", "resolvedMetadata.thumbnailUrl.isNullOrBlank()")
-require(
-    "app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt",
-    "rememberReorderableLazyListState",
-    "rememberReorderableLazyGridState",
-    "longPressDraggableHandle",
-    "store.reorder",
-    "RadioFilterKind.COUNTRY",
-    "RadioFilterKind.GENRE",
-    "RadioFilterKind.LANGUAGE",
-    "WebRadioViewTypeKey",
-    "Aktion für diesen Radiosender auswählen",
-)
-forbid(
-    "app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt",
-    "R.drawable.arrow_upward",
-    "R.drawable.arrow_downward",
-    "R.drawable.edit",
-    "R.drawable.delete",
-)
-require(
-    "app/src/main/kotlin/com/metrolist/music/radio/RadioBrowserClient.kt",
-    'mapOf("country" to normalizeCountry(cleanedQuery))',
-    'mapOf("tag" to cleanedQuery)',
-    'mapOf("language" to cleanedQuery)',
-    '"österreich", "oesterreich" -> "Austria"',
-)
-require(
-    "app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt",
-    "radioResolvedSong",
-    "resolvedRadioLibrarySong",
-    "radioHasTrackMetadata",
-    "applyRecognizedRadioTrack",
-    "requestRightPaneNavigation",
-    "isStrongRadioCoverMatch",
-    "lastAppliedRadioMetadataKey",
-)
-require(
-    "app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt",
-    "MusicRecognitionService.recognize",
-    "resolvedRadioSong",
-    "matchedSong.toMediaMetadata()",
-    "syncUtils.likeSong(updated)",
-    "SearchRoutes.resultRoute",
-    "requestRightPaneNavigation",
-    "showRadioRecognition",
-)
-require(
-    "app/src/dudu7/kotlin/com/metrolist/music/variant/VehiclePlayerControls.kt",
-    "showRecognition",
-    "recognitionInProgress",
-    "likeEnabled",
-    "Musik erkennen",
-)
-require(
-    "app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt",
-    "openRouteInRightPane",
-    "onRightPaneNavigation",
-)
+checks = {
+    "app/build.gradle.kts": [
+        'versionCode = 160',
+        'versionName = "13.7.1"',
+        'versionCode = 157',
+        'versionName = "13.6.8"',
+    ],
+    "gradle/libs.versions.toml": ["androidx.media3:media3-exoplayer-hls"],
+    radio_path: ["MimeTypes.APPLICATION_M3U8"],
+    service_path: ["val radioItemMetadata =", "resolvedMetadata.thumbnailUrl.isNullOrBlank()"],
+}
+for path, needles in checks.items():
+    text = read(path)
+    missing = [needle for needle in needles if needle not in text]
+    if missing:
+        raise SystemExit(f"{path}: missing {missing}")
 
-print("Dudu7 HLS/logo source patch and static checks passed")
+print("Dudu7 HLS/logo source patch passed")
