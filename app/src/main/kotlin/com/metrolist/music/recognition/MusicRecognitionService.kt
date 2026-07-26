@@ -79,12 +79,22 @@ object MusicRecognitionService {
      * Recognize the currently selected WebRadio source without using the microphone.
      * A second connection to the same resolved stream URL is decoded for twelve seconds.
      */
-    suspend fun recognizeStream(streamUrl: String): RecognitionStatus =
+    suspend fun recognizeStream(context: Context, streamUrl: String): RecognitionStatus =
         withContext(Dispatchers.IO) {
             if (streamUrl.isBlank()) return@withContext setError("Radiostream is unavailable")
             _recognitionStatus.value = RecognitionStatus.Listening
             try {
-                val decoded = decodeRadioStream(streamUrl)
+                val decoded =
+                    if (streamUrl.isHlsStreamUrl()) {
+                        HlsRecognitionDecoder.decode(
+                            context = context.applicationContext,
+                            streamUrl = streamUrl,
+                            durationMs = RECORDING_DURATION_MS,
+                            timeoutMs = STREAM_DECODE_TIMEOUT_MS,
+                        )
+                    } else {
+                        decodeRadioStream(streamUrl)
+                    }
                 Timber.tag(TAG).i(
                     "Direct radio stream decoded: bytes=%d sampleRate=%d channels=%d",
                     decoded.data.size,
@@ -145,6 +155,11 @@ object MusicRecognitionService {
         )
     }
 
+    private fun String.isHlsStreamUrl(): Boolean {
+        val normalized = substringBefore('#').substringBefore('?').lowercase()
+        return normalized.endsWith(".m3u8") || normalized.contains("/playlist.m3u8") || normalized.contains("/manifest.m3u8")
+    }
+
     private fun decodeRadioStream(streamUrl: String): DecodedAudio {
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
@@ -154,7 +169,7 @@ object MusicRecognitionService {
                 streamUrl,
                 mapOf(
                     "Icy-MetaData" to "0",
-                    "User-Agent" to "MetrolistHU/13.7.1 (direct recognition)",
+                    "User-Agent" to "MetrolistHU/13.7.5 (direct recognition)",
                 ),
             )
             val trackIndex =

@@ -4,6 +4,8 @@
  */
 package com.metrolist.music.ui.screens.radio
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -78,6 +80,7 @@ import com.metrolist.music.extensions.move
 import com.metrolist.music.playback.queues.ListQueue
 import com.metrolist.music.radio.RadioBrowserClient
 import com.metrolist.music.radio.RadioStation
+import com.metrolist.music.radio.RadioStationLogoCache
 import com.metrolist.music.radio.RadioStationLogoResolver
 import com.metrolist.music.radio.RadioStationStore
 import com.metrolist.music.radio.mergeSavedStationUpdates
@@ -738,11 +741,18 @@ private fun RadioStationArtwork(
     modifier: Modifier,
     onLogoResolved: (RadioStation) -> Unit,
 ) {
+    val context = LocalContext.current
     var artworkUrl by remember(station.uuid, station.favicon) { mutableStateOf(station.favicon) }
-    LaunchedEffect(station.uuid, station.homepage) {
+    LaunchedEffect(station.uuid, station.homepage, station.favicon, station.manualFavicon) {
         RadioStationLogoResolver.resolve(station)?.let { resolved ->
-            artworkUrl = resolved
-            if (resolved != station.favicon) onLogoResolved(station.copy(favicon = resolved))
+            val stable =
+                if (RadioStationLogoCache.isLocal(resolved)) {
+                    resolved
+                } else {
+                    RadioStationLogoCache.cache(context, station.uuid, resolved) ?: resolved
+                }
+            artworkUrl = stable
+            if (stable != station.favicon) onLogoResolved(station.copy(favicon = stable))
         }
     }
     if (artworkUrl.isNotBlank()) {
@@ -848,14 +858,39 @@ private fun RadioStationEditorDialog(
     onDismiss: () -> Unit,
     onSave: (RadioStation) -> Unit,
 ) {
+    val context = LocalContext.current
+    val stationUuid = remember(initial) { initial?.uuid ?: UUID.randomUUID().toString() }
     var name by remember(initial) { mutableStateOf(initial?.name.orEmpty()) }
     var streamUrl by remember(initial) { mutableStateOf(initial?.streamUrl.orEmpty()) }
     var favicon by remember(initial) { mutableStateOf(initial?.favicon.orEmpty()) }
     var manualFavicon by remember(initial) { mutableStateOf(initial?.manualFavicon == true) }
     var logoCandidates by remember(initial) { mutableStateOf<List<String>>(emptyList()) }
     var logoSearchLoading by remember(initial) { mutableStateOf(false) }
+    var logoSaving by remember(initial) { mutableStateOf(false) }
     var logoSearchError by remember(initial) { mutableStateOf<String?>(null) }
+    val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
+
+    fun selectFixedLogo(source: String) {
+        if (source.isBlank() || logoSaving) return
+        scope.launch {
+            logoSaving = true
+            logoSearchError = null
+            val cached = RadioStationLogoCache.cache(context, stationUuid, source)
+            if (cached != null) {
+                favicon = cached
+                manualFavicon = true
+            } else {
+                logoSearchError = "Logo konnte nicht lokal gespeichert werden"
+            }
+            logoSaving = false
+        }
+    }
+
+    val imagePicker =
+        rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            uri?.toString()?.let(::selectFixedLogo)
+        }
 
     fun searchLogos() {
         if (name.isBlank() || logoSearchLoading) return
@@ -882,7 +917,14 @@ private fun RadioStationEditorDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (initial == null) "Radiosender hinzufügen" else "Radiosender bearbeiten") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 430.dp)
+                        .verticalScroll(scrollState),
+            ) {
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Sendername") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = streamUrl, onValueChange = { streamUrl = it }, label = { Text("Stream-, M3U- oder PLS-Adresse") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(
@@ -904,8 +946,11 @@ private fun RadioStationEditorDialog(
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedButton(onClick = ::searchLogos, enabled = name.isNotBlank() && !logoSearchLoading) {
+                    OutlinedButton(onClick = ::searchLogos, enabled = name.isNotBlank() && !logoSearchLoading && !logoSaving) {
                         Text("Logos suchen")
+                    }
+                    OutlinedButton(onClick = { imagePicker.launch("image/*") }, enabled = !logoSaving) {
+                        Text("Bild auswählen")
                     }
                     TextButton(
                         onClick = {
@@ -915,7 +960,7 @@ private fun RadioStationEditorDialog(
                             logoSearchError = null
                         },
                     ) { Text("Automatisch") }
-                    if (logoSearchLoading) CircularProgressIndicator(Modifier.size(24.dp))
+                    if (logoSearchLoading || logoSaving) CircularProgressIndicator(Modifier.size(24.dp))
                 }
                 if (logoCandidates.isNotEmpty()) {
                     Text("Logo auswählen", style = MaterialTheme.typography.labelLarge)
@@ -929,39 +974,46 @@ private fun RadioStationEditorDialog(
                                     Modifier
                                         .size(72.dp)
                                         .clip(RoundedCornerShape(10.dp))
-                                        .then(
-                                            if (favicon == candidate && manualFavicon) {
-                                                Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp))
-                                            } else {
-                                                Modifier
-                                            },
-                                        ).clickable {
-                                            favicon = candidate
-                                            manualFavicon = true
-                                        },
+                                        .clickable(enabled = !logoSaving) { selectFixedLogo(candidate) },
                             )
                         }
                     }
                 }
                 logoSearchError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if (manualFavicon && favicon.isNotBlank()) {
-                    Text("Dieses Logo bleibt fest eingestellt.", style = MaterialTheme.typography.bodySmall)
+                    Text("Dieses Logo ist lokal gespeichert und bleibt fest eingestellt.", style = MaterialTheme.typography.bodySmall)
                 }
             }
         },
         confirmButton = {
             Button(
-                enabled = name.isNotBlank() && streamUrl.isNotBlank(),
+                enabled = name.isNotBlank() && streamUrl.isNotBlank() && !logoSaving,
                 onClick = {
-                    onSave(
-                        (initial ?: RadioStation(UUID.randomUUID().toString(), name.trim(), streamUrl.trim()))
-                            .copy(
-                                name = name.trim(),
-                                streamUrl = streamUrl.trim(),
-                                favicon = favicon.trim(),
-                                manualFavicon = manualFavicon && favicon.isNotBlank(),
-                            ),
-                    )
+                    val saveDraft: (String, Boolean) -> Unit = { stableFavicon, stableManual ->
+                        onSave(
+                            (initial ?: RadioStation(stationUuid, name.trim(), streamUrl.trim()))
+                                .copy(
+                                    name = name.trim(),
+                                    streamUrl = streamUrl.trim(),
+                                    favicon = stableFavicon,
+                                    manualFavicon = stableManual,
+                                ),
+                        )
+                    }
+                    if (manualFavicon && favicon.isNotBlank() && !RadioStationLogoCache.isLocal(favicon)) {
+                        scope.launch {
+                            logoSaving = true
+                            val cached = RadioStationLogoCache.cache(context, stationUuid, favicon)
+                            logoSaving = false
+                            if (cached != null) {
+                                saveDraft(cached, true)
+                            } else {
+                                logoSearchError = "Logo konnte nicht lokal gespeichert werden"
+                            }
+                        }
+                    } else {
+                        saveDraft(favicon.trim(), manualFavicon && favicon.isNotBlank())
+                    }
                 },
             ) { Text("Speichern") }
         },

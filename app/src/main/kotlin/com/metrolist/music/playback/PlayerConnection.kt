@@ -102,6 +102,18 @@ class PlayerConnection(
             null
         }
 
+    private fun withStoredRadioArtwork(
+        metadata: com.metrolist.music.models.MediaMetadata?,
+    ): com.metrolist.music.models.MediaMetadata? {
+        if (metadata == null || !isRadioMediaId(metadata.id) || !metadata.thumbnailUrl.isNullOrBlank()) return metadata
+        val storedArtwork =
+            radioStationStore.stations.value
+                .firstOrNull { it.mediaId == metadata.id }
+                ?.favicon
+                ?.takeIf { it.isNotBlank() }
+        return if (storedArtwork == null) metadata else metadata.copy(thumbnailUrl = storedArtwork)
+    }
+
     val player: ExoPlayer
         get() = getPlayerSafe()
 
@@ -156,6 +168,8 @@ class PlayerConnection(
         scope.launch {
             radioStationStore.stations.collect {
                 if (isRadioMediaId(getPlayerOrNull()?.currentMediaItem?.mediaId)) {
+                    val stableMetadata = withStoredRadioArtwork(mediaMetadata.value)
+                    if (stableMetadata != mediaMetadata.value) mediaMetadata.value = stableMetadata
                     updateCanSkipPreviousAndNext()
                 }
             }
@@ -177,7 +191,7 @@ class PlayerConnection(
             initialState.third,
         )
 
-    val mediaMetadata = MutableStateFlow(getPlayerOrNull()?.currentMetadata)
+    val mediaMetadata = MutableStateFlow(withStoredRadioArtwork(getPlayerOrNull()?.currentMetadata))
     private var radioSongLookupJob: Job? = null
     private val radioSongCache = mutableMapOf<String, SongItem?>()
     /** Prevent repeated ICY/Media3 callbacks from reapplying the same radio song. */
@@ -716,7 +730,7 @@ class PlayerConnection(
         lastAppliedRadioMetadataKey = null
         radioResolvedSong.value = null
         radioHasTrackMetadata.value = false
-        mediaMetadata.value = mediaItem?.metadata
+        mediaMetadata.value = withStoredRadioArtwork(mediaItem?.metadata)
         currentMediaItemIndex.value = player.currentMediaItemIndex
         currentWindowIndex.value = player.getCurrentQueueIndex()
         updateCanSkipPreviousAndNext()
@@ -724,7 +738,7 @@ class PlayerConnection(
 
     override fun onMediaMetadataChanged(newMetadata: androidx.media3.common.MediaMetadata) {
         val currentItem = getPlayerOrNull()?.currentMediaItem ?: return
-        val base = currentItem.metadata ?: return
+        val base = withStoredRadioArtwork(currentItem.metadata) ?: return
         if (!isRadioMediaId(base.id)) {
             mediaMetadata.value = base
             return
@@ -759,7 +773,7 @@ class PlayerConnection(
 
     private fun applyRadioStreamTitle(rawTitle: String) {
         val currentItem = getPlayerOrNull()?.currentMediaItem ?: return
-        val base = currentItem.metadata ?: return
+        val base = withStoredRadioArtwork(currentItem.metadata) ?: return
         if (!isRadioMediaId(base.id)) return
 
         val stationName =
@@ -799,7 +813,7 @@ class PlayerConnection(
     /** Apply a manual Shazam result to the current radio item and resolve its YTM identity. */
     fun applyRecognizedRadioTrack(result: RecognitionResult) {
         val currentItem = getPlayerOrNull()?.currentMediaItem ?: return
-        val base = currentItem.metadata ?: return
+        val base = withStoredRadioArtwork(currentItem.metadata) ?: return
         if (!isRadioMediaId(base.id)) return
         val preferredCover = result.coverArtHqUrl ?: result.coverArtUrl
         lastAppliedRadioMetadataKey =
