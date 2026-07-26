@@ -24,7 +24,8 @@ jobs:
         run: |
           set -euxo pipefail
           python3 scripts/apply_dudu7_1378_unified_radio_logos.py
-          python3 -m py_compile scripts/apply_dudu7_1378_unified_radio_logos.py
+          python3 scripts/apply_dudu7_1378_compile_fix.py
+          python3 -m py_compile scripts/apply_dudu7_1378_unified_radio_logos.py scripts/apply_dudu7_1378_compile_fix.py
           git diff --check
 
           grep -q 'versionCode = 167' app/build.gradle.kts
@@ -45,6 +46,7 @@ jobs:
           grep -q 'result.image.toBitmap' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoCache.kt
           grep -q 'Bitmap.createBitmap(TARGET_SIZE, TARGET_SIZE' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoCache.kt
           grep -q 'Bitmap.CompressFormat.PNG' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoCache.kt
+          ! grep -q 'import coil3.request.diskCachePolicy' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoCache.kt
 
           # Structured, attributable multi-source WebRadio search.
           grep -q 'data class RadioLogoCandidate' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
