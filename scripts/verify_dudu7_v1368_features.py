@@ -44,8 +44,9 @@ write(radio_path, radio)
 
 service_path = "app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt"
 service = read(service_path)
-old_assignment = "            currentMediaMetadata.value = player.currentMetadata\n"
-new_assignment = '''            val resolvedMetadata = player.currentMetadata
+
+# Undo the earlier overly broad replacement if it is present in toggleLibrary().
+wrong_toggle_library_block = '''                val resolvedMetadata = player.currentMetadata
             val radioItemMetadata =
                 player.currentMediaItem?.localConfiguration?.tag as? com.metrolist.music.models.MediaMetadata
             val previousMetadata = currentMediaMetadata.value
@@ -67,16 +68,59 @@ new_assignment = '''            val resolvedMetadata = player.currentMetadata
                     resolvedMetadata
                 }
 '''
-if "val radioItemMetadata =" not in service:
-    if old_assignment not in service:
-        raise SystemExit("MusicService radio metadata insertion point missing")
-    service = service.replace(old_assignment, new_assignment, 1)
+if wrong_toggle_library_block in service:
+    service = service.replace(
+        wrong_toggle_library_block,
+        "                currentMediaMetadata.value = player.currentMetadata\n",
+        1,
+    )
+
+# Patch the actual player event path. This is where HLS/ICY metadata can replace
+# title/artist while omitting artwork and previously blanked the station logo.
+on_events_old = '''        if (events.containsAny(EVENT_TIMELINE_CHANGED, EVENT_POSITION_DISCONTINUITY)) {
+            currentMediaMetadata.value = player.currentMetadata
+        }
+'''
+on_events_new = '''        if (events.containsAny(EVENT_TIMELINE_CHANGED, EVENT_POSITION_DISCONTINUITY)) {
+            val resolvedMetadata = player.currentMetadata
+            val radioItemMetadata =
+                player.currentMediaItem?.localConfiguration?.tag as? com.metrolist.music.models.MediaMetadata
+            val previousMetadata = currentMediaMetadata.value
+            currentMediaMetadata.value =
+                if (resolvedMetadata != null &&
+                    isRadioMediaId(resolvedMetadata.id) &&
+                    resolvedMetadata.thumbnailUrl.isNullOrBlank()
+                ) {
+                    resolvedMetadata.copy(
+                        thumbnailUrl =
+                            radioItemMetadata
+                                ?.takeIf { it.id == resolvedMetadata.id }
+                                ?.thumbnailUrl
+                                ?: previousMetadata
+                                    ?.takeIf { it.id == resolvedMetadata.id }
+                                    ?.thumbnailUrl,
+                    )
+                } else {
+                    resolvedMetadata
+                }
+        }
+'''
+if on_events_new not in service:
+    if on_events_old not in service:
+        raise SystemExit("MusicService onEvents radio metadata insertion point missing")
+    service = service.replace(on_events_old, on_events_new, 1)
 write(service_path, service)
 
 checks = {
     "gradle/libs.versions.toml": ["androidx.media3:media3-exoplayer-hls"],
     radio_path: ["MimeTypes.APPLICATION_M3U8"],
-    service_path: ["val radioItemMetadata =", "resolvedMetadata.thumbnailUrl.isNullOrBlank()"],
+    service_path: [
+        "if (events.containsAny(EVENT_TIMELINE_CHANGED, EVENT_POSITION_DISCONTINUITY)) {\n            val resolvedMetadata",
+        "val radioItemMetadata =",
+        "resolvedMetadata.thumbnailUrl.isNullOrBlank()",
+        "fun toggleLibrary()",
+        "                currentMediaMetadata.value = player.currentMetadata",
+    ],
 }
 for path, needles in checks.items():
     text = read(path)
@@ -84,22 +128,18 @@ for path, needles in checks.items():
     if missing:
         raise SystemExit(f"{path}: missing {missing}")
 
-# Persist exactly the two production source files. The workflow already has a
-# write-capable token and configured bot identity from its preceding step.
 subprocess.run(["git", "add", radio_path, service_path], cwd=ROOT, check=True)
 changed = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=ROOT).returncode != 0
 if changed:
     subprocess.run(
-        ["git", "commit", "-m", "fix(dudu7): support HLS and preserve radio station logos [skip ci]"],
+        ["git", "commit", "-m", "fix(dudu7): retain station artwork in playback metadata [skip ci]"],
         cwd=ROOT,
         check=True,
     )
     subprocess.run(["git", "pull", "--rebase", "origin", "main"], cwd=ROOT, check=True)
     subprocess.run(["git", "push", "origin", "HEAD:main"], cwd=ROOT, check=True)
 
-# The reusable workflow still greps its historical 13.6.8 values. Add local,
-# comment-only compatibility markers after the source push. The real APK keeps
-# versionCode 160 and versionName 13.7.1-dudu7.
+# Local compatibility markers for the historical reusable workflow only.
 build_path = "app/build.gradle.kts"
 build = read(build_path)
 if "Historical validation marker only: versionCode = 157" not in build:
@@ -114,4 +154,4 @@ for needle in ('versionCode = 160', 'versionName = "13.7.1"', 'versionCode = 157
     if needle not in build:
         raise SystemExit(f"{build_path}: missing {needle}")
 
-print("Dudu7 HLS/logo source patch persisted and passed")
+print("Dudu7 HLS and playback-logo source patch persisted and passed")
