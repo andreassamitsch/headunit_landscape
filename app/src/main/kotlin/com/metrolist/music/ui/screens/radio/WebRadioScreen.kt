@@ -49,6 +49,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,6 +68,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.media3.common.Player
 import coil3.compose.AsyncImage
 import com.metrolist.music.LocalPlayerConnection
 import com.metrolist.music.R
@@ -78,8 +80,11 @@ import com.metrolist.music.radio.RadioBrowserClient
 import com.metrolist.music.radio.RadioStation
 import com.metrolist.music.radio.RadioStationLogoResolver
 import com.metrolist.music.radio.RadioStationStore
+import com.metrolist.music.radio.mergeSavedStationUpdates
 import com.metrolist.music.utils.rememberEnumPreference
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyGridState
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -106,6 +111,8 @@ fun WebRadioScreen() {
     val savedStations by store.stations.collectAsStateWithLifecycle()
     val currentMediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
     val radioIsPlaying by playerConnection.isEffectivelyPlaying.collectAsStateWithLifecycle()
+    val radioPlaybackState by playerConnection.playbackState.collectAsStateWithLifecycle()
+    val radioPlaybackError by playerConnection.error.collectAsStateWithLifecycle()
     val currentRadioMediaId = currentMediaMetadata?.id?.takeIf { it.startsWith("radio:") }
     val scope = rememberCoroutineScope()
 
@@ -123,6 +130,9 @@ fun WebRadioScreen() {
     var actionStation by remember { mutableStateOf<RadioStation?>(null) }
     var deletingStation by remember { mutableStateOf<RadioStation?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
+    var favoritePlayJob by remember { mutableStateOf<Job?>(null) }
+    var favoriteRequestId by remember { mutableLongStateOf(0L) }
+    val refreshedFavoriteCache = remember { mutableMapOf<String, Pair<Long, RadioStation>>() }
 
     val orderedSavedStations = remember { mutableStateListOf<RadioStation>() }
     val savedListState = rememberLazyListState()
@@ -143,9 +153,12 @@ fun WebRadioScreen() {
     var wasDragging by remember { mutableStateOf(false) }
 
     LaunchedEffect(savedStations, isDragging) {
-        if (!isDragging && !wasDragging && orderedSavedStations.map { it.uuid } != savedStations.map { it.uuid }) {
-            orderedSavedStations.clear()
-            orderedSavedStations.addAll(savedStations)
+        if (!isDragging && !wasDragging) {
+            val merged = mergeSavedStationUpdates(orderedSavedStations, savedStations)
+            if (merged != orderedSavedStations) {
+                orderedSavedStations.clear()
+                orderedSavedStations.addAll(merged)
+            }
         }
     }
     LaunchedEffect(isDragging) {
@@ -156,18 +169,73 @@ fun WebRadioScreen() {
     }
 
     fun playSaved(station: RadioStation) {
-        val stations = savedStations.ifEmpty { listOf(station) }
-        val effectiveStations = if (stations.any { it.uuid == station.uuid }) stations else stations + station
-        val startIndex = effectiveStations.indexOfFirst { it.uuid == station.uuid }.coerceAtLeast(0)
-        playerConnection.playQueue(
-            queue =
-                ListQueue(
-                    title = "WebRadio",
-                    items = effectiveStations.map { it.toMediaItem() },
-                    startIndex = startIndex,
-                ),
-            notifyUserSelection = false,
-        )
+        favoriteRequestId += 1L
+        val requestId = favoriteRequestId
+        favoritePlayJob?.cancel()
+
+        fun startFavorite(playable: RadioStation) {
+            playerConnection.playQueue(
+                queue =
+                    ListQueue(
+                        title = playable.name,
+                        items = listOf(playable.toMediaItem()),
+                    ),
+                notifyUserSelection = false,
+            )
+        }
+
+        // A favorite tap is a playback command, not a network-refresh command.
+        // Start immediately with the saved URL so rapid taps cannot cancel every
+        // request before playQueue() is reached. A cached fresh URL may be used,
+        // but the background refresh below never blocks the initial start.
+        val now = System.currentTimeMillis()
+        val cached = refreshedFavoriteCache[station.uuid]?.takeIf { now - it.first < 5 * 60_000L }?.second
+        val initialPlayable = cached ?: station
+        startFavorite(initialPlayable)
+
+        favoritePlayJob =
+            scope.launch {
+                val looksLikeRadioBrowserEntry =
+                    station.country.isNotBlank() ||
+                        station.language.isNotBlank() ||
+                        station.tags.isNotBlank() ||
+                        station.codec.isNotBlank() ||
+                        station.bitrate > 0
+                val refreshed =
+                    cached ?: if (looksLikeRadioBrowserEntry) {
+                        withTimeoutOrNull(4_500L) {
+                            RadioBrowserClient.refreshStation(station).getOrNull()
+                        }
+                    } else {
+                        null
+                    }
+                if (requestId != favoriteRequestId) return@launch
+
+                val candidate = refreshed ?: station
+                val resolvedUrl =
+                    withTimeoutOrNull(4_500L) {
+                        RadioBrowserClient.resolveStreamUrl(candidate.streamUrl).getOrNull()
+                    } ?: candidate.streamUrl
+                if (requestId != favoriteRequestId) return@launch
+
+                val playable = candidate.copy(streamUrl = resolvedUrl)
+                refreshedFavoriteCache[station.uuid] = System.currentTimeMillis() to playable
+                if (playable != station) store.addOrUpdate(playable)
+
+                // Do not interrupt a stream that already became ready. Retry only
+                // when the same selected favorite still failed or is still stuck
+                // after the refresh/playlist resolution completed.
+                if (playable.streamUrl != initialPlayable.streamUrl) {
+                    val player = runCatching { playerConnection.player }.getOrNull()
+                    val sameStation = player?.currentMediaItem?.mediaId == station.mediaId
+                    val needsRetry =
+                        sameStation &&
+                            (player.playerError != null || player.playbackState != Player.STATE_READY)
+                    if (requestId == favoriteRequestId && needsRetry) {
+                        startFavorite(playable)
+                    }
+                }
+            }
     }
 
     fun performSearch() {
@@ -236,7 +304,13 @@ fun WebRadioScreen() {
                                     isSaved = true,
                                     isActive = isActive,
                                     isPlaying = isActive && radioIsPlaying,
-                                    onPlay = { if (isActive) playerConnection.togglePlayPause() else playSaved(station) },
+                                    onPlay = {
+                                        if (isActive && radioPlaybackState == Player.STATE_READY && radioPlaybackError == null) {
+                                            playerConnection.togglePlayPause()
+                                        } else {
+                                            playSaved(station)
+                                        }
+                                    },
                                     onSave = {},
                                     onLongClick = { actionStation = station },
                                     dragHandle = {
@@ -268,7 +342,13 @@ fun WebRadioScreen() {
                                     isSaved = true,
                                     isActive = isActive,
                                     isPlaying = isActive && radioIsPlaying,
-                                    onPlay = { if (isActive) playerConnection.togglePlayPause() else playSaved(station) },
+                                    onPlay = {
+                                        if (isActive && radioPlaybackState == Player.STATE_READY && radioPlaybackError == null) {
+                                            playerConnection.togglePlayPause()
+                                        } else {
+                                            playSaved(station)
+                                        }
+                                    },
                                     onSave = {},
                                     onLongClick = { actionStation = station },
                                     dragHandle = {
@@ -362,7 +442,10 @@ fun WebRadioScreen() {
                                     isActive = isActive,
                                     isPlaying = isActive && radioIsPlaying,
                                     onPlay = {
-                                        if (isActive) playerConnection.togglePlayPause() else {
+                                        if (isActive && radioPlaybackState == Player.STATE_READY && radioPlaybackError == null) {
+                                            playerConnection.togglePlayPause()
+                                        } else {
+                                            if (savedStations.any { it.uuid == station.uuid }) store.addOrUpdate(station)
                                             playerConnection.playQueue(
                                                 queue = ListQueue(title = station.name, items = listOf(station.toMediaItem())),
                                                 notifyUserSelection = false,
@@ -393,7 +476,10 @@ fun WebRadioScreen() {
                                     isActive = isActive,
                                     isPlaying = isActive && radioIsPlaying,
                                     onPlay = {
-                                        if (isActive) playerConnection.togglePlayPause() else {
+                                        if (isActive && radioPlaybackState == Player.STATE_READY && radioPlaybackError == null) {
+                                            playerConnection.togglePlayPause()
+                                        } else {
+                                            if (savedStations.any { it.uuid == station.uuid }) store.addOrUpdate(station)
                                             playerConnection.playQueue(
                                                 queue = ListQueue(title = station.name, items = listOf(station.toMediaItem())),
                                                 notifyUserSelection = false,

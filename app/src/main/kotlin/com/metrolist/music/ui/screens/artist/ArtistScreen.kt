@@ -11,7 +11,6 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -70,8 +69,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.ContentScale
@@ -457,60 +454,21 @@ fun ArtistScreen(
                                                         notifyUserSelection = !embeddedInPlayer,
                                                     )
                                                 }
-                                                if (embeddedInPlayer) {
-                                                    Row(
-                                                        modifier =
-                                                            Modifier
-                                                                .height(40.dp)
-                                                                .clip(RoundedCornerShape(50))
-                                                                .border(
-                                                                    width = 1.dp,
-                                                                    color = MaterialTheme.colorScheme.outline,
-                                                                    shape = RoundedCornerShape(50),
-                                                                ).pointerInput(radioEndpoint) {
-                                                                    awaitPointerEventScope {
-                                                                        while (true) {
-                                                                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                                                                            if (event.changes.any { it.previousPressed && !it.pressed }) {
-                                                                                event.changes.forEach { it.consume() }
-                                                                                playArtistRadio()
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }.combinedClickable(
-                                                                    onClick = playArtistRadio,
-                                                                    onLongClick = {},
-                                                                ).padding(horizontal = 16.dp),
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                    ) {
-                                                        Icon(
-                                                            painter = painterResource(R.drawable.radio),
-                                                            contentDescription = null,
-                                                            modifier = Modifier.size(20.dp),
-                                                        )
-                                                        Spacer(modifier = Modifier.width(8.dp))
-                                                        Text(
-                                                            text = stringResource(R.string.radio),
-                                                            fontSize = 14.sp,
-                                                        )
-                                                    }
-                                                } else {
-                                                    OutlinedButton(
-                                                        onClick = playArtistRadio,
-                                                        shape = RoundedCornerShape(50),
-                                                        modifier = Modifier.height(40.dp),
-                                                    ) {
-                                                        Icon(
-                                                            painter = painterResource(R.drawable.radio),
-                                                            contentDescription = null,
-                                                            modifier = Modifier.size(20.dp),
-                                                        )
-                                                        Spacer(modifier = Modifier.width(8.dp))
-                                                        Text(
-                                                            text = stringResource(R.string.radio),
-                                                            fontSize = 14.sp,
-                                                        )
-                                                    }
+                                                OutlinedButton(
+                                                    onClick = playArtistRadio,
+                                                    shape = RoundedCornerShape(50),
+                                                    modifier = Modifier.height(40.dp),
+                                                ) {
+                                                    Icon(
+                                                        painter = painterResource(R.drawable.radio),
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(20.dp),
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(
+                                                        text = stringResource(R.string.radio),
+                                                        fontSize = 14.sp,
+                                                    )
                                                 }
                                             }
                                         }
@@ -532,54 +490,22 @@ fun ArtistScreen(
                                                         notifyUserSelection = !embeddedInPlayer,
                                                     )
                                                 }
-                                                if (embeddedInPlayer) {
-                                                    Box(
-                                                        contentAlignment = Alignment.Center,
-                                                        modifier =
-                                                            Modifier
-                                                                .size(48.dp)
-                                                                .clip(RoundedCornerShape(24.dp))
-                                                                .background(MaterialTheme.colorScheme.primary)
-                                                                .pointerInput(shuffleEndpoint) {
-                                                                    awaitPointerEventScope {
-                                                                        while (true) {
-                                                                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                                                                            if (event.changes.any { it.previousPressed && !it.pressed }) {
-                                                                                event.changes.forEach { it.consume() }
-                                                                                playArtistShuffle()
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }.combinedClickable(
-                                                                    onClick = playArtistShuffle,
-                                                                    onLongClick = {},
-                                                                ),
-                                                    ) {
-                                                        Icon(
-                                                            painter = painterResource(R.drawable.shuffle),
-                                                            contentDescription = "Shuffle",
-                                                            tint = MaterialTheme.colorScheme.onPrimary,
-                                                            modifier = Modifier.size(20.dp),
-                                                        )
-                                                    }
-                                                } else {
-                                                    IconButton(
-                                                        onClick = playArtistShuffle,
-                                                        modifier =
-                                                            Modifier
-                                                                .size(48.dp)
-                                                                .background(
-                                                                    MaterialTheme.colorScheme.primary,
-                                                                    RoundedCornerShape(24.dp),
-                                                                ),
-                                                    ) {
-                                                        Icon(
-                                                            painter = painterResource(R.drawable.shuffle),
-                                                            contentDescription = "Shuffle",
-                                                            tint = MaterialTheme.colorScheme.onPrimary,
-                                                            modifier = Modifier.size(20.dp),
-                                                        )
-                                                    }
+                                                IconButton(
+                                                    onClick = playArtistShuffle,
+                                                    modifier =
+                                                        Modifier
+                                                            .size(48.dp)
+                                                            .background(
+                                                                MaterialTheme.colorScheme.primary,
+                                                                RoundedCornerShape(24.dp),
+                                                            ),
+                                                ) {
+                                                    Icon(
+                                                        painter = painterResource(R.drawable.shuffle),
+                                                        contentDescription = "Shuffle",
+                                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                                        modifier = Modifier.size(20.dp),
+                                                    )
                                                 }
                                             }
                                         }

@@ -8,11 +8,17 @@ import android.os.Bundle
 import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata.MEDIA_TYPE_RADIO_STATION
+import androidx.media3.common.MimeTypes
 import com.metrolist.music.models.MediaMetadata
 
 const val RADIO_MEDIA_ID_PREFIX = "radio:"
 
 fun isRadioMediaId(mediaId: String?): Boolean = mediaId?.startsWith(RADIO_MEDIA_ID_PREFIX) == true
+
+private fun String.isHlsStreamUrl(): Boolean {
+    val normalized = substringBefore('#').substringBefore('?').lowercase()
+    return normalized.endsWith(".m3u8") || normalized.contains("/playlist.m3u8") || normalized.contains("/manifest.m3u8")
+}
 
 data class RadioStation(
     val uuid: String,
@@ -40,32 +46,41 @@ data class RadioStation(
                 album = MediaMetadata.Album(id = mediaId, title = country.ifBlank { "Live Radio" }),
             )
 
-        return MediaItem.Builder()
-            .setMediaId(mediaId)
-            .setUri(streamUrl)
-            .setCustomCacheKey(mediaId)
-            .setTag(appMetadata)
-            .setMediaMetadata(
-                androidx.media3.common.MediaMetadata.Builder()
-                    .setTitle(name)
-                    .setDisplayTitle(name)
-                    .setArtist("WebRadio")
-                    .setAlbumTitle(country.ifBlank { "Live Radio" })
-                    .setArtworkUri(favicon.takeIf { it.isNotBlank() }?.toUri())
-                    .setMediaType(MEDIA_TYPE_RADIO_STATION)
-                    .setIsBrowsable(false)
-                    .setIsPlayable(true)
-                    .setExtras(
-                        Bundle().apply {
-                            putString("radio_uuid", uuid)
-                            putString("radio_name", name)
-                            putString("radio_stream_url", streamUrl)
-                            putString("radio_favicon", favicon)
-                            putBoolean("radio_manual_favicon", manualFavicon)
-                            putString("radio_country", country)
-                        },
-                    ).build(),
-            ).build()
+        val builder =
+            MediaItem.Builder()
+                .setMediaId(mediaId)
+                .setUri(streamUrl)
+                .setCustomCacheKey(mediaId)
+                .setTag(appMetadata)
+                .setMediaMetadata(
+                    androidx.media3.common.MediaMetadata.Builder()
+                        .setTitle(name)
+                        .setDisplayTitle(name)
+                        .setArtist("WebRadio")
+                        .setAlbumTitle(country.ifBlank { "Live Radio" })
+                        .setArtworkUri(favicon.takeIf { it.isNotBlank() }?.toUri())
+                        .setMediaType(MEDIA_TYPE_RADIO_STATION)
+                        .setIsBrowsable(false)
+                        .setIsPlayable(true)
+                        .setExtras(
+                            Bundle().apply {
+                                putString("radio_uuid", uuid)
+                                putString("radio_name", name)
+                                putString("radio_stream_url", streamUrl)
+                                putString("radio_favicon", favicon)
+                                putBoolean("radio_manual_favicon", manualFavicon)
+                                putString("radio_country", country)
+                            },
+                        ).build(),
+                )
+
+        // Explicitly mark HLS playlists. This also covers signed/query-string URLs where
+        // automatic content-type inference is unreliable on some head-unit firmwares.
+        if (streamUrl.isHlsStreamUrl()) {
+            builder.setMimeType(MimeTypes.APPLICATION_M3U8)
+        }
+
+        return builder.build()
     }
 }
 

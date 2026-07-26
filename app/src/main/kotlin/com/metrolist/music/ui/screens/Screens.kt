@@ -46,6 +46,15 @@ sealed class Screens(
     )
 
     companion object {
-        val MainScreens = listOf(Home, Search, ListenTogether, Library)
+        /**
+         * Build the list on access instead of storing it in a static backing field.
+         *
+         * A static list creates a JVM initialization cycle when a nested screen
+         * singleton (for example [Home]) is touched before the outer [Screens]
+         * class has finished initializing. In that case Home.INSTANCE may still be
+         * null and the corrupted list later crashes while reading screen.route.
+         */
+        val MainScreens: List<Screens>
+            get() = listOf(Home, Search, ListenTogether, Library)
     }
 }

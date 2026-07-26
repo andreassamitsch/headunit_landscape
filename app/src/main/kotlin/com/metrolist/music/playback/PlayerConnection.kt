@@ -35,8 +35,11 @@ import com.metrolist.music.extensions.getQueueWindows
 import com.metrolist.music.extensions.metadata
 import com.metrolist.music.extensions.togglePlayPause
 import com.metrolist.music.playback.MusicService.MusicBinder
+import com.metrolist.music.playback.queues.ListQueue
 import com.metrolist.music.playback.queues.Queue
+import com.metrolist.music.radio.RadioStationStore
 import com.metrolist.music.radio.isRadioMediaId
+import com.metrolist.music.radio.radioFavoriteNeighbor
 import com.metrolist.shazamkit.models.RecognitionResult
 import com.metrolist.music.utils.dataStore
 import com.metrolist.music.utils.get
@@ -70,6 +73,7 @@ class PlayerConnection(
     }
 
     val service = binder.service
+    private val radioStationStore = RadioStationStore.get(context.applicationContext)
     private val playerReadinessFlow = service.isPlayerReady
 
     private fun getPlayerSafe(): ExoPlayer {
@@ -146,6 +150,13 @@ class PlayerConnection(
                 isPlayerInitialized.value = ready
                 if (ready) {
                     Timber.tag(TAG).d("Service player initialization detected by PlayerConnection")
+                }
+            }
+        }
+        scope.launch {
+            radioStationStore.stations.collect {
+                if (isRadioMediaId(getPlayerOrNull()?.currentMediaItem?.mediaId)) {
+                    updateCanSkipPreviousAndNext()
                 }
             }
         }
@@ -472,12 +483,33 @@ class PlayerConnection(
         }
     }
 
+    private fun playAdjacentRadioFavorite(direction: Int): Boolean {
+        val activePlayer = getPlayerOrNull() ?: return false
+        val currentMediaId = activePlayer.currentMediaItem?.mediaId
+        if (!isRadioMediaId(currentMediaId)) return false
+        val target =
+            radioFavoriteNeighbor(
+                ordered = radioStationStore.stations.value,
+                currentMediaId = currentMediaId,
+                direction = direction,
+            ) ?: return false
+        playQueue(
+            queue = ListQueue(title = target.name, items = listOf(target.toMediaItem())),
+            notifyUserSelection = false,
+        )
+        return true
+    }
+
     fun seekToNext() {
         try {
             // When casting, use Cast skip instead of local player
             val castHandler = service.castConnectionHandler
             if (castHandler?.isCasting?.value == true) {
                 castHandler.skipToNext()
+                return
+            }
+            if (isRadioMediaId(player.currentMediaItem?.mediaId)) {
+                if (playAdjacentRadioFavorite(1)) onSkipNext?.invoke()
                 return
             }
             player.seekToNext()
@@ -502,15 +534,10 @@ class PlayerConnection(
                 return
             }
 
-            // A live radio stream has no meaningful "restart current item" position.
-            // Previous must always select the previous saved station.
-            if (isRadioMediaId(player.currentMediaItem?.mediaId) && player.hasPreviousMediaItem()) {
-                player.seekToPreviousMediaItem()
-                if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) {
-                    player.prepare()
-                }
-                player.playWhenReady = true
-                onSkipPrevious?.invoke()
+            // A live radio stream has no seek position. Resolve the previous
+            // saved favorite ourselves and keep ExoPlayer on a single stream.
+            if (isRadioMediaId(player.currentMediaItem?.mediaId)) {
+                if (playAdjacentRadioFavorite(-1)) onSkipPrevious?.invoke()
                 return
             }
 
@@ -950,6 +977,13 @@ class PlayerConnection(
     }
 
     private fun updateCanSkipPreviousAndNext() {
+        val currentMediaId = player.currentMediaItem?.mediaId
+        if (isRadioMediaId(currentMediaId)) {
+            val favorites = radioStationStore.stations.value
+            canSkipPrevious.value = radioFavoriteNeighbor(favorites, currentMediaId, -1) != null
+            canSkipNext.value = radioFavoriteNeighbor(favorites, currentMediaId, 1) != null
+            return
+        }
         if (!player.currentTimeline.isEmpty) {
             val window =
                 player.currentTimeline.getWindow(player.currentMediaItemIndex, Timeline.Window())

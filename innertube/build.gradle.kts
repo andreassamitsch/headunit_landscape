@@ -33,6 +33,12 @@ dependencies {
         exclude(group = "com.google.protobuf")
     }
     implementation(libs.timber)
+
+    // The app already depends on this module. Keeping the HLS runtime here makes
+    // Media3's DefaultMediaSourceFactory discover HLS support without changing
+    // the app's existing dependency block.
+    runtimeOnly("androidx.media3:media3-exoplayer-hls:${libs.versions.media3.get()}")
+
     testImplementation(libs.junit)
 
     coreLibraryDesugaring(libs.desugaring)

@@ -1,0 +1,636 @@
+run_id=30154330908
+sha=97470002888fae9f41a3ca630c44b7ba3b2f5985
+
+=== matching files ===
+app/src/main/kotlin/com/metrolist/music/ui/screens/recognition/RecognitionScreen.kt
+app/src/main/kotlin/com/metrolist/music/ui/screens/recognition/RecognitionHistoryScreen.kt
+app/src/main/kotlin/com/metrolist/music/recognition/MusicRecognitionService.kt
+app/src/main/kotlin/com/metrolist/music/recognition/ShazamSignatureGenerator.kt
+app/src/main/kotlin/com/metrolist/music/recognition/RecognitionForegroundService.kt
+app/src/main/kotlin/com/metrolist/music/recognition/RecognitionLaunchActivity.kt
+app/src/main/kotlin/com/metrolist/music/recognition/VibraSignature.kt
+app/src/main/kotlin/com/metrolist/music/recognition/AudioResampler.kt
+app/src/main/kotlin/com/metrolist/music/quicksettings/MusicRecognizerTileService.kt
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetService.kt
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt
+app/src/main/kotlin/com/metrolist/music/db/entities/RecognitionHistory.kt
+app/src/main/res/xml-v31/recognizer_widget_info.xml
+app/src/main/res/layout/widget_recognizer_wide.xml
+app/src/main/res/layout/widget_recognizer_compact.xml
+app/src/main/res/layout/widget_recognizer_tiny.xml
+app/src/main/res/xml/recognizer_widget_info.xml
+
+=== recognition references ===
+app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt:40:import com.metrolist.shazamkit.models.RecognitionResult
+app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt:772:    /** Apply a manual Shazam result to the current radio item and resolve its YTM identity. */
+app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt:773:    fun applyRecognizedRadioTrack(result: RecognitionResult) {
+app/src/main/kotlin/com/metrolist/music/ui/component/HideOnScrollFAB.kt:71:                        contentDescription = stringResource(R.string.recognize_music),
+app/src/main/kotlin/com/metrolist/music/ui/component/HideOnScrollFAB.kt:122:                        contentDescription = stringResource(R.string.recognize_music),
+app/src/main/kotlin/com/metrolist/music/ui/component/HideOnScrollFAB.kt:173:                        contentDescription = stringResource(R.string.recognize_music),
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:669:        scope.launch { MusicRecognitionService.recognizeStream(streamUrl) }
+app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt:676:                playerConnection.applyRecognizedRadioTrack(status.result)
+app/src/main/kotlin/com/metrolist/music/ui/screens/recognition/RecognitionScreen.kt:89:import com.metrolist.shazamkit.models.RecognitionResult
+app/src/main/kotlin/com/metrolist/music/ui/screens/recognition/RecognitionScreen.kt:143:                        .recognize(context)
+app/src/main/kotlin/com/metrolist/music/ui/screens/recognition/RecognitionScreen.kt:152:                    .recognize(context)
+app/src/main/kotlin/com/metrolist/music/ui/screens/recognition/RecognitionScreen.kt:173:    fun saveToHistory(result: RecognitionResult) {
+app/src/main/kotlin/com/metrolist/music/ui/screens/recognition/RecognitionScreen.kt:194:                        recognizedAt = LocalDateTime.now(),
+app/src/main/kotlin/com/metrolist/music/ui/screens/recognition/RecognitionScreen.kt:204:                title = { Text(stringResource(R.string.recognize_music)) },
+app/src/main/kotlin/com/metrolist/music/ui/screens/recognition/RecognitionScreen.kt:341:            text = stringResource(R.string.tap_to_recognize),
+app/src/main/kotlin/com/metrolist/music/ui/screens/recognition/RecognitionScreen.kt:483:    result: RecognitionResult,
+app/src/main/kotlin/com/metrolist/music/ui/screens/recognition/RecognitionScreen.kt:484:    onPlayOnApp: (RecognitionResult) -> Unit,
+app/src/main/kotlin/com/metrolist/music/ui/screens/recognition/RecognitionScreen.kt:487:    onSaveToHistory: (RecognitionResult) -> Unit,
+app/src/main/kotlin/com/metrolist/music/ui/screens/recognition/RecognitionHistoryScreen.kt:293:                    text = item.recognizedAt.format(dateFormatter),
+app/src/main/kotlin/com/metrolist/music/recognition/MusicRecognitionService.kt:21:import com.metrolist.shazamkit.Shazam
+app/src/main/kotlin/com/metrolist/music/recognition/MusicRecognitionService.kt:56:    suspend fun recognize(context: Context): RecognitionStatus =
+app/src/main/kotlin/com/metrolist/music/recognition/MusicRecognitionService.kt:64:                recognizeDecodedAudio(
+app/src/main/kotlin/com/metrolist/music/recognition/MusicRecognitionService.kt:82:    suspend fun recognizeStream(streamUrl: String): RecognitionStatus =
+app/src/main/kotlin/com/metrolist/music/recognition/MusicRecognitionService.kt:94:                recognizeDecodedAudio(decoded)
+app/src/main/kotlin/com/metrolist/music/recognition/MusicRecognitionService.kt:101:    private suspend fun recognizeDecodedAudio(source: DecodedAudio): RecognitionStatus {
+app/src/main/kotlin/com/metrolist/music/recognition/MusicRecognitionService.kt:117:        ) { "Invalid audio format for fingerprint generation" }
+app/src/main/kotlin/com/metrolist/music/recognition/MusicRecognitionService.kt:124:                return setError("Failed to generate fingerprint: ${error.message}")
+app/src/main/kotlin/com/metrolist/music/recognition/MusicRecognitionService.kt:129:        return Shazam.recognize(signature, sampleDurationMs).fold(
+app/src/main/kotlin/com/metrolist/music/recognition/MusicRecognitionService.kt:268:            "Only 16-bit PCM can be fingerprinted"
+app/src/main/kotlin/com/metrolist/music/recognition/ShazamSignatureGenerator.kt:15: * Pure Kotlin implementation of the Shazam audio fingerprinting algorithm.
+app/src/main/kotlin/com/metrolist/music/recognition/ShazamSignatureGenerator.kt:18: * the Shazam signature algorithm using FFT-based audio fingerprinting.
+app/src/main/kotlin/com/metrolist/music/recognition/ShazamSignatureGenerator.kt:22:internal object ShazamSignatureGenerator {
+app/src/main/kotlin/com/metrolist/music/recognition/ShazamSignatureGenerator.kt:23:    private const val TAG = "ShazamSigGen"
+app/src/main/kotlin/com/metrolist/music/recognition/ShazamSignatureGenerator.kt:50:     * Generates a Shazam-compatible audio fingerprint from raw 16-bit PCM samples.
+app/src/main/kotlin/com/metrolist/music/recognition/ShazamSignatureGenerator.kt:61:        Timber.tag(TAG).d("Generating fingerprint from %d bytes of PCM data", samples.size)
+app/src/main/kotlin/com/metrolist/music/recognition/RecognitionForegroundService.kt:18:import com.metrolist.shazamkit.models.RecognitionResult
+app/src/main/kotlin/com/metrolist/music/recognition/RecognitionForegroundService.kt:68:                title = getString(R.string.recognize_music),
+app/src/main/kotlin/com/metrolist/music/recognition/RecognitionForegroundService.kt:128:                val result = MusicRecognitionService.recognize(this@RecognitionForegroundService)
+app/src/main/kotlin/com/metrolist/music/recognition/RecognitionForegroundService.kt:142:                    title = getString(R.string.recognize_music),
+app/src/main/kotlin/com/metrolist/music/recognition/RecognitionForegroundService.kt:155:                    title = getString(R.string.recognize_music),
+app/src/main/kotlin/com/metrolist/music/recognition/RecognitionForegroundService.kt:175:                    title = getString(R.string.recognize_music),
+app/src/main/kotlin/com/metrolist/music/recognition/RecognitionForegroundService.kt:191:                    title = getString(R.string.recognize_music),
+app/src/main/kotlin/com/metrolist/music/recognition/RecognitionForegroundService.kt:255:    private fun handleSuccess(result: RecognitionResult) {
+app/src/main/kotlin/com/metrolist/music/recognition/RecognitionForegroundService.kt:315:    private fun createResultPendingIntent(result: RecognitionResult): PendingIntent {
+app/src/main/kotlin/com/metrolist/music/recognition/VibraSignature.kt:4: * Audio fingerprint generator for Shazam-compatible signatures.
+app/src/main/kotlin/com/metrolist/music/recognition/VibraSignature.kt:7: * Uses [ShazamSignatureGenerator] which ports the vibra algorithm to JVM.
+app/src/main/kotlin/com/metrolist/music/recognition/VibraSignature.kt:14:     * Generates a Shazam signature from raw PCM audio data.
+app/src/main/kotlin/com/metrolist/music/recognition/VibraSignature.kt:17:     * @return The encoded signature URI string suitable for the Shazam API
+app/src/main/kotlin/com/metrolist/music/recognition/VibraSignature.kt:21:    fun fromI16(samples: ByteArray): String = ShazamSignatureGenerator.fromI16(samples)
+app/src/main/kotlin/com/metrolist/music/recognition/AudioResampler.kt:40: * Resamples mono 16-bit PCM audio to the required sample rate for fingerprinting.
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetService.kt:111:            .setContentTitle(getString(R.string.widget_recognizer_listening))
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetService.kt:112:            .setContentText(getString(R.string.widget_recognizer_notification_text))
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetService.kt:153:                val result = MusicRecognitionService.recognize(this@MusicRecognizerWidgetService)
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetService.kt:193:                                    recognizedAt = LocalDateTime.now()
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetService.kt:234:                    .putString(PREF_ERROR_MESSAGE, e.message ?: getString(R.string.widget_recognizer_error))
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetService.kt:335:            getString(R.string.widget_recognizer_channel_name),
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetService.kt:338:            description = getString(R.string.widget_recognizer_channel_desc)
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetService.kt:347:        const val ACTION_START_RECOGNITION = "com.metrolist.music.widget.recognizer.START"
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetService.kt:348:        const val ACTION_STOP_RECOGNITION = "com.metrolist.music.widget.recognizer.STOP"
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetService.kt:350:        const val PREFS_NAME = "recognizer_widget_prefs"
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetService.kt:365:        const val ALBUM_ART_CACHE_FILE = "recognizer_widget_art.png"
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetService.kt:369:        private const val CHANNEL_ID = "music_recognizer_widget"
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:179:        val views = RemoteViews(context.packageName, R.layout.widget_recognizer_wide)
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:182:        applyMicState(views, state, pulseFrame, R.id.widget_recognizer_mic_container, R.id.widget_recognizer_pulse)
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:183:        views.setOnClickPendingIntent(R.id.widget_recognizer_mic_container, getMicIntent(context))
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:185:        views.setOnClickPendingIntent(R.id.widget_recognizer_text_area, infoIntent)
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:186:        views.setOnClickPendingIntent(R.id.widget_recognizer_album_art, infoIntent)
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:199:        val views = RemoteViews(context.packageName, R.layout.widget_recognizer_compact)
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:202:        applyMicState(views, state, pulseFrame, R.id.widget_recognizer_mic_container, R.id.widget_recognizer_pulse)
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:203:        views.setOnClickPendingIntent(R.id.widget_recognizer_mic_container, getMicIntent(context))
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:205:        views.setOnClickPendingIntent(R.id.widget_recognizer_text_area, infoIntent)
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:206:        views.setOnClickPendingIntent(R.id.widget_recognizer_album_art, infoIntent)
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:215:        val views = RemoteViews(context.packageName, R.layout.widget_recognizer_tiny)
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:216:        applyMicState(views, state, pulseFrame, R.id.widget_recognizer_tiny_mic_container, R.id.widget_recognizer_tiny_pulse)
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:217:        views.setOnClickPendingIntent(R.id.widget_recognizer_tiny_root, getMicIntent(context))
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:229:            views.setImageViewBitmap(R.id.widget_recognizer_album_art, albumArt)
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:230:            views.setViewVisibility(R.id.widget_recognizer_album_art, View.VISIBLE)
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:232:            views.setViewVisibility(R.id.widget_recognizer_album_art, View.GONE)
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:246:                views.setTextViewText(R.id.widget_recognizer_song_title,
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:247:                    context.getString(R.string.widget_recognizer_tap_to_search))
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:248:                views.setViewVisibility(R.id.widget_recognizer_artist_name, View.GONE)
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:251:                views.setTextViewText(R.id.widget_recognizer_song_title,
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:252:                    context.getString(R.string.widget_recognizer_listening))
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:253:                views.setViewVisibility(R.id.widget_recognizer_artist_name, View.GONE)
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:256:                views.setTextViewText(R.id.widget_recognizer_song_title,
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:257:                    context.getString(R.string.widget_recognizer_processing))
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:258:                views.setViewVisibility(R.id.widget_recognizer_artist_name, View.GONE)
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:261:                views.setTextViewText(R.id.widget_recognizer_song_title,
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:262:                    songTitle.ifEmpty { context.getString(R.string.widget_recognizer_unknown_song) })
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:263:                views.setTextViewText(R.id.widget_recognizer_artist_name,
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:264:                    artistName.ifEmpty { context.getString(R.string.widget_recognizer_unknown_artist) })
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:265:                views.setViewVisibility(R.id.widget_recognizer_artist_name, View.VISIBLE)
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:268:                views.setTextViewText(R.id.widget_recognizer_song_title,
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:269:                    context.getString(R.string.widget_recognizer_no_match))
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:270:                views.setViewVisibility(R.id.widget_recognizer_artist_name, View.GONE)
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:273:                views.setTextViewText(R.id.widget_recognizer_song_title,
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:274:                    context.getString(R.string.widget_recognizer_error))
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:275:                views.setTextViewText(R.id.widget_recognizer_artist_name,
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:276:                    errorMessage.ifEmpty { context.getString(R.string.widget_recognizer_error_generic) })
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:277:                views.setViewVisibility(R.id.widget_recognizer_artist_name, View.VISIBLE)
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:336:        const val ACTION_START_RECOGNITION = "com.metrolist.music.widget.recognizer.TAP_MIC"
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:337:        const val ACTION_UPDATE_WIDGET = "com.metrolist.music.widget.recognizer.UPDATE"
+app/src/main/kotlin/com/metrolist/music/widget/MusicRecognizerWidgetReceiver.kt:338:        const val ACTION_RESET_STATE = "com.metrolist.music.widget.recognizer.RESET"
+app/src/main/kotlin/com/metrolist/music/listentogether/ListenTogetherClient.kt:1471:                                // Clear stale room state immediately - server no longer recognizes the session
+app/src/main/kotlin/com/metrolist/music/db/entities/RecognitionHistory.kt:38:    val recognizedAt: LocalDateTime = LocalDateTime.now(),
+app/src/main/kotlin/com/metrolist/music/db/DatabaseDao.kt:1497:    @Query("SELECT * FROM recognition_history ORDER BY recognizedAt DESC")
+app/src/main/kotlin/com/metrolist/music/db/DatabaseDao.kt:1505:    @Query("SELECT * FROM recognition_history WHERE title LIKE '%' || :query || '%' OR artist LIKE '%' || :query || '%' ORDER BY recognizedAt DESC")
+app/src/main/AndroidManifest.xml:354:            android:label="@string/widget_recognizer_name">
+app/src/main/AndroidManifest.xml:357:                <action android:name="com.metrolist.music.widget.recognizer.TAP_MIC" />
+app/src/main/AndroidManifest.xml:358:                <action android:name="com.metrolist.music.widget.recognizer.UPDATE" />
+app/src/main/AndroidManifest.xml:359:                <action android:name="com.metrolist.music.widget.recognizer.RESET" />
+app/src/main/AndroidManifest.xml:364:                android:resource="@xml/recognizer_widget_info" />
+app/src/main/AndroidManifest.xml:380:            android:label="@string/qs_tile_music_recognizer"
+app/src/main/res/values/metrolist_strings.xml:169:    <string name="token_adv_login_description">This is an ADVANCED login method. Instead of using the web portal, you can enter or update your login token directly. This can be useful for signing in across multiple devices quickly. Tokens in an unrecognized format will be rejected</string>
+app/src/main/res/values/metrolist_strings.xml:573:    <string name="widget_recognizer_name">Music Recognizer</string>
+app/src/main/res/values/metrolist_strings.xml:574:    <string name="widget_recognizer_description">Identify songs playing around you directly from your home screen</string>
+app/src/main/res/values/metrolist_strings.xml:575:    <string name="widget_recognizer_tap_to_search">Tap to identify a song</string>
+app/src/main/res/values/metrolist_strings.xml:576:    <string name="widget_recognizer_listening">Listening…</string>
+app/src/main/res/values/metrolist_strings.xml:577:    <string name="widget_recognizer_processing">Identifying…</string>
+app/src/main/res/values/metrolist_strings.xml:578:    <string name="widget_recognizer_no_match">No match found. Try again</string>
+app/src/main/res/values/metrolist_strings.xml:579:    <string name="widget_recognizer_error">Recognition failed</string>
+app/src/main/res/values/metrolist_strings.xml:580:    <string name="widget_recognizer_error_generic">Something went wrong. Please try again</string>
+app/src/main/res/values/metrolist_strings.xml:581:    <string name="widget_recognizer_unknown_song">Unknown song</string>
+app/src/main/res/values/metrolist_strings.xml:582:    <string name="widget_recognizer_unknown_artist">Unknown artist</string>
+app/src/main/res/values/metrolist_strings.xml:583:    <string name="widget_recognizer_mic_desc">Identify a song</string>
+app/src/main/res/values/metrolist_strings.xml:584:    <string name="widget_recognizer_channel_name">Music Recognition</string>
+app/src/main/res/values/metrolist_strings.xml:585:    <string name="widget_recognizer_channel_desc">Shows a notification while identifying a song from the widget</string>
+app/src/main/res/values/metrolist_strings.xml:586:    <string name="widget_recognizer_notification_text">Recording audio to identify the song…</string>
+app/src/main/res/values/metrolist_strings.xml:773:    <string name="recognize_music">Recognize music</string>
+app/src/main/res/values/metrolist_strings.xml:774:    <string name="tap_to_recognize">Tap to recognize</string>
+app/src/main/res/values/metrolist_strings.xml:786:    <string name="qs_tile_music_recognizer">Recognize music</string>
+app/src/main/res/values-bg/metrolist_strings.xml:431:    <string name="widget_recognizer_name">Разпознаване на музика</string>
+app/src/main/res/values-bg/metrolist_strings.xml:644:    <string name="recognize_music">Разпознай песен</string>
+app/src/main/res/values-bg/metrolist_strings.xml:645:    <string name="tap_to_recognize">Натисни за да разпознаеш</string>
+app/src/main/res/values-bg/metrolist_strings.xml:657:    <string name="qs_tile_music_recognizer">Разпознай песен</string>
+app/src/main/res/values-bg/metrolist_strings.xml:736:    <string name="widget_recognizer_description">Разпознай песни свирейки около теб директно от началния екран</string>
+app/src/main/res/values-bg/metrolist_strings.xml:737:    <string name="widget_recognizer_tap_to_search">Натиснете за да разпознаете песен</string>
+app/src/main/res/values-bg/metrolist_strings.xml:738:    <string name="widget_recognizer_listening">Слушане…</string>
+app/src/main/res/values-bg/metrolist_strings.xml:739:    <string name="widget_recognizer_processing">Разпознаване…</string>
+app/src/main/res/values-bg/metrolist_strings.xml:740:    <string name="widget_recognizer_no_match">Няма резултат. Опитайте отново</string>
+app/src/main/res/values-bg/metrolist_strings.xml:741:    <string name="widget_recognizer_error">Неуспешно разпознаване</string>
+app/src/main/res/values-bg/metrolist_strings.xml:742:    <string name="widget_recognizer_error_generic">Нещо се обърка. Моля опитайте отново</string>
+app/src/main/res/values-bg/metrolist_strings.xml:743:    <string name="widget_recognizer_unknown_song">Непозната песен</string>
+app/src/main/res/values-bg/metrolist_strings.xml:744:    <string name="widget_recognizer_unknown_artist">Непознат изпълнител</string>
+app/src/main/res/values-bg/metrolist_strings.xml:745:    <string name="widget_recognizer_mic_desc">Разпознаване на песен</string>
+app/src/main/res/values-bg/metrolist_strings.xml:746:    <string name="widget_recognizer_channel_name">Разпознаване на песен</string>
+app/src/main/res/values-bg/metrolist_strings.xml:747:    <string name="widget_recognizer_notification_text">Записване на аудио за да разпознае песен…</string>
+app/src/main/res/values-bg/metrolist_strings.xml:757:    <string name="widget_recognizer_channel_desc">Показва известие при идентифициране на песен от уиджета</string>
+app/src/main/res/values-in/metrolist_strings.xml:488:    <string name="recognize_music">Kenali musik</string>
+app/src/main/res/values-in/metrolist_strings.xml:489:    <string name="tap_to_recognize">Ketuk untuk mengenali</string>
+app/src/main/res/values-in/metrolist_strings.xml:592:    <string name="widget_recognizer_name">Pengenal Musik</string>
+app/src/main/res/values-in/metrolist_strings.xml:593:    <string name="widget_recognizer_description">Identifikasi lagu yang diputar di sekitar Anda langsung dari layar beranda</string>
+app/src/main/res/values-in/metrolist_strings.xml:594:    <string name="widget_recognizer_tap_to_search">Ketuk untuk mengidentifikasi lagu</string>
+app/src/main/res/values-in/metrolist_strings.xml:595:    <string name="widget_recognizer_listening">Mendengarkan…</string>
+app/src/main/res/values-in/metrolist_strings.xml:596:    <string name="widget_recognizer_processing">Mengidentifikasi…</string>
+app/src/main/res/values-in/metrolist_strings.xml:597:    <string name="widget_recognizer_no_match">Tidak ada kecocokan. Coba lagi</string>
+app/src/main/res/values-in/metrolist_strings.xml:598:    <string name="widget_recognizer_error">Pengenalan gagal</string>
+app/src/main/res/values-in/metrolist_strings.xml:599:    <string name="widget_recognizer_error_generic">Terjadi kesalahan. Silakan coba lagi</string>
+app/src/main/res/values-in/metrolist_strings.xml:600:    <string name="widget_recognizer_unknown_song">Lagu tidak dikenal</string>
+app/src/main/res/values-in/metrolist_strings.xml:601:    <string name="widget_recognizer_unknown_artist">Artis tidak dikenal</string>
+app/src/main/res/values-in/metrolist_strings.xml:602:    <string name="widget_recognizer_mic_desc">Identifikasi lagu</string>
+app/src/main/res/values-in/metrolist_strings.xml:603:    <string name="widget_recognizer_channel_name">Pengenalan Musik</string>
+app/src/main/res/values-in/metrolist_strings.xml:604:    <string name="widget_recognizer_channel_desc">Menampilkan notifikasi saat mengidentifikasi lagu dari widget</string>
+app/src/main/res/values-in/metrolist_strings.xml:605:    <string name="widget_recognizer_notification_text">Merekam audio untuk mengidentifikasi lagu…</string>
+app/src/main/res/values-in/metrolist_strings.xml:695:    <string name="qs_tile_music_recognizer">Kenali musik</string>
+app/src/main/res/xml-v31/recognizer_widget_info.xml:11:    android:previewLayout="@layout/widget_recognizer_wide"
+app/src/main/res/xml-v31/recognizer_widget_info.xml:12:    android:initialLayout="@layout/widget_recognizer_wide"
+app/src/main/res/xml-v31/recognizer_widget_info.xml:13:    android:description="@string/widget_recognizer_description"
+app/src/main/res/values-it/metrolist_strings.xml:469:    <string name="recognize_music">Riconoscimento musica</string>
+app/src/main/res/values-it/metrolist_strings.xml:488:    <string name="tap_to_recognize">Tocca per riconoscere</string>
+app/src/main/res/values-it/metrolist_strings.xml:636:    <string name="widget_recognizer_name">Riconoscitore musicale</string>
+app/src/main/res/values-it/metrolist_strings.xml:637:    <string name="widget_recognizer_description">Identifica i brani che ti circondano direttamente dalla schermata iniziale</string>
+app/src/main/res/values-it/metrolist_strings.xml:638:    <string name="widget_recognizer_tap_to_search">Tocca per identificare un brano</string>
+app/src/main/res/values-it/metrolist_strings.xml:639:    <string name="widget_recognizer_listening">In ascolto…</string>
+app/src/main/res/values-it/metrolist_strings.xml:640:    <string name="widget_recognizer_processing">Identificazione…</string>
+app/src/main/res/values-it/metrolist_strings.xml:641:    <string name="widget_recognizer_no_match">Nessuna corrispondenza trovata. Prova di nuovo</string>
+app/src/main/res/values-it/metrolist_strings.xml:642:    <string name="widget_recognizer_error">Riconoscimento fallito</string>
+app/src/main/res/values-it/metrolist_strings.xml:643:    <string name="widget_recognizer_error_generic">Qualcosa è andato storto. Per favore riprova</string>
+app/src/main/res/values-it/metrolist_strings.xml:644:    <string name="widget_recognizer_unknown_song">Brano sconosciuto</string>
+app/src/main/res/values-it/metrolist_strings.xml:645:    <string name="widget_recognizer_unknown_artist">Artista sconosciuto</string>
+app/src/main/res/values-it/metrolist_strings.xml:646:    <string name="widget_recognizer_mic_desc">Identifica un brano</string>
+app/src/main/res/values-it/metrolist_strings.xml:647:    <string name="widget_recognizer_channel_name">Riconoscimento Musicale</string>
+app/src/main/res/values-it/metrolist_strings.xml:648:    <string name="widget_recognizer_channel_desc">Mostra una notifica mentre stai identificando un brano dal widget</string>
+app/src/main/res/values-it/metrolist_strings.xml:649:    <string name="widget_recognizer_notification_text">Registrazione dell\'audio per identificare il brano…</string>
+app/src/main/res/values-it/metrolist_strings.xml:707:    <string name="qs_tile_music_recognizer">Riconosci musica</string>
+app/src/main/res/values-de/metrolist_strings.xml:464:    <string name="recognize_music">Musik erkennen</string>
+app/src/main/res/values-de/metrolist_strings.xml:480:    <string name="tap_to_recognize">Zum Erkennen antippen</string>
+app/src/main/res/values-de/metrolist_strings.xml:580:    <string name="widget_recognizer_description">Finde Lieder, die um dich herum spielen, direkt von deinem Homescreen</string>
+app/src/main/res/values-de/metrolist_strings.xml:581:    <string name="widget_recognizer_tap_to_search">Tippe hier, um ein Lied zu erkennen</string>
+app/src/main/res/values-de/metrolist_strings.xml:582:    <string name="widget_recognizer_listening">Zuhören …</string>
+app/src/main/res/values-de/metrolist_strings.xml:583:    <string name="widget_recognizer_processing">Erkennen …</string>
+app/src/main/res/values-de/metrolist_strings.xml:584:    <string name="widget_recognizer_no_match">Keine Übereinstimmung gefunden. Nochmal versuchen</string>
+app/src/main/res/values-de/metrolist_strings.xml:585:    <string name="widget_recognizer_error">Erkennen fehlgeschlagen</string>
+app/src/main/res/values-de/metrolist_strings.xml:586:    <string name="widget_recognizer_error_generic">Es ist ein Fehler aufgetreten. Bitte versuche es erneut.</string>
+app/src/main/res/values-de/metrolist_strings.xml:587:    <string name="widget_recognizer_unknown_song">Unbekanntes Lied</string>
+app/src/main/res/values-de/metrolist_strings.xml:588:    <string name="widget_recognizer_unknown_artist">Unbekannter Künstler</string>
+app/src/main/res/values-de/metrolist_strings.xml:589:    <string name="widget_recognizer_mic_desc">Einen Song identifizieren</string>
+app/src/main/res/values-de/metrolist_strings.xml:590:    <string name="widget_recognizer_channel_name">Musik-Erkennung</string>
+app/src/main/res/values-de/metrolist_strings.xml:591:    <string name="widget_recognizer_name">Musik-Erkennung</string>
+app/src/main/res/values-de/metrolist_strings.xml:592:    <string name="widget_recognizer_channel_desc">Zeigt eine Benachrichtigung an, während ein Lied vom Widget erkannt wird</string>
+app/src/main/res/values-de/metrolist_strings.xml:593:    <string name="widget_recognizer_notification_text">Audio aufnehmen, um Lied zu erkennen …</string>
+app/src/main/res/values-de/metrolist_strings.xml:677:    <string name="qs_tile_music_recognizer">Musik erkennen</string>
+app/src/main/res/values-iw/metrolist_strings.xml:430:    <string name="widget_recognizer_name">מזהה מוזיקה</string>
+app/src/main/res/values-iw/metrolist_strings.xml:431:    <string name="widget_recognizer_description">זהה שירים שמתנגנים סביבך ישירות ממסך הבית שלך</string>
+app/src/main/res/values-iw/metrolist_strings.xml:432:    <string name="widget_recognizer_tap_to_search">הקש כדי לזהות שיר</string>
+app/src/main/res/values-iw/metrolist_strings.xml:433:    <string name="widget_recognizer_listening">מקשיב…</string>
+app/src/main/res/values-iw/metrolist_strings.xml:434:    <string name="widget_recognizer_processing">מזהה…</string>
+app/src/main/res/values-iw/metrolist_strings.xml:435:    <string name="widget_recognizer_no_match">לא נמצאה התאמה. נסה שוב</string>
+app/src/main/res/values-iw/metrolist_strings.xml:436:    <string name="widget_recognizer_error">הזיהוי נכשל</string>
+app/src/main/res/values-iw/metrolist_strings.xml:437:    <string name="widget_recognizer_error_generic">אירעה שגיאה. אנא נסה שוב</string>
+app/src/main/res/values-iw/metrolist_strings.xml:438:    <string name="widget_recognizer_unknown_song">שיר לא ידוע</string>
+app/src/main/res/values-iw/metrolist_strings.xml:439:    <string name="widget_recognizer_unknown_artist">אמן לא ידוע</string>
+app/src/main/res/values-iw/metrolist_strings.xml:440:    <string name="widget_recognizer_mic_desc">זיהוי שיר</string>
+app/src/main/res/values-iw/metrolist_strings.xml:441:    <string name="widget_recognizer_channel_name">זיהוי מוזיקה</string>
+app/src/main/res/values-iw/metrolist_strings.xml:442:    <string name="widget_recognizer_channel_desc">מציג התראה בעת זיהוי שיר מהווידג\'ט</string>
+app/src/main/res/values-iw/metrolist_strings.xml:443:    <string name="widget_recognizer_notification_text">הקלטת אודיו לזיהוי השיר…</string>
+app/src/main/res/values-iw/metrolist_strings.xml:616:    <string name="recognize_music">זיהוי מוזיקה</string>
+app/src/main/res/values-iw/metrolist_strings.xml:617:    <string name="tap_to_recognize">הקש כדי לזהות</string>
+app/src/main/res/values-iw/metrolist_strings.xml:629:    <string name="qs_tile_music_recognizer">זיהוי מוזיקה</string>
+app/src/main/res/values-ro/metrolist_strings.xml:469:    <string name="recognize_music">Recunoaște muzica</string>
+app/src/main/res/values-ro/metrolist_strings.xml:484:    <string name="tap_to_recognize">Atinge pentru a recunoaște</string>
+app/src/main/res/values-ro/metrolist_strings.xml:580:    <string name="widget_recognizer_name">Recunoscător de muzică</string>
+app/src/main/res/values-ro/metrolist_strings.xml:581:    <string name="widget_recognizer_description">Identifică melodiile care se redau în jurul tău direct de pe ecranul de pornire</string>
+app/src/main/res/values-ro/metrolist_strings.xml:582:    <string name="widget_recognizer_tap_to_search">Atinge pentru a identifica o melodie</string>
+app/src/main/res/values-ro/metrolist_strings.xml:583:    <string name="widget_recognizer_listening">Se ascultă…</string>
+app/src/main/res/values-ro/metrolist_strings.xml:584:    <string name="widget_recognizer_processing">Se identifică…</string>
+app/src/main/res/values-ro/metrolist_strings.xml:585:    <string name="widget_recognizer_no_match">Nicio potrivire găsită. Încearcă din nou</string>
+app/src/main/res/values-ro/metrolist_strings.xml:586:    <string name="widget_recognizer_error">Recunoaștere eșuată</string>
+app/src/main/res/values-ro/metrolist_strings.xml:587:    <string name="widget_recognizer_error_generic">Ceva nu a mers cum trebuie. Te rugăm să încerci din nou</string>
+app/src/main/res/values-ro/metrolist_strings.xml:588:    <string name="widget_recognizer_unknown_song">Melodie necunoscută</string>
+app/src/main/res/values-ro/metrolist_strings.xml:589:    <string name="widget_recognizer_unknown_artist">Artist necunoscut</string>
+app/src/main/res/values-ro/metrolist_strings.xml:590:    <string name="widget_recognizer_mic_desc">Identifică o melodie</string>
+app/src/main/res/values-ro/metrolist_strings.xml:591:    <string name="widget_recognizer_channel_name">Recunoaștere muzicală</string>
+app/src/main/res/values-ro/metrolist_strings.xml:592:    <string name="widget_recognizer_channel_desc">Arată o notificare în timpul identificării unei melodii de pe widget</string>
+app/src/main/res/values-ro/metrolist_strings.xml:593:    <string name="widget_recognizer_notification_text">Se înregistrează audio pentru identificarea melodiei…</string>
+app/src/main/res/values-ro/metrolist_strings.xml:708:    <string name="qs_tile_music_recognizer">Recunoaște muzica</string>
+app/src/main/res/values-ru/metrolist_strings.xml:473:    <string name="recognize_music">Распознать музыку</string>
+app/src/main/res/values-ru/metrolist_strings.xml:488:    <string name="tap_to_recognize">Нажмите, чтобы распознать</string>
+app/src/main/res/values-ru/metrolist_strings.xml:645:    <string name="widget_recognizer_name">Распознаватель музыки</string>
+app/src/main/res/values-ru/metrolist_strings.xml:646:    <string name="widget_recognizer_description">Узнавайте, какая музыка играет рядом, прямо с главного экрана</string>
+app/src/main/res/values-ru/metrolist_strings.xml:647:    <string name="widget_recognizer_tap_to_search">Нажмите, чтобы распознать трек</string>
+app/src/main/res/values-ru/metrolist_strings.xml:648:    <string name="widget_recognizer_listening">Слушаем…</string>
+app/src/main/res/values-ru/metrolist_strings.xml:649:    <string name="widget_recognizer_processing">Определяем…</string>
+app/src/main/res/values-ru/metrolist_strings.xml:650:    <string name="widget_recognizer_no_match">Совпадений не найдено. Попробуйте снова</string>
+app/src/main/res/values-ru/metrolist_strings.xml:651:    <string name="widget_recognizer_error">Не удалось распознать</string>
+app/src/main/res/values-ru/metrolist_strings.xml:652:    <string name="widget_recognizer_error_generic">Что-то пошло не так. Пожалуйста, попробуйте снова</string>
+app/src/main/res/values-ru/metrolist_strings.xml:653:    <string name="widget_recognizer_unknown_song">Неизвестный трек</string>
+app/src/main/res/values-ru/metrolist_strings.xml:654:    <string name="widget_recognizer_unknown_artist">Неизвестный исполнитель</string>
+app/src/main/res/values-ru/metrolist_strings.xml:655:    <string name="widget_recognizer_mic_desc">Определить трек</string>
+app/src/main/res/values-ru/metrolist_strings.xml:656:    <string name="widget_recognizer_channel_name">Распознавание музыки</string>
+app/src/main/res/values-ru/metrolist_strings.xml:657:    <string name="widget_recognizer_channel_desc">Показывает уведомление при распознавании трека через виджет</string>
+app/src/main/res/values-ru/metrolist_strings.xml:658:    <string name="widget_recognizer_notification_text">Запись звука для распознавания трека…</string>
+app/src/main/res/values-ru/metrolist_strings.xml:713:    <string name="qs_tile_music_recognizer">Распознать музыку</string>
+app/src/main/res/values-zh-rCN/metrolist_strings.xml:461:    <string name="recognize_music">识别音乐</string>
+app/src/main/res/values-zh-rCN/metrolist_strings.xml:476:    <string name="tap_to_recognize">点击识别</string>
+app/src/main/res/values-zh-rCN/metrolist_strings.xml:572:    <string name="widget_recognizer_name">音乐识别器</string>
+app/src/main/res/values-zh-rCN/metrolist_strings.xml:573:    <string name="widget_recognizer_description">直接从主屏幕识别周围播放的歌曲</string>
+app/src/main/res/values-zh-rCN/metrolist_strings.xml:574:    <string name="widget_recognizer_tap_to_search">点击识别歌曲</string>
+app/src/main/res/values-zh-rCN/metrolist_strings.xml:575:    <string name="widget_recognizer_listening">正在听…</string>
+app/src/main/res/values-zh-rCN/metrolist_strings.xml:576:    <string name="widget_recognizer_processing">正在识别…</string>
+app/src/main/res/values-zh-rCN/metrolist_strings.xml:577:    <string name="widget_recognizer_no_match">未找到匹配，请重试</string>
+app/src/main/res/values-zh-rCN/metrolist_strings.xml:578:    <string name="widget_recognizer_error">识别失败</string>
+app/src/main/res/values-zh-rCN/metrolist_strings.xml:579:    <string name="widget_recognizer_error_generic">出了点问题，请重试</string>
+app/src/main/res/values-zh-rCN/metrolist_strings.xml:580:    <string name="widget_recognizer_unknown_song">未知歌曲</string>
+app/src/main/res/values-zh-rCN/metrolist_strings.xml:581:    <string name="widget_recognizer_unknown_artist">未知音乐人</string>
+app/src/main/res/values-zh-rCN/metrolist_strings.xml:582:    <string name="widget_recognizer_mic_desc">识别歌曲</string>
+app/src/main/res/values-zh-rCN/metrolist_strings.xml:583:    <string name="widget_recognizer_channel_name">音乐识别</string>
+app/src/main/res/values-zh-rCN/metrolist_strings.xml:584:    <string name="widget_recognizer_channel_desc">在微件中识别歌曲时显示通知</string>
+app/src/main/res/values-zh-rCN/metrolist_strings.xml:585:    <string name="widget_recognizer_notification_text">正在录音以识别歌曲…</string>
+app/src/main/res/values-zh-rCN/metrolist_strings.xml:695:    <string name="qs_tile_music_recognizer">识别音乐</string>
+app/src/main/res/values-ca/metrolist_strings.xml:499:    <string name="recognize_music">Identificar Música</string>
+app/src/main/res/values-ca/metrolist_strings.xml:500:    <string name="tap_to_recognize">Toca per identificar</string>
+app/src/main/res/values-ca/metrolist_strings.xml:611:    <string name="widget_recognizer_name">Reconeixedor de música</string>
+app/src/main/res/values-ca/metrolist_strings.xml:612:    <string name="widget_recognizer_description">Reconeix les cançons que sonen al teu voltant directament des de la pantalla d\'inici</string>
+app/src/main/res/values-ca/metrolist_strings.xml:613:    <string name="widget_recognizer_tap_to_search">Prem per reconèixer la cançó</string>
+app/src/main/res/values-ca/metrolist_strings.xml:614:    <string name="widget_recognizer_listening">Escoltant…</string>
+app/src/main/res/values-ca/metrolist_strings.xml:615:    <string name="widget_recognizer_processing">Identificant…</string>
+app/src/main/res/values-ca/metrolist_strings.xml:616:    <string name="widget_recognizer_no_match">No s\'ha trobat cap coincidència. Prove de nou</string>
+app/src/main/res/values-ca/metrolist_strings.xml:617:    <string name="widget_recognizer_error">Ha fallat el reconeixement</string>
+app/src/main/res/values-ca/metrolist_strings.xml:618:    <string name="widget_recognizer_error_generic">S\'ha produït un error. Per favor, prove de nou</string>
+app/src/main/res/values-ca/metrolist_strings.xml:619:    <string name="widget_recognizer_unknown_song">Cançó desconeguda</string>
+app/src/main/res/values-ca/metrolist_strings.xml:620:    <string name="widget_recognizer_unknown_artist">Artista desconegut</string>
+app/src/main/res/values-ca/metrolist_strings.xml:621:    <string name="widget_recognizer_mic_desc">Identifica la cançó</string>
+app/src/main/res/values-ca/metrolist_strings.xml:622:    <string name="widget_recognizer_channel_name">Reconeixement de música</string>
+app/src/main/res/values-ca/metrolist_strings.xml:623:    <string name="widget_recognizer_channel_desc">Mostra una notificació en reconèixer una cançó amb el widget</string>
+app/src/main/res/values-ca/metrolist_strings.xml:624:    <string name="widget_recognizer_notification_text">Enregistrant so per identificar la cançó…</string>
+app/src/main/res/layout/widget_recognizer_wide.xml:19:        android:id="@+id/widget_recognizer_album_art"
+app/src/main/res/layout/widget_recognizer_wide.xml:28:        android:id="@+id/widget_recognizer_text_area"
+app/src/main/res/layout/widget_recognizer_wide.xml:38:            android:id="@+id/widget_recognizer_song_title"
+app/src/main/res/layout/widget_recognizer_wide.xml:46:            android:text="@string/widget_recognizer_tap_to_search" />
+app/src/main/res/layout/widget_recognizer_wide.xml:49:            android:id="@+id/widget_recognizer_artist_name"
+app/src/main/res/layout/widget_recognizer_wide.xml:68:            android:id="@+id/widget_recognizer_pulse"
+app/src/main/res/layout/widget_recognizer_wide.xml:77:            android:id="@+id/widget_recognizer_mic_container"
+app/src/main/res/layout/widget_recognizer_wide.xml:88:                android:contentDescription="@string/widget_recognizer_mic_desc" />
+app/src/main/res/layout/widget_recognizer_compact.xml:19:        android:id="@+id/widget_recognizer_album_art"
+app/src/main/res/layout/widget_recognizer_compact.xml:28:        android:id="@+id/widget_recognizer_text_area"
+app/src/main/res/layout/widget_recognizer_compact.xml:38:            android:id="@+id/widget_recognizer_song_title"
+app/src/main/res/layout/widget_recognizer_compact.xml:46:            android:text="@string/widget_recognizer_tap_to_search" />
+app/src/main/res/layout/widget_recognizer_compact.xml:49:            android:id="@+id/widget_recognizer_artist_name"
+app/src/main/res/layout/widget_recognizer_compact.xml:68:            android:id="@+id/widget_recognizer_pulse"
+app/src/main/res/layout/widget_recognizer_compact.xml:77:            android:id="@+id/widget_recognizer_mic_container"
+app/src/main/res/layout/widget_recognizer_compact.xml:88:                android:contentDescription="@string/widget_recognizer_mic_desc" />
+app/src/main/res/layout/widget_recognizer_tiny.xml:5:    android:id="@+id/widget_recognizer_tiny_root"
+app/src/main/res/layout/widget_recognizer_tiny.xml:13:        android:id="@+id/widget_recognizer_tiny_pulse"
+app/src/main/res/layout/widget_recognizer_tiny.xml:22:        android:id="@+id/widget_recognizer_tiny_mic_container"
+app/src/main/res/layout/widget_recognizer_tiny.xml:33:            android:contentDescription="@string/widget_recognizer_mic_desc" />
+app/src/main/res/values-tr/metrolist_strings.xml:465:    <string name="recognize_music">Müziği tanımla</string>
+app/src/main/res/values-tr/metrolist_strings.xml:480:    <string name="tap_to_recognize">Tanımlamak için dokunun</string>
+app/src/main/res/values-tr/metrolist_strings.xml:635:    <string name="widget_recognizer_name">Müzik Tanıyıcı</string>
+app/src/main/res/values-tr/metrolist_strings.xml:636:    <string name="widget_recognizer_description">Çevrenizde çalan şarkıları doğrudan ana ekranınızdan tanımlayın</string>
+app/src/main/res/values-tr/metrolist_strings.xml:637:    <string name="widget_recognizer_tap_to_search">Bir şarkıyı tanımlamak için dokun</string>
+app/src/main/res/values-tr/metrolist_strings.xml:638:    <string name="widget_recognizer_listening">Dinleniyor…</string>
+app/src/main/res/values-tr/metrolist_strings.xml:639:    <string name="widget_recognizer_processing">Tanımlanıyor…</string>
+app/src/main/res/values-tr/metrolist_strings.xml:640:    <string name="widget_recognizer_no_match">Eşleşme bulunamadı. Tekrar deneyin</string>
+app/src/main/res/values-tr/metrolist_strings.xml:641:    <string name="widget_recognizer_error">Tanıma başarısız</string>
+app/src/main/res/values-tr/metrolist_strings.xml:642:    <string name="widget_recognizer_error_generic">Bir sorun oluştu. Lütfen tekrar dene</string>
+app/src/main/res/values-tr/metrolist_strings.xml:643:    <string name="widget_recognizer_unknown_song">Bilinmeyen şarkı</string>
+app/src/main/res/values-tr/metrolist_strings.xml:644:    <string name="widget_recognizer_unknown_artist">Bilinmeyen sanatçı</string>
+app/src/main/res/values-tr/metrolist_strings.xml:645:    <string name="widget_recognizer_mic_desc">Şarkıyı tanımla</string>
+app/src/main/res/values-tr/metrolist_strings.xml:646:    <string name="widget_recognizer_channel_name">Müzik Tanıma</string>
+app/src/main/res/values-tr/metrolist_strings.xml:647:    <string name="widget_recognizer_channel_desc">Widget\'tan şarkı tanımlanırken bir bildirim gösterir</string>
+app/src/main/res/values-tr/metrolist_strings.xml:648:    <string name="widget_recognizer_notification_text">Şarkıyı tanımlamak için ses kaydediliyor…</string>
+app/src/main/res/values-tr/metrolist_strings.xml:694:    <string name="qs_tile_music_recognizer">Müziği Tanı</string>
+app/src/main/res/values-ja/metrolist_strings.xml:471:    <string name="recognize_music">楽曲認識</string>
+app/src/main/res/values-ja/metrolist_strings.xml:472:    <string name="tap_to_recognize">タップして開始</string>
+app/src/main/res/values-ja/metrolist_strings.xml:630:    <string name="widget_recognizer_name">楽曲認識</string>
+app/src/main/res/values-ja/metrolist_strings.xml:631:    <string name="widget_recognizer_description">周囲で流れている曲を認識できるウィジェット</string>
+app/src/main/res/values-ja/metrolist_strings.xml:632:    <string name="widget_recognizer_tap_to_search">タップして開始</string>
+app/src/main/res/values-ja/metrolist_strings.xml:633:    <string name="widget_recognizer_listening">聴き取り中…</string>
+app/src/main/res/values-ja/metrolist_strings.xml:634:    <string name="widget_recognizer_processing">認識中…</string>
+app/src/main/res/values-ja/metrolist_strings.xml:635:    <string name="widget_recognizer_no_match">一致する曲が見つかりませんでした。もう一度お試しください</string>
+app/src/main/res/values-ja/metrolist_strings.xml:636:    <string name="widget_recognizer_error">認識に失敗しました</string>
+app/src/main/res/values-ja/metrolist_strings.xml:637:    <string name="widget_recognizer_error_generic">エラーが発生しました。もう一度お試しください</string>
+app/src/main/res/values-ja/metrolist_strings.xml:638:    <string name="widget_recognizer_unknown_song">不明な曲</string>
+app/src/main/res/values-ja/metrolist_strings.xml:639:    <string name="widget_recognizer_unknown_artist">不明なアーティスト</string>
+app/src/main/res/values-ja/metrolist_strings.xml:640:    <string name="widget_recognizer_mic_desc">音楽を特定します</string>
+app/src/main/res/values-ja/metrolist_strings.xml:641:    <string name="widget_recognizer_channel_name">楽曲認識</string>
+app/src/main/res/values-ja/metrolist_strings.xml:642:    <string name="widget_recognizer_channel_desc">ウィジェットから曲を認識している間、通知を表示します</string>
+app/src/main/res/values-ja/metrolist_strings.xml:643:    <string name="widget_recognizer_notification_text">音声を録音中…</string>
+app/src/main/res/values-ja/metrolist_strings.xml:695:    <string name="qs_tile_music_recognizer">楽曲を認識</string>
+app/src/main/res/values-pt-rBR/metrolist_strings.xml:491:    <string name="recognize_music">Reconhecer música</string>
+app/src/main/res/values-pt-rBR/metrolist_strings.xml:492:    <string name="tap_to_recognize">Toque para reconhecer</string>
+app/src/main/res/values-pt-rBR/metrolist_strings.xml:640:    <string name="widget_recognizer_name">Reconhecedor de música</string>
+app/src/main/res/values-pt-rBR/metrolist_strings.xml:641:    <string name="widget_recognizer_description">Identifique músicas tocando ao seu redor diretamente da sua tela inicial</string>
+app/src/main/res/values-pt-rBR/metrolist_strings.xml:642:    <string name="widget_recognizer_tap_to_search">Toque para identificar uma música</string>
+app/src/main/res/values-pt-rBR/metrolist_strings.xml:643:    <string name="widget_recognizer_listening">Escutando…</string>
+app/src/main/res/values-pt-rBR/metrolist_strings.xml:644:    <string name="widget_recognizer_processing">Identificando…</string>
+app/src/main/res/values-pt-rBR/metrolist_strings.xml:645:    <string name="widget_recognizer_no_match">Nenhuma correspondência encontrada. Tente novamente</string>
+app/src/main/res/values-pt-rBR/metrolist_strings.xml:646:    <string name="widget_recognizer_error">Reconhecimento falhou</string>
+app/src/main/res/values-pt-rBR/metrolist_strings.xml:647:    <string name="widget_recognizer_error_generic">Algo correu mal. Por favor, tente novamente</string>
+app/src/main/res/values-pt-rBR/metrolist_strings.xml:648:    <string name="widget_recognizer_unknown_song">Música desconhecida</string>
+app/src/main/res/values-pt-rBR/metrolist_strings.xml:649:    <string name="widget_recognizer_unknown_artist">Artista desconhecido</string>
+app/src/main/res/values-pt-rBR/metrolist_strings.xml:650:    <string name="widget_recognizer_mic_desc">Identificar uma música</string>
+app/src/main/res/values-pt-rBR/metrolist_strings.xml:651:    <string name="widget_recognizer_channel_name">Reconhecimento de música</string>
+app/src/main/res/values-pt-rBR/metrolist_strings.xml:652:    <string name="widget_recognizer_channel_desc">Mostra uma notificação enquanto identifica uma música do widget</string>
+app/src/main/res/values-pt-rBR/metrolist_strings.xml:653:    <string name="widget_recognizer_notification_text">Gravando áudio para identificar a música…</string>
+app/src/main/res/values-pt-rBR/metrolist_strings.xml:707:    <string name="qs_tile_music_recognizer">Reconhecer música</string>
+app/src/main/res/values-fr/metrolist_strings.xml:469:    <string name="recognize_music">Reconnaître la musique</string>
+app/src/main/res/values-fr/metrolist_strings.xml:484:    <string name="tap_to_recognize">Appuyez pour reconnaître</string>
+app/src/main/res/values-fr/metrolist_strings.xml:640:    <string name="widget_recognizer_name">Reconnaissance Musicale</string>
+app/src/main/res/values-fr/metrolist_strings.xml:641:    <string name="widget_recognizer_description">Identifiez les titres diffusés autour de vous directement depuis votre écran d\'accueil</string>
+app/src/main/res/values-fr/metrolist_strings.xml:642:    <string name="widget_recognizer_tap_to_search">Appuyez pour identifier un titre</string>
+app/src/main/res/values-fr/metrolist_strings.xml:643:    <string name="widget_recognizer_listening">En cours d\'écoute…</string>
+app/src/main/res/values-fr/metrolist_strings.xml:644:    <string name="widget_recognizer_processing">Identification…</string>
+app/src/main/res/values-fr/metrolist_strings.xml:645:    <string name="widget_recognizer_no_match">Aucun résultat trouvé. Veuillez réessayer</string>
+app/src/main/res/values-fr/metrolist_strings.xml:646:    <string name="widget_recognizer_error">Échec de la reconnaissance</string>
+app/src/main/res/values-fr/metrolist_strings.xml:647:    <string name="widget_recognizer_error_generic">Une erreur s\'est produite. Veuillez réessayer</string>
+app/src/main/res/values-fr/metrolist_strings.xml:648:    <string name="widget_recognizer_unknown_song">Titre inconnu</string>
+app/src/main/res/values-fr/metrolist_strings.xml:649:    <string name="widget_recognizer_unknown_artist">Artiste inconnu</string>
+app/src/main/res/values-fr/metrolist_strings.xml:650:    <string name="widget_recognizer_mic_desc">Identifier un titre</string>
+app/src/main/res/values-fr/metrolist_strings.xml:651:    <string name="widget_recognizer_channel_name">Reconnaissance Musicale</string>
+app/src/main/res/values-fr/metrolist_strings.xml:652:    <string name="widget_recognizer_channel_desc">Affiche une notification lors de l\'identification d\'un titre à partir du widget</string>
+app/src/main/res/values-fr/metrolist_strings.xml:653:    <string name="widget_recognizer_notification_text">Enregistrement audio pour identifier le titre…</string>
+app/src/main/res/values-fr/metrolist_strings.xml:707:    <string name="qs_tile_music_recognizer">Reconnaître la musique</string>
+app/src/main/res/xml/recognizer_widget_info.xml:8:    android:previewLayout="@layout/widget_recognizer_wide"
+app/src/main/res/xml/recognizer_widget_info.xml:9:    android:initialLayout="@layout/widget_recognizer_wide"
+app/src/main/res/xml/recognizer_widget_info.xml:10:    android:description="@string/widget_recognizer_description"
+app/src/main/res/values-uk/metrolist_strings.xml:471:    <string name="widget_recognizer_name">Розпізнавач музики</string>
+app/src/main/res/values-uk/metrolist_strings.xml:472:    <string name="widget_recognizer_description">Дізнавайтеся, яка пісня лунає навколо, прямо з головного екрана</string>
+app/src/main/res/values-uk/metrolist_strings.xml:473:    <string name="widget_recognizer_tap_to_search">Натисніть, щоб розпізнати пісню</string>
+app/src/main/res/values-uk/metrolist_strings.xml:474:    <string name="widget_recognizer_listening">Слухаю…</string>
+app/src/main/res/values-uk/metrolist_strings.xml:475:    <string name="widget_recognizer_processing">Визначення…</string>
+app/src/main/res/values-uk/metrolist_strings.xml:476:    <string name="widget_recognizer_no_match">Збігів не знайдено. Спробуйте ще раз</string>
+app/src/main/res/values-uk/metrolist_strings.xml:477:    <string name="widget_recognizer_error">Не вдалося розпізнати</string>
+app/src/main/res/values-uk/metrolist_strings.xml:478:    <string name="widget_recognizer_error_generic">Щось пішло не так. Будь ласка, спробуйте знову</string>
+app/src/main/res/values-uk/metrolist_strings.xml:479:    <string name="widget_recognizer_unknown_song">Невідома пісня</string>
+app/src/main/res/values-uk/metrolist_strings.xml:480:    <string name="widget_recognizer_unknown_artist">Невідомий виконавець</string>
+app/src/main/res/values-uk/metrolist_strings.xml:481:    <string name="widget_recognizer_mic_desc">Визначити пісню</string>
+app/src/main/res/values-uk/metrolist_strings.xml:482:    <string name="widget_recognizer_channel_name">Розпізнавання музики</string>
+app/src/main/res/values-uk/metrolist_strings.xml:483:    <string name="widget_recognizer_channel_desc">Показує сповіщення під час пошуку пісні через віджет</string>
+app/src/main/res/values-uk/metrolist_strings.xml:484:    <string name="widget_recognizer_notification_text">Запис аудіо для розпізнавання пісні…</string>
+app/src/main/res/values-uk/metrolist_strings.xml:557:    <string name="recognize_music">Розпізнати музики</string>
+app/src/main/res/values-uk/metrolist_strings.xml:558:    <string name="tap_to_recognize">Торкніться, щоб розпізнати</string>
+app/src/main/res/values-cs/metrolist_strings.xml:451:    <string name="recognize_music">Rozpoznat hudbu</string>
+app/src/main/res/values-cs/metrolist_strings.xml:484:    <string name="tap_to_recognize">Klepněte pro rozpoznání</string>
+app/src/main/res/values-cs/metrolist_strings.xml:657:    <string name="widget_recognizer_name">Rozpoznávání hudby</string>
+app/src/main/res/values-cs/metrolist_strings.xml:658:    <string name="widget_recognizer_description">Identifikuje skladby hrající kolem vás přímo z vaší domovské obrazovky</string>
+app/src/main/res/values-cs/metrolist_strings.xml:659:    <string name="widget_recognizer_tap_to_search">Klepněte pro identifikaci skladby</string>
+app/src/main/res/values-cs/metrolist_strings.xml:660:    <string name="widget_recognizer_listening">Poslouchám…</string>
+app/src/main/res/values-cs/metrolist_strings.xml:661:    <string name="widget_recognizer_processing">Identifikuji…</string>
+app/src/main/res/values-cs/metrolist_strings.xml:662:    <string name="widget_recognizer_no_match">Nenalezena žádná shoda. Zkuste to znovu</string>
+app/src/main/res/values-cs/metrolist_strings.xml:663:    <string name="widget_recognizer_error">Rozpoznání selhalo</string>
+app/src/main/res/values-cs/metrolist_strings.xml:664:    <string name="widget_recognizer_error_generic">Něco se pokazilo. Zkuste to prosím znovu</string>
+app/src/main/res/values-cs/metrolist_strings.xml:665:    <string name="widget_recognizer_unknown_song">Neznámá skladba</string>
+app/src/main/res/values-cs/metrolist_strings.xml:666:    <string name="widget_recognizer_unknown_artist">Neznámý umělec</string>
+app/src/main/res/values-cs/metrolist_strings.xml:667:    <string name="widget_recognizer_mic_desc">Identifikovat skladbu</string>
+app/src/main/res/values-cs/metrolist_strings.xml:668:    <string name="widget_recognizer_channel_name">Rozpoznání hudby</string>
+app/src/main/res/values-cs/metrolist_strings.xml:669:    <string name="widget_recognizer_channel_desc">Zobrazit oznámení během identifikace skladby z widgetu</string>
+app/src/main/res/values-cs/metrolist_strings.xml:670:    <string name="widget_recognizer_notification_text">Nahrávání zvuku pro identifikaci skladby…</string>
+app/src/main/res/values-cs/metrolist_strings.xml:713:    <string name="qs_tile_music_recognizer">Rozpoznat hudbu</string>
+app/src/main/res/values-hu/metrolist_strings.xml:449:    <string name="recognize_music">Zene Felismerése</string>
+app/src/main/res/values-hu/metrolist_strings.xml:450:    <string name="tap_to_recognize">Koppintson a felismeréshez</string>
+app/src/main/res/values-hu/metrolist_strings.xml:462:    <string name="qs_tile_music_recognizer">Zenefelismerés</string>
+app/src/main/res/values-hu/metrolist_strings.xml:624:    <string name="widget_recognizer_name">Zene felismerő</string>
+app/src/main/res/values-hu/metrolist_strings.xml:625:    <string name="widget_recognizer_description">A hallható dalok felismerése közvetlenül a kezdőképernyődről</string>
+app/src/main/res/values-hu/metrolist_strings.xml:626:    <string name="widget_recognizer_tap_to_search">Koppintson a dal felismeréséhez</string>
+app/src/main/res/values-hu/metrolist_strings.xml:627:    <string name="widget_recognizer_listening">Hallgatózás…</string>
+app/src/main/res/values-hu/metrolist_strings.xml:628:    <string name="widget_recognizer_processing">Felismerés…</string>
+app/src/main/res/values-hu/metrolist_strings.xml:629:    <string name="widget_recognizer_no_match">Nincs találat. Próbálja újra</string>
+app/src/main/res/values-hu/metrolist_strings.xml:630:    <string name="widget_recognizer_error">Felismerés sikertelen</string>
+app/src/main/res/values-hu/metrolist_strings.xml:631:    <string name="widget_recognizer_error_generic">Hiba lépett fel. Próbálja újra</string>
+app/src/main/res/values-hu/metrolist_strings.xml:632:    <string name="widget_recognizer_unknown_song">Ismeretlen dal</string>
+app/src/main/res/values-hu/metrolist_strings.xml:633:    <string name="widget_recognizer_unknown_artist">Ismeretlen előadó</string>
+app/src/main/res/values-hu/metrolist_strings.xml:634:    <string name="widget_recognizer_mic_desc">Dal felismerése</string>
+app/src/main/res/values-hu/metrolist_strings.xml:635:    <string name="widget_recognizer_channel_name">Zene felismerés</string>
+app/src/main/res/values-hu/metrolist_strings.xml:636:    <string name="widget_recognizer_channel_desc">Értesítés a widget-ből indított zenefelismerés közben</string>
+app/src/main/res/values-hu/metrolist_strings.xml:637:    <string name="widget_recognizer_notification_text">Hang rögzítése a zenefelismeréshez…</string>
+app/src/main/res/values-bn/metrolist_strings.xml:355:    <string name="widget_recognizer_name">সঙ্গীত শনাক্তকারী</string>
+app/src/main/res/values-bn/metrolist_strings.xml:356:    <string name="widget_recognizer_description">আপনার হোম স্ক্রীন থেকেই সরাসরি আপনার আশেপাশে বাজতে থাকা গানগুলো শনাক্ত করুন</string>
+app/src/main/res/values-bn/metrolist_strings.xml:357:    <string name="widget_recognizer_tap_to_search">গান শনাক্ত করতে ট্যাপ করুন</string>
+app/src/main/res/values-bn/metrolist_strings.xml:358:    <string name="widget_recognizer_listening">শুনছি…</string>
+app/src/main/res/values-bn/metrolist_strings.xml:359:    <string name="widget_recognizer_processing">শনাক্ত করা হচ্ছে…</string>
+app/src/main/res/values-bn/metrolist_strings.xml:360:    <string name="widget_recognizer_no_match">কোনো মিল খুঁজে পাওয়া যায়নি। আবার চেষ্টা করুন</string>
+app/src/main/res/values-bn/metrolist_strings.xml:361:    <string name="widget_recognizer_error">শনাক্তকরণ ব্যর্থ হয়েছে</string>
+app/src/main/res/values-bn/metrolist_strings.xml:362:    <string name="widget_recognizer_error_generic">কিছু একটা ভুল হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন</string>
+app/src/main/res/values-bn/metrolist_strings.xml:363:    <string name="widget_recognizer_unknown_song">অজানা সঙ্গীত</string>
+app/src/main/res/values-bn/metrolist_strings.xml:364:    <string name="widget_recognizer_unknown_artist">অজানা শিল্পী</string>
+app/src/main/res/values-bn/metrolist_strings.xml:365:    <string name="widget_recognizer_mic_desc">একটি গান শনাক্ত করুন</string>
+app/src/main/res/values-bn/metrolist_strings.xml:366:    <string name="widget_recognizer_channel_name">সঙ্গীত শনাক্তকরণ</string>
+app/src/main/res/values-bn/metrolist_strings.xml:367:    <string name="widget_recognizer_channel_desc">উইজেট থেকে গান শনাক্ত করার সময় একটি নোটিফিকেশন দেখায়</string>
+app/src/main/res/values-bn/metrolist_strings.xml:368:    <string name="widget_recognizer_notification_text">গানটি শনাক্ত করার জন্য অডিও রেকর্ড করা হচ্ছে…</string>
+app/src/main/res/values-bn/metrolist_strings.xml:779:    <string name="recognize_music">সঙ্গীত শনাক্তকরণ করুন</string>
+app/src/main/res/values-bn/metrolist_strings.xml:780:    <string name="tap_to_recognize">শনাক্তকরণ করতে ট্যাপ করুন</string>
+app/src/main/res/values-bn/metrolist_strings.xml:792:    <string name="qs_tile_music_recognizer">সঙ্গীত শনাক্তকরণ করুন</string>
+app/src/main/res/values-el/metrolist_strings.xml:322:    <string name="qs_tile_music_recognizer">Αναγνώριση Μουσικής</string>
+app/src/main/res/values-pl/metrolist_strings.xml:453:    <string name="widget_recognizer_name">Rozpoznawanie Muzyki</string>
+app/src/main/res/values-pl/metrolist_strings.xml:454:    <string name="widget_recognizer_description">Identyfikuj utwory odtwarzane dookoła ciebie bezpośrednio z ekranu głównego</string>
+app/src/main/res/values-pl/metrolist_strings.xml:455:    <string name="widget_recognizer_tap_to_search">Dotknij, aby zidentyfikować piosenkę</string>
+app/src/main/res/values-pl/metrolist_strings.xml:456:    <string name="widget_recognizer_listening">Słuchanie…</string>
+app/src/main/res/values-pl/metrolist_strings.xml:457:    <string name="widget_recognizer_processing">Identyfikowanie…</string>
+app/src/main/res/values-pl/metrolist_strings.xml:458:    <string name="widget_recognizer_no_match">Brak pasujących wyników. Spróbuj ponownie</string>
+app/src/main/res/values-pl/metrolist_strings.xml:459:    <string name="widget_recognizer_error">Rozpoznanie nie powiodło się</string>
+app/src/main/res/values-pl/metrolist_strings.xml:460:    <string name="widget_recognizer_error_generic">Wystąpił błąd. Spróbuj ponownie</string>
+app/src/main/res/values-pl/metrolist_strings.xml:461:    <string name="widget_recognizer_unknown_song">Nieznana piosenka</string>
+app/src/main/res/values-pl/metrolist_strings.xml:462:    <string name="widget_recognizer_unknown_artist">Nieznany artysta</string>
+app/src/main/res/values-pl/metrolist_strings.xml:463:    <string name="widget_recognizer_mic_desc">Zidentyfikuj piosenkę</string>
+app/src/main/res/values-pl/metrolist_strings.xml:464:    <string name="widget_recognizer_channel_name">Rozpoznawanie muzyki</string>
+app/src/main/res/values-pl/metrolist_strings.xml:465:    <string name="widget_recognizer_channel_desc">Wyświetla powiadomienie podczas identyfikowania utworu z widżetu</string>
+app/src/main/res/values-pl/metrolist_strings.xml:466:    <string name="widget_recognizer_notification_text">Nagrywanie dźwięku w celu identyfikacji utworu…</string>
+app/src/main/res/values-pl/metrolist_strings.xml:601:    <string name="recognize_music">Rozpoznawanie Muzyki</string>
+app/src/main/res/values-pl/metrolist_strings.xml:602:    <string name="tap_to_recognize">Dotknij, aby rozpoznać</string>
+app/src/main/res/values-pl/metrolist_strings.xml:614:    <string name="qs_tile_music_recognizer">Rozpoznawaj muzykę</string>
+app/src/main/res/values-zh-rTW/metrolist_strings.xml:403:    <string name="qs_tile_music_recognizer">辨識音樂</string>
+app/src/main/res/values-zh-rTW/metrolist_strings.xml:415:    <string name="tap_to_recognize">點擊開始</string>
+app/src/main/res/values-zh-rTW/metrolist_strings.xml:416:    <string name="recognize_music">辨識音樂</string>
+app/src/main/res/values-zh-rTW/metrolist_strings.xml:579:    <string name="widget_recognizer_name">音樂辨識器</string>
+app/src/main/res/values-zh-rTW/metrolist_strings.xml:580:    <string name="widget_recognizer_description">直接從主畫面辨識周圍正在播放的歌曲</string>
+app/src/main/res/values-zh-rTW/metrolist_strings.xml:581:    <string name="widget_recognizer_tap_to_search">點擊識別歌曲</string>
+app/src/main/res/values-zh-rTW/metrolist_strings.xml:582:    <string name="widget_recognizer_listening">正在聽…</string>
+app/src/main/res/values-zh-rTW/metrolist_strings.xml:601:    <string name="widget_recognizer_processing">正在識別…</string>
+app/src/main/res/values-zh-rTW/metrolist_strings.xml:602:    <string name="widget_recognizer_no_match">未找到匹配項。請重試</string>
+app/src/main/res/values-zh-rTW/metrolist_strings.xml:603:    <string name="widget_recognizer_error">識別失敗</string>
+app/src/main/res/values-zh-rTW/metrolist_strings.xml:604:    <string name="widget_recognizer_error_generic">發生錯誤，請重試</string>
+app/src/main/res/values-zh-rTW/metrolist_strings.xml:605:    <string name="widget_recognizer_unknown_song">未知歌曲</string>
+app/src/main/res/values-zh-rTW/metrolist_strings.xml:606:    <string name="widget_recognizer_unknown_artist">未知藝術家</string>
+app/src/main/res/values-zh-rTW/metrolist_strings.xml:607:    <string name="widget_recognizer_mic_desc">辨識歌曲</string>
+app/src/main/res/values-zh-rTW/metrolist_strings.xml:608:    <string name="widget_recognizer_channel_name">音樂識別</string>
+app/src/main/res/values-zh-rTW/metrolist_strings.xml:609:    <string name="widget_recognizer_channel_desc">在小工具辨識歌曲時顯示通知</string>
+app/src/main/res/values-zh-rTW/metrolist_strings.xml:610:    <string name="widget_recognizer_notification_text">錄製音訊以識別歌曲…</string>
+app/src/main/res/values-eu/metrolist_strings.xml:513:    <string name="widget_recognizer_name">Musika-ezagutzailea</string>
+app/src/main/res/values-eu/metrolist_strings.xml:514:    <string name="widget_recognizer_description">Zure inguruan entzuten dituzun abestiak ezagutu etxeko pantailatik zuzenean</string>
+app/src/main/res/values-eu/metrolist_strings.xml:515:    <string name="widget_recognizer_tap_to_search">Sakatu abestia ezagutzeko</string>
+app/src/main/res/values-eu/metrolist_strings.xml:516:    <string name="widget_recognizer_listening">Entzuten…</string>
+app/src/main/res/values-eu/metrolist_strings.xml:517:    <string name="widget_recognizer_processing">Identifikatzen…</string>
+app/src/main/res/values-eu/metrolist_strings.xml:518:    <string name="widget_recognizer_no_match">Ez da parekorik aurkitu. Berriz saiatu</string>
+app/src/main/res/values-eu/metrolist_strings.xml:519:    <string name="widget_recognizer_error">Ezagutzean akatsa</string>
+app/src/main/res/values-eu/metrolist_strings.xml:520:    <string name="widget_recognizer_error_generic">Akats bat izan da. Mesedez saiatu berriro</string>
+app/src/main/res/values-eu/metrolist_strings.xml:521:    <string name="widget_recognizer_unknown_song">Abesti ezezaguna</string>
+app/src/main/res/values-eu/metrolist_strings.xml:522:    <string name="widget_recognizer_unknown_artist">Egile ezezaguna</string>
+app/src/main/res/values-eu/metrolist_strings.xml:523:    <string name="widget_recognizer_mic_desc">Abesti bat ezagutu</string>
+app/src/main/res/values-eu/metrolist_strings.xml:524:    <string name="widget_recognizer_channel_name">Musika-ezagutzea</string>
+app/src/main/res/values-es/metrolist_strings.xml:469:    <string name="recognize_music">Identificar música</string>
+app/src/main/res/values-es/metrolist_strings.xml:484:    <string name="tap_to_recognize">Toca para identificar</string>
+app/src/main/res/values-es/metrolist_strings.xml:640:    <string name="widget_recognizer_name">Identificador de música</string>
+app/src/main/res/values-es/metrolist_strings.xml:641:    <string name="widget_recognizer_description">Identifica canciones que suenan a tu alrededor directamente desde tu pantalla de inicio</string>
+app/src/main/res/values-es/metrolist_strings.xml:642:    <string name="widget_recognizer_tap_to_search">Toca para identificar una canción</string>
+app/src/main/res/values-es/metrolist_strings.xml:643:    <string name="widget_recognizer_listening">Escuchando…</string>
+app/src/main/res/values-es/metrolist_strings.xml:644:    <string name="widget_recognizer_processing">Identificando…</string>
+app/src/main/res/values-es/metrolist_strings.xml:645:    <string name="widget_recognizer_no_match">No se encontraron coincidencias. Inténtalo de nuevo</string>
+app/src/main/res/values-es/metrolist_strings.xml:646:    <string name="widget_recognizer_error">Identificación fallida</string>
+app/src/main/res/values-es/metrolist_strings.xml:647:    <string name="widget_recognizer_error_generic">Algo salió mal. Inténtalo de nuevo</string>
+app/src/main/res/values-es/metrolist_strings.xml:648:    <string name="widget_recognizer_unknown_song">Canción desconocida</string>
+app/src/main/res/values-es/metrolist_strings.xml:649:    <string name="widget_recognizer_unknown_artist">Artista desconocido</string>
+app/src/main/res/values-es/metrolist_strings.xml:650:    <string name="widget_recognizer_mic_desc">Identificar una canción</string>
+app/src/main/res/values-es/metrolist_strings.xml:651:    <string name="widget_recognizer_channel_name">Identificación de música</string>
+app/src/main/res/values-es/metrolist_strings.xml:652:    <string name="widget_recognizer_channel_desc">Muestra una notificación mientras se identifica una canción desde el widget</string>
+app/src/main/res/values-es/metrolist_strings.xml:653:    <string name="widget_recognizer_notification_text">Grabando audio para identificar la canción…</string>
+app/src/main/res/values-es/metrolist_strings.xml:707:    <string name="qs_tile_music_recognizer">Identificar música</string>
+app/src/main/res/values-ar/metrolist_strings.xml:457:    <string name="recognize_music">التعرف على الموسيقى</string>
+app/src/main/res/values-ar/metrolist_strings.xml:490:    <string name="tap_to_recognize">انقر للتعرف</string>
+app/src/main/res/values-ar/metrolist_strings.xml:655:    <string name="widget_recognizer_name">التعرف على الموسيقى</string>
+app/src/main/res/values-ar/metrolist_strings.xml:656:    <string name="widget_recognizer_description">حدد الأغاني التي يتم تشغيلها من حولك مباشرة من شاشتك الرئيسية</string>
+app/src/main/res/values-ar/metrolist_strings.xml:657:    <string name="widget_recognizer_tap_to_search">انقر لتحديد الأغنية</string>
+app/src/main/res/values-ar/metrolist_strings.xml:658:    <string name="widget_recognizer_listening">جارٍ الاستماع…</string>
+app/src/main/res/values-ar/metrolist_strings.xml:659:    <string name="widget_recognizer_processing">جارٍ تحديد…</string>
+app/src/main/res/values-ar/metrolist_strings.xml:660:    <string name="widget_recognizer_no_match">لم يتم العثور على تطابق. حاول مرة أخرى</string>
+app/src/main/res/values-ar/metrolist_strings.xml:661:    <string name="widget_recognizer_error">فشل التعرّف</string>
+app/src/main/res/values-ar/metrolist_strings.xml:662:    <string name="widget_recognizer_error_generic">مرة أخرى حدث خطأ، يرجى المحاولة</string>
+app/src/main/res/values-ar/metrolist_strings.xml:663:    <string name="widget_recognizer_unknown_song">أغنية غير معروفة</string>
+app/src/main/res/values-ar/metrolist_strings.xml:664:    <string name="widget_recognizer_unknown_artist">فنان مجهول</string>
+app/src/main/res/values-ar/metrolist_strings.xml:665:    <string name="widget_recognizer_mic_desc">تحديد الأغنية</string>
+app/src/main/res/values-ar/metrolist_strings.xml:666:    <string name="widget_recognizer_channel_name">التعرف على الموسيقى</string>
+app/src/main/res/values-ar/metrolist_strings.xml:667:    <string name="widget_recognizer_channel_desc">يعرض إشعارًا أثناء تحديد أغنية من الأداة</string>
+app/src/main/res/values-ar/metrolist_strings.xml:668:    <string name="widget_recognizer_notification_text">تسجيل الصوت لتحديد الأغنية…</string>
+app/src/main/res/values-ar/metrolist_strings.xml:695:    <string name="qs_tile_music_recognizer">التعرف على الموسيقى</string>
+app/src/main/res/values-nl/metrolist_strings.xml:248:    <string name="recognize_music">Muziek herkennen</string>
+app/src/main/res/values-nl/metrolist_strings.xml:249:    <string name="tap_to_recognize">Tik om te herkennen</string>
+app/src/main/res/values-ko/metrolist_strings.xml:194:    <string name="widget_recognizer_name">노래 검색기</string>
+app/src/main/res/values-ko/metrolist_strings.xml:201:    <string name="widget_recognizer_description">홈 화면에서 주변 노래 검색</string>
+app/src/main/res/values-ko/metrolist_strings.xml:202:    <string name="widget_recognizer_tap_to_search">탭하여 노래 검색</string>
+app/src/main/res/values-ko/metrolist_strings.xml:203:    <string name="widget_recognizer_listening">듣는 중…</string>
+app/src/main/res/values-ko/metrolist_strings.xml:204:    <string name="widget_recognizer_processing">분석 중…</string>
+app/src/main/res/values-ko/metrolist_strings.xml:205:    <string name="widget_recognizer_no_match">일치하는 곡을 찾을 수 없습니다. 다시 시도해 주십시오</string>
+app/src/main/res/values-ko/metrolist_strings.xml:206:    <string name="widget_recognizer_error">검색 실패</string>
+app/src/main/res/values-ko/metrolist_strings.xml:207:    <string name="widget_recognizer_error_generic">오류가 발생했습니다. 다시 시도해 주십시오</string>
+app/src/main/res/values-ko/metrolist_strings.xml:208:    <string name="widget_recognizer_unknown_song">알 수 없는 노래</string>
+app/src/main/res/values-ko/metrolist_strings.xml:209:    <string name="widget_recognizer_unknown_artist">알 수 없는 아티스트</string>
+app/src/main/res/values-ko/metrolist_strings.xml:210:    <string name="widget_recognizer_mic_desc">노래 검색</string>
+app/src/main/res/values-ko/metrolist_strings.xml:211:    <string name="widget_recognizer_channel_name">노래 검색</string>
+app/src/main/res/values-ko/metrolist_strings.xml:212:    <string name="widget_recognizer_notification_text">노래 검색을 위해 오디오 녹음 중…</string>
+app/src/main/res/values-ko/metrolist_strings.xml:213:    <string name="widget_recognizer_channel_desc">위젯에서 노래 검색 시 알림을 표시합니다</string>
+app/src/main/res/values-ko/metrolist_strings.xml:459:    <string name="recognize_music">노래 검색</string>
+app/src/main/res/values-ko/metrolist_strings.xml:460:    <string name="tap_to_recognize">탭하여 노래 검색</string>
+app/src/main/res/values-ko/metrolist_strings.xml:472:    <string name="qs_tile_music_recognizer">노래 검색</string>
+app/src/main/res/values-gl/metrolist_strings.xml:387:    <string name="recognize_music">Recoñecer música</string>
+app/src/main/res/values-gl/metrolist_strings.xml:388:    <string name="tap_to_recognize">Preme para recoñecer</string>
+app/src/main/res/values-gl/metrolist_strings.xml:400:    <string name="qs_tile_music_recognizer">Recoñecer música</string>
+app/src/main/res/values-gl/metrolist_strings.xml:681:    <string name="widget_recognizer_name">Identificador de música</string>
+app/src/main/res/values-gl/metrolist_strings.xml:682:    <string name="widget_recognizer_description">Identificar cancións que soan ao redor túa directamente desde a túa pantalla de inicio</string>
+app/src/main/res/values-gl/metrolist_strings.xml:683:    <string name="widget_recognizer_tap_to_search">Preme para identificar unha canción</string>
+app/src/main/res/values-gl/metrolist_strings.xml:684:    <string name="widget_recognizer_listening">Escoitando…</string>
+app/src/main/res/values-gl/metrolist_strings.xml:685:    <string name="widget_recognizer_processing">Identificando…</string>
+app/src/main/res/values-gl/metrolist_strings.xml:686:    <string name="widget_recognizer_no_match">Non se atoparon coincidencias. Téntao de novo</string>
+app/src/main/res/values-gl/metrolist_strings.xml:687:    <string name="widget_recognizer_error">Fallou a identificación</string>
+app/src/main/res/values-gl/metrolist_strings.xml:688:    <string name="widget_recognizer_error_generic">Algo foi mal. Por favor, téntao de novo</string>
+app/src/main/res/values-gl/metrolist_strings.xml:689:    <string name="widget_recognizer_unknown_song">Canción descoñecida</string>
+app/src/main/res/values-gl/metrolist_strings.xml:690:    <string name="widget_recognizer_unknown_artist">Artista descoñecido</string>
+app/src/main/res/values-gl/metrolist_strings.xml:691:    <string name="widget_recognizer_mic_desc">Identificar unha canción</string>
+app/src/main/res/values-gl/metrolist_strings.xml:692:    <string name="widget_recognizer_channel_name">Recoñecemento de música</string>
+app/src/main/res/values-gl/metrolist_strings.xml:693:    <string name="widget_recognizer_channel_desc">Amosa unha notificación mentres se identifica unha canción desde o widget</string>
+app/src/main/res/values-gl/metrolist_strings.xml:694:    <string name="widget_recognizer_notification_text">Gravando audio para identificar a canción…</string>
+app/src/main/res/values-th/metrolist_strings.xml:475:    <string name="recognize_music">ค้นหาเพลงจากเสียง</string>
+app/src/main/res/values-th/metrolist_strings.xml:476:    <string name="tap_to_recognize">แตะเพื่อค้นหาเพลง</string>
+app/src/main/res/values-th/metrolist_strings.xml:630:    <string name="widget_recognizer_name">ระบบค้นหาเพลง</string>
+app/src/main/res/values-th/metrolist_strings.xml:631:    <string name="widget_recognizer_description">ระบุชื่อเพลงที่กำลังเล่นรอบตัวคุณได้จากหน้าจอหลักโดยตรง</string>
+app/src/main/res/values-th/metrolist_strings.xml:632:    <string name="widget_recognizer_tap_to_search">แตะเพื่อค้นหาเพลง</string>
+app/src/main/res/values-th/metrolist_strings.xml:633:    <string name="widget_recognizer_listening">กำลังฟัง…</string>
+app/src/main/res/values-th/metrolist_strings.xml:634:    <string name="widget_recognizer_processing">กำลังระบุเพลง…</string>
+app/src/main/res/values-th/metrolist_strings.xml:635:    <string name="widget_recognizer_no_match">ไม่พบเพลงที่ตรงกัน ลองใหม่อีกครั้ง</string>
+app/src/main/res/values-th/metrolist_strings.xml:636:    <string name="widget_recognizer_error">การค้นหาเพลงล้มเหลว</string>
+app/src/main/res/values-th/metrolist_strings.xml:637:    <string name="widget_recognizer_error_generic">มีบางอย่างผิดพลาด กรุณาลองใหม่อีกครั้ง</string>
+app/src/main/res/values-th/metrolist_strings.xml:638:    <string name="widget_recognizer_unknown_song">ไม่ทราบชื่อเพลง</string>
+app/src/main/res/values-th/metrolist_strings.xml:639:    <string name="widget_recognizer_unknown_artist">ไม่ทราบชื่อศิลปิน</string>
+app/src/main/res/values-th/metrolist_strings.xml:640:    <string name="widget_recognizer_mic_desc">ค้นหาเพลง</string>
+app/src/main/res/values-th/metrolist_strings.xml:641:    <string name="widget_recognizer_channel_name">การค้นหาเพลง</string>
+app/src/main/res/values-th/metrolist_strings.xml:642:    <string name="widget_recognizer_channel_desc">แสดงการแจ้งเตือนขณะกำลังค้นหาเพลงจากวิดเจ็ต</string>
+app/src/main/res/values-th/metrolist_strings.xml:643:    <string name="widget_recognizer_notification_text">กำลังบันทึกเสียงเพื่อระบุเพลง…</string>
+app/src/main/res/values-th/metrolist_strings.xml:822:    <string name="qs_tile_music_recognizer">ระบุเพลง</string>
+app/src/main/res/values-es-rUS/metrolist_strings.xml:504:    <string name="recognize_music">Reconocer música</string>
+app/src/main/res/values-es-rUS/metrolist_strings.xml:505:    <string name="tap_to_recognize">Toca para identificar</string>
+app/src/main/res/values-es-rUS/metrolist_strings.xml:702:    <string name="widget_recognizer_name">Reconocimiento de canción</string>
+app/src/main/res/values-es-rUS/metrolist_strings.xml:703:    <string name="widget_recognizer_description">Identifica la canción que se está reproduciendo directamente desde tu pantalla de inicio</string>
+app/src/main/res/values-es-rUS/metrolist_strings.xml:704:    <string name="widget_recognizer_tap_to_search">Presiona para identificar</string>
+app/src/main/res/values-es-rUS/metrolist_strings.xml:705:    <string name="widget_recognizer_listening">Escuchando…</string>
+app/src/main/res/values-es-rUS/metrolist_strings.xml:706:    <string name="widget_recognizer_processing">Identificando…</string>
+app/src/main/res/values-es-rUS/metrolist_strings.xml:707:    <string name="widget_recognizer_no_match">Sin coincidencias, intente denuevo</string>
+app/src/main/res/values-es-rUS/metrolist_strings.xml:708:    <string name="widget_recognizer_error">Error al intentar reconocer</string>
+app/src/main/res/values-es-rUS/metrolist_strings.xml:709:    <string name="widget_recognizer_error_generic">Algo salió mal, vuelve a intentarlo</string>
+app/src/main/res/values-es-rUS/metrolist_strings.xml:710:    <string name="widget_recognizer_unknown_song">Canción desconocida</string>
+app/src/main/res/values-es-rUS/metrolist_strings.xml:711:    <string name="widget_recognizer_unknown_artist">Artista desconocido</string>
+app/src/main/res/values-es-rUS/metrolist_strings.xml:712:    <string name="widget_recognizer_mic_desc">Identifica la canción</string>
+app/src/main/res/values-es-rUS/metrolist_strings.xml:713:    <string name="widget_recognizer_channel_name">Reconocimiento de musica</string>
+app/src/main/res/values-es-rUS/metrolist_strings.xml:714:    <string name="widget_recognizer_channel_desc">Muestra una notificación mientras se esta identificando una canción desde el widget</string>
+app/src/main/res/values-es-rUS/metrolist_strings.xml:715:    <string name="widget_recognizer_notification_text">Grabando audio para identificar la canción…</string>
+app/src/main/res/values-es-rUS/metrolist_strings.xml:726:    <string name="qs_tile_music_recognizer">Reconocer musica</string>
+app/src/main/res/values-vi/metrolist_strings.xml:599:    <string name="widget_recognizer_name">Nhận dạng âm nhạc</string>
+app/src/main/res/values-vi/metrolist_strings.xml:600:    <string name="widget_recognizer_description">Nhận dạng những bài hát đang phát xung quanh bạn trực tiếp từ màn hình chính</string>
+app/src/main/res/values-vi/metrolist_strings.xml:601:    <string name="widget_recognizer_tap_to_search">Ấn để nhận dạng bài hát</string>
+app/src/main/res/values-vi/metrolist_strings.xml:602:    <string name="widget_recognizer_listening">Đang nghe…</string>
+app/src/main/res/values-vi/metrolist_strings.xml:603:    <string name="widget_recognizer_processing">Đang nhận dạng…</string>
+app/src/main/res/values-vi/metrolist_strings.xml:604:    <string name="widget_recognizer_no_match">Không tìm được kết quả phù hợp. Hãy thừ lại</string>
+app/src/main/res/values-vi/metrolist_strings.xml:605:    <string name="widget_recognizer_error">Không thể nhận dạng</string>
+app/src/main/res/values-vi/metrolist_strings.xml:606:    <string name="widget_recognizer_error_generic">Đã có lỗi xảy ra. Vui lòng thử lại</string>
+app/src/main/res/values-vi/metrolist_strings.xml:607:    <string name="widget_recognizer_unknown_song">Bài hát không rõ</string>
+app/src/main/res/values-vi/metrolist_strings.xml:608:    <string name="widget_recognizer_unknown_artist">Nghệ sĩ không rõ</string>
+app/src/main/res/values-vi/metrolist_strings.xml:609:    <string name="widget_recognizer_mic_desc">Nhận dạng bài hát</string>
+app/src/main/res/values-vi/metrolist_strings.xml:610:    <string name="widget_recognizer_channel_name">Nhận dạng Âm Nhạc</string>
+app/src/main/res/values-vi/metrolist_strings.xml:611:    <string name="widget_recognizer_channel_desc">Hiển thị một thông báo trong khi đang nhân dạng bài hát từ widget</string>
+app/src/main/res/values-vi/metrolist_strings.xml:612:    <string name="widget_recognizer_notification_text">Đang ghi âm để nhận dạng bài hát…</string>
+app/src/main/res/values-vi/metrolist_strings.xml:661:    <string name="recognize_music">Nhận dạng âm nhạc</string>
+app/src/main/res/values-vi/metrolist_strings.xml:662:    <string name="tap_to_recognize">Ấn để nhận dạng</string>
+app/src/main/res/values-vi/metrolist_strings.xml:710:    <string name="qs_tile_music_recognizer">Nhận dạng bài hát</string>
+app/src/dudu7/kotlin/com/metrolist/music/variant/VehiclePlayerControls.kt:261:                    description = if (recognitionInProgress) "Musik wird erkannt" else "Musik erkennen",

@@ -337,6 +337,7 @@ class MusicService :
     private lateinit var audioQuality: com.metrolist.music.constants.AudioQuality
 
     private var currentQueue: Queue = EmptyQueue
+    private val explicitQueueRequestGate = LatestRequestGate()
     var queueTitle: String? = null
 
     val currentMediaMetadata = MutableStateFlow<com.metrolist.music.models.MediaMetadata?>(null)
@@ -1826,6 +1827,7 @@ class MusicService :
             return
         }
 
+        val queueRequestToken = explicitQueueRequestGate.issue()
         currentQueue = queue
         queueTitle = null
         val persistShuffleAcrossQueues = dataStore.get(PersistentShuffleAcrossQueuesKey, false)
@@ -1847,6 +1849,10 @@ class MusicService :
                         .filterExplicit(dataStore.get(HideExplicitKey, false))
                         .filterVideoSongs(dataStore.get(HideVideoSongsKey, false))
                 }
+            if (!explicitQueueRequestGate.isCurrent(queueRequestToken)) {
+                Timber.tag(TAG).d("Ignoring stale explicit queue request %d", queueRequestToken)
+                return@launch
+            }
             if (queue.preloadItem != null && player.playbackState == STATE_IDLE) return@launch
             if (initialStatus.title != null) {
                 queueTitle = initialStatus.title
