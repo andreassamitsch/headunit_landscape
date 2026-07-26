@@ -1,4 +1,4 @@
-name: Build validated Metrolist 13.7.1 APK
+name: Build Dudu7 HLS Logo Fix APK
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: metrolist-v1371-release
+  group: metrolist-dudu7-hls-logo-fix
   cancel-in-progress: true
 
 jobs:
@@ -24,33 +24,109 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Record release run
+      - name: Record HLS logo build run
         run: |
           set -euxo pipefail
           mkdir -p _assistant
-          printf 'run_id=%s\nstatus=running\nsource_commit=%s\nui_validation_run=30090964124\n' \
-            "$GITHUB_RUN_ID" "$GITHUB_SHA" > _assistant/v1371_release_build_run.txt
+          printf 'run_id=%s\nstatus=running\nsource_commit=%s\n' \
+            "$GITHUB_RUN_ID" "$GITHUB_SHA" > _assistant/hls_logo_fix_build_run.txt
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add _assistant/v1371_release_build_run.txt
-          git commit -m 'build(dudu7): record 13.7.1 release run [skip ci]'
+          git add _assistant/hls_logo_fix_build_run.txt
+          git commit -m 'build(dudu7): record HLS logo fix run [skip ci]'
           git pull --rebase origin main
           git push
 
-      - name: Verify validated source markers
+      - name: Apply focused HLS and radio logo fixes
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          radio = Path('app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt')
+          text = radio.read_text(encoding='utf-8')
+          if 'import androidx.media3.common.MimeTypes' not in text:
+              text = text.replace(
+                  'import androidx.media3.common.MediaItem\n',
+                  'import androidx.media3.common.MediaItem\nimport androidx.media3.common.MimeTypes\n',
+                  1,
+              )
+          old = '''        return MediaItem.Builder()
+              .setMediaId(mediaId)
+              .setUri(streamUrl)
+              .setCustomCacheKey(mediaId)'''
+          new = '''        return MediaItem.Builder()
+              .setMediaId(mediaId)
+              .setUri(streamUrl)
+              .setMimeType(
+                  streamUrl
+                      .substringBefore('?')
+                      .takeIf { it.endsWith(".m3u8", ignoreCase = true) }
+                      ?.let { MimeTypes.APPLICATION_M3U8 },
+              )
+              .setCustomCacheKey(mediaId)'''
+          if 'MimeTypes.APPLICATION_M3U8' not in text:
+              if old not in text:
+                  raise SystemExit('RadioStation HLS insertion point not found')
+              text = text.replace(old, new, 1)
+          radio.write_text(text, encoding='utf-8')
+
+          service = Path('app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt')
+          text = service.read_text(encoding='utf-8')
+          old = '            currentMediaMetadata.value = player.currentMetadata\n'
+          new = '''            val resolvedMetadata = player.currentMetadata
+            val radioItemMetadata =
+                player.currentMediaItem?.localConfiguration?.tag as? com.metrolist.music.models.MediaMetadata
+            val previousMetadata = currentMediaMetadata.value
+            currentMediaMetadata.value =
+                if (resolvedMetadata != null &&
+                    isRadioMediaId(resolvedMetadata.id) &&
+                    resolvedMetadata.thumbnailUrl.isNullOrBlank()
+                ) {
+                    resolvedMetadata.copy(
+                        thumbnailUrl =
+                            radioItemMetadata
+                                ?.takeIf { it.id == resolvedMetadata.id }
+                                ?.thumbnailUrl
+                                ?: previousMetadata
+                                    ?.takeIf { it.id == resolvedMetadata.id }
+                                    ?.thumbnailUrl,
+                    )
+                } else {
+                    resolvedMetadata
+                }
+'''
+          if 'val radioItemMetadata =' not in text:
+              if old not in text:
+                  raise SystemExit('MusicService metadata insertion point not found')
+              text = text.replace(old, new, 1)
+          service.write_text(text, encoding='utf-8')
+          PY
+
+          git diff --check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt \
+                  app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          if ! git diff --cached --quiet; then
+            git commit -m 'fix(dudu7): support HLS and preserve radio station logos [skip ci]'
+            git pull --rebase origin main
+            git push
+          fi
+
+      - name: Verify focused source changes
         run: |
           set -euxo pipefail
           git diff --check
           grep -q 'versionCode = 160' app/build.gradle.kts
           grep -q 'versionName = "13.7.1"' app/build.gradle.kts
+          grep -q 'media3-exoplayer-hls' gradle/libs.versions.toml
+          grep -q 'MimeTypes.APPLICATION_M3U8' app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt
+          grep -q 'val radioItemMetadata =' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          grep -q 'resolvedMetadata.thumbnailUrl.isNullOrBlank()' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
           grep -q 'Dudu7RightPaneScroll' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
-          grep -q 'Dudu7RightPaneTap' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'rightPaneScrollBridge.dispatchTap' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
-          grep -q 'tapHandler:' app/src/main/kotlin/com/metrolist/music/ui/component/RightPaneScrollBridge.kt
-          grep -q 'rightPaneTapTargets\[sectionTapKey\]' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
-          grep -q 'coordinates.boundsInRoot() to sectionClick' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
-          grep -q 'browseId=__artist_songs__&params=' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
-          grep -q 'browseId == "__artist_songs__"' app/src/main/kotlin/com/metrolist/music/viewmodels/ArtistItemsViewModel.kt
 
       - uses: actions/setup-java@v4
         with:
@@ -68,21 +144,21 @@ jobs:
           ./gradlew --console=plain :app:assembleGmsDudu7Debug --warning-mode summary 2>&1 | tee artifacts/build-arm.log
           APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
           test -n "$APK"
-          cp "$APK" artifacts/Metrolist-Dudu7-13.7.1.apk
+          cp "$APK" artifacts/MetroList-Dudu7-HLS-Logo-Fix.apk
           build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
-          "$build_tools/aapt" dump badging artifacts/Metrolist-Dudu7-13.7.1.apk | tee artifacts/apk-badging.txt
-          "$build_tools/apksigner" verify --verbose --print-certs artifacts/Metrolist-Dudu7-13.7.1.apk | tee artifacts/apk-signature.txt
+          "$build_tools/aapt" dump badging artifacts/MetroList-Dudu7-HLS-Logo-Fix.apk | tee artifacts/apk-badging.txt
+          "$build_tools/apksigner" verify --verbose --print-certs artifacts/MetroList-Dudu7-HLS-Logo-Fix.apk | tee artifacts/apk-signature.txt
           grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='160'" artifacts/apk-badging.txt
-          unzip -l artifacts/Metrolist-Dudu7-13.7.1.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
-          sha256sum artifacts/Metrolist-Dudu7-13.7.1.apk | tee artifacts/SHA256SUMS.txt
+          unzip -l artifacts/MetroList-Dudu7-HLS-Logo-Fix.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
+          sha256sum artifacts/MetroList-Dudu7-HLS-Logo-Fix.apk | tee artifacts/SHA256SUMS.txt
         env:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
 
-      - name: Upload release APK
+      - name: Upload HLS logo fix APK
         uses: actions/upload-artifact@v4
         with:
-          name: Metrolist-Dudu7-13.7.1-release-${{ github.run_id }}
+          name: MetroList-Dudu7-HLS-Logo-Fix-${{ github.run_id }}
           path: artifacts/
           if-no-files-found: error
           retention-days: 14
