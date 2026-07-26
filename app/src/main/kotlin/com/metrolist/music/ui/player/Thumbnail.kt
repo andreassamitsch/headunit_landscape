@@ -569,11 +569,24 @@ private fun ThumbnailItem(
             if (hidePlayerThumbnail) {
                 HiddenThumbnailPlaceholder(textBackgroundColor = textBackgroundColor)
             } else {
-                val artworkUriToUse = if (item.mediaId == currentMediaId && !currentMediaThumbnail.isNullOrBlank()) {
-                    currentMediaThumbnail
-                } else {
-                    item.mediaMetadata.artworkUri?.toString()
-                }
+                val stableRadioArtwork =
+                    if (com.metrolist.music.radio.isRadioMediaId(item.mediaId)) {
+                        (item.localConfiguration?.tag as? com.metrolist.music.models.MediaMetadata)
+                            ?.thumbnailUrl
+                            ?.takeIf { it.isNotBlank() }
+                            ?: item.mediaMetadata.extras
+                                ?.getString("radio_favicon")
+                                ?.takeIf { it.isNotBlank() }
+                    } else {
+                        null
+                    }
+                val artworkUriToUse =
+                    when {
+                        item.mediaId == currentMediaId && !currentMediaThumbnail.isNullOrBlank() ->
+                            currentMediaThumbnail
+                        stableRadioArtwork != null -> stableRadioArtwork
+                        else -> item.mediaMetadata.artworkUri?.toString()
+                    }
 
                 ThumbnailImage(
                     artworkUri = artworkUriToUse,
