@@ -86,9 +86,27 @@ jobs:
       - name: Build GMS Dudu7 ARM APK
         shell: bash
         run: |
-          set -euxo pipefail
+          set -uo pipefail
           chmod +x gradlew
-          ./gradlew :app:assembleGmsDudu7Debug --no-daemon --stacktrace
+          set +e
+          ./gradlew :app:assembleGmsDudu7Debug --no-daemon --stacktrace > build-output.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            mkdir -p _assistant
+            grep -E '(^e: | error: |Compilation error|FAILURE:)' build-output.log | tail -n 240 > _assistant/dudu7-1375-build-errors.txt || true
+            if [ ! -s _assistant/dudu7-1375-build-errors.txt ]; then
+              tail -n 240 build-output.log > _assistant/dudu7-1375-build-errors.txt
+            fi
+            cat _assistant/dudu7-1375-build-errors.txt
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add _assistant/dudu7-1375-build-errors.txt
+            git commit -m 'diag(dudu7): capture 13.7.5 compiler errors [skip ci]' || true
+            git push origin HEAD:${GITHUB_HEAD_REF} || true
+            exit "$status"
+          fi
+          cat build-output.log
 
       - name: Verify and collect APK
         shell: bash
