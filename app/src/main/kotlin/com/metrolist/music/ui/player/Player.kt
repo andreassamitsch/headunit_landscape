@@ -659,14 +659,18 @@ fun BottomSheetPlayer(
             (recognitionStatus is RecognitionStatus.Listening || recognitionStatus is RecognitionStatus.Processing)
 
     fun startRadioRecognition() {
-        val streamUrl = currentRadioStation?.streamUrl?.trim().orEmpty()
+        val streamUrl =
+            runCatching { playerConnection.player.currentMediaItem?.localConfiguration?.uri?.toString()?.trim() }
+                .getOrNull()
+                .takeUnless { it.isNullOrBlank() }
+                ?: currentRadioStation?.streamUrl?.trim().orEmpty()
         if (streamUrl.isBlank()) {
             Toast.makeText(context, "Radiostream ist nicht verfügbar", Toast.LENGTH_SHORT).show()
             return
         }
         recognitionRequestedForRadio = true
         MusicRecognitionService.reset()
-        scope.launch { MusicRecognitionService.recognizeStream(streamUrl) }
+        scope.launch { MusicRecognitionService.recognizeStream(context.applicationContext, streamUrl) }
     }
 
     LaunchedEffect(recognitionStatus, recognitionRequestedForRadio, isWebRadio) {
