@@ -1,0 +1,124 @@
+name: Build Dudu7 HLS Logo Fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-hls-logo-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply focused HLS and logo fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          radio = Path('app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt')
+          text = radio.read_text()
+          if 'import androidx.media3.common.MimeTypes' not in text:
+              text = text.replace(
+                  'import androidx.media3.common.MediaItem\n',
+                  'import androidx.media3.common.MediaItem\nimport androidx.media3.common.MimeTypes\n',
+              )
+          old = '''        return MediaItem.Builder()
+              .setMediaId(mediaId)
+              .setUri(streamUrl)
+              .setCustomCacheKey(mediaId)'''
+          new = '''        return MediaItem.Builder()
+              .setMediaId(mediaId)
+              .setUri(streamUrl)
+              .setMimeType(
+                  streamUrl
+                      .substringBefore('?')
+                      .takeIf { it.endsWith(".m3u8", ignoreCase = true) }
+                      ?.let { MimeTypes.APPLICATION_M3U8 },
+              )
+              .setCustomCacheKey(mediaId)'''
+          if old not in text and 'MimeTypes.APPLICATION_M3U8' not in text:
+              raise SystemExit('RadioStation HLS insertion point not found')
+          text = text.replace(old, new)
+          radio.write_text(text)
+
+          service = Path('app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt')
+          text = service.read_text()
+          old = '            currentMediaMetadata.value = player.currentMetadata\n'
+          new = '''            val resolvedMetadata = player.currentMetadata
+            val radioItemMetadata =
+                player.currentMediaItem?.localConfiguration?.tag as? com.metrolist.music.models.MediaMetadata
+            val previousMetadata = currentMediaMetadata.value
+            currentMediaMetadata.value =
+                if (resolvedMetadata != null &&
+                    isRadioMediaId(resolvedMetadata.id) &&
+                    resolvedMetadata.thumbnailUrl.isNullOrBlank()
+                ) {
+                    resolvedMetadata.copy(
+                        thumbnailUrl =
+                            radioItemMetadata
+                                ?.takeIf { it.id == resolvedMetadata.id }
+                                ?.thumbnailUrl
+                                ?: previousMetadata
+                                    ?.takeIf { it.id == resolvedMetadata.id }
+                                    ?.thumbnailUrl,
+                    )
+                } else {
+                    resolvedMetadata
+                }
+'''
+          if old not in text and 'val radioItemMetadata =' not in text:
+              raise SystemExit('MusicService metadata insertion point not found')
+          text = text.replace(old, new)
+          service.write_text(text)
+          PY
+
+      - name: Commit source fix
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'Source already patched.'
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+            git commit -m 'fix(dudu7): support HLS and preserve radio station logos [skip ci]'
+            git push origin HEAD:main
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Build focused Dudu7 APK
+        shell: bash
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleFossDudu7Debug --no-daemon --stacktrace
+
+      - name: Collect APK
+        shell: bash
+        run: |
+          mkdir -p dist
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep -i 'dudu7' | head -1)
+          test -n "$APK"
+          cp "$APK" dist/MetroList-Dudu7-HLS-Logo-Fix.apk
+          sha256sum dist/MetroList-Dudu7-HLS-Logo-Fix.apk > dist/MetroList-Dudu7-HLS-Logo-Fix.apk.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MetroList-Dudu7-HLS-Logo-Fix
+          path: dist/*
+          retention-days: 7
