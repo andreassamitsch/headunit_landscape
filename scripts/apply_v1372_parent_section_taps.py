@@ -60,3 +60,71 @@ if "val embeddedSectionTapModifier" in artist:
 
 artist_path.write_text(artist, encoding="utf-8")
 print("Registered artist section tap bounds with the right-pane parent bridge")
+
+# Focused WebRadio fix bundled into the proven Dudu7 validation workflow.
+# Media3's HLS module is already selected in libs.versions.toml; explicitly
+# classify .m3u8 station URLs so redirects/content-type quirks cannot make the
+# generic media source factory treat them as progressive streams.
+radio_path = Path("app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt")
+radio = radio_path.read_text(encoding="utf-8")
+if "import androidx.media3.common.MimeTypes" not in radio:
+    radio = radio.replace(
+        "import androidx.media3.common.MediaItem\n",
+        "import androidx.media3.common.MediaItem\nimport androidx.media3.common.MimeTypes\n",
+        1,
+    )
+radio_builder = '''        return MediaItem.Builder()
+            .setMediaId(mediaId)
+            .setUri(streamUrl)
+            .setCustomCacheKey(mediaId)'''
+radio_builder_hls = '''        return MediaItem.Builder()
+            .setMediaId(mediaId)
+            .setUri(streamUrl)
+            .setMimeType(
+                streamUrl
+                    .substringBefore('?')
+                    .takeIf { it.endsWith(".m3u8", ignoreCase = true) }
+                    ?.let { MimeTypes.APPLICATION_M3U8 },
+            )
+            .setCustomCacheKey(mediaId)'''
+if "MimeTypes.APPLICATION_M3U8" not in radio:
+    if radio_builder not in radio:
+        raise SystemExit("RadioStation HLS insertion point missing")
+    radio = radio.replace(radio_builder, radio_builder_hls, 1)
+radio_path.write_text(radio, encoding="utf-8")
+
+# Live HLS/ICY metadata can contain title/artist but no artwork. Keep accepting
+# those live fields while falling back to the station MediaItem's saved favicon
+# (or the previous metadata for the same station) instead of blanking the logo.
+service_path = Path("app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt")
+service = service_path.read_text(encoding="utf-8")
+metadata_assignment = "            currentMediaMetadata.value = player.currentMetadata\n"
+metadata_assignment_with_logo_fallback = '''            val resolvedMetadata = player.currentMetadata
+            val radioItemMetadata =
+                player.currentMediaItem?.localConfiguration?.tag as? com.metrolist.music.models.MediaMetadata
+            val previousMetadata = currentMediaMetadata.value
+            currentMediaMetadata.value =
+                if (resolvedMetadata != null &&
+                    isRadioMediaId(resolvedMetadata.id) &&
+                    resolvedMetadata.thumbnailUrl.isNullOrBlank()
+                ) {
+                    resolvedMetadata.copy(
+                        thumbnailUrl =
+                            radioItemMetadata
+                                ?.takeIf { it.id == resolvedMetadata.id }
+                                ?.thumbnailUrl
+                                ?: previousMetadata
+                                    ?.takeIf { it.id == resolvedMetadata.id }
+                                    ?.thumbnailUrl,
+                    )
+                } else {
+                    resolvedMetadata
+                }
+'''
+if "val radioItemMetadata =" not in service:
+    if metadata_assignment not in service:
+        raise SystemExit("MusicService radio metadata insertion point missing")
+    service = service.replace(metadata_assignment, metadata_assignment_with_logo_fallback, 1)
+service_path.write_text(service, encoding="utf-8")
+
+print("Applied explicit HLS classification and persistent WebRadio logo fallback")
