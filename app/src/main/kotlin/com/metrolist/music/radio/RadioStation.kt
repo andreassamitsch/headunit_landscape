@@ -97,7 +97,18 @@ data class RadioStation(
         // HLS has a separate Media3 module and a separate request path. Do not give
         // every manifest/segment the same custom cache key.
         if (playbackUrl.isHlsStreamUrl()) {
-            builder.setMimeType(MimeTypes.APPLICATION_M3U8)
+            builder
+                .setMimeType(MimeTypes.APPLICATION_M3U8)
+                .setLiveConfiguration(
+                    MediaItem.LiveConfiguration
+                        .Builder()
+                        .setTargetOffsetMs(8_000L)
+                        .setMinOffsetMs(3_000L)
+                        .setMaxOffsetMs(20_000L)
+                        .setMinPlaybackSpeed(0.98f)
+                        .setMaxPlaybackSpeed(1.03f)
+                        .build(),
+                )
         }
 
         return builder.build()

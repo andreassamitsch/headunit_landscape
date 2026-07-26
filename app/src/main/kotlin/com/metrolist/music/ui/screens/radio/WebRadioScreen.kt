@@ -85,6 +85,7 @@ import com.metrolist.music.radio.RadioBrowserClient
 import com.metrolist.music.radio.RadioStation
 import com.metrolist.music.radio.RadioStationLogoCache
 import com.metrolist.music.radio.RadioStationLogoResolver
+import com.metrolist.music.radio.RadioStationLogoSearch
 import com.metrolist.music.radio.RadioStationStore
 import com.metrolist.music.radio.mergeSavedStationUpdates
 import com.metrolist.music.utils.rememberEnumPreference
@@ -900,16 +901,16 @@ private fun RadioStationEditorDialog(
         scope.launch {
             logoSearchLoading = true
             logoSearchError = null
-            RadioBrowserClient.search(name.trim())
-                .onSuccess { stations ->
-                    logoCandidates =
-                        stations
-                            .asSequence()
-                            .map { it.favicon.trim() }
-                            .filter { it.startsWith("https://") || it.startsWith("http://") }
-                            .distinct()
-                            .take(16)
-                            .toList()
+            val currentStation =
+                initial?.copy(
+                    name = name.trim(),
+                    streamUrl = streamUrl.trim().ifBlank { initial.streamUrl },
+                    favicon = favicon.trim(),
+                    manualFavicon = manualFavicon,
+                )
+            RadioStationLogoSearch.search(name.trim(), currentStation)
+                .onSuccess { candidates ->
+                    logoCandidates = candidates
                     if (logoCandidates.isEmpty()) logoSearchError = "Keine passenden Logos gefunden"
                 }.onFailure { logoSearchError = it.message ?: "Logosuche fehlgeschlagen" }
             logoSearchLoading = false

@@ -1873,17 +1873,18 @@ class MusicService :
                     ),
                 )
             } else {
-                player.setMediaItems(
-                    initialStatus.items,
-                    if (initialStatus.mediaItemIndex >
-                        0
-                    ) {
-                        initialStatus.mediaItemIndex
+                val startIndex =
+                    if (initialStatus.mediaItemIndex > 0) initialStatus.mediaItemIndex else 0
+                val startPosition =
+                    if (isRadioMediaId(initialStatus.items.getOrNull(startIndex)?.mediaId)) {
+                        // Position zero is the beginning of a live HLS DVR window, not
+                        // the live edge. TIME_UNSET selects the media-defined default,
+                        // which is the current live position for a live stream.
+                        C.TIME_UNSET
                     } else {
-                        0
-                    },
-                    initialStatus.position,
-                )
+                        initialStatus.position
+                    }
+                player.setMediaItems(initialStatus.items, startIndex, startPosition)
                 player.prepare()
                 player.playWhenReady = playWhenReady
             }
