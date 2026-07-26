@@ -1,6 +1,9 @@
 name: Dudu7 APK Build
 
 on:
+  push:
+    branches:
+      - agent/fm-radio-ui-logos-tabs
   pull_request:
     branches: [ main ]
   workflow_dispatch:
