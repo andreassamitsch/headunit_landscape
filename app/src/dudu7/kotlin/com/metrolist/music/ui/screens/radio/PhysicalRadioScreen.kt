@@ -182,6 +182,7 @@ fun PhysicalRadioScreen() {
                                         FmPresetOrderStore.sameFrequency(state.frequency, preset.frequency)
                                 FmFavouriteRow(
                                     preset = preset,
+                                    pi = if (isActive && state.pi > 0) state.pi else preset.pi,
                                     isActive = isActive,
                                     isMuted = isActive && state.isMuted,
                                     onPlay = {
@@ -275,6 +276,7 @@ private fun EmptyFmFavourites(onOpenSearch: () -> Unit) {
 @Composable
 private fun FmFavouriteRow(
     preset: FytPhysicalRadio.Preset,
+    pi: Int,
     isActive: Boolean,
     isMuted: Boolean,
     onPlay: () -> Unit,
@@ -299,6 +301,7 @@ private fun FmFavouriteRow(
         FmStationArtwork(
             stationName = preset.name,
             frequency = preset.frequency,
+            pi = pi,
             size = 56.dp,
         )
         Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {

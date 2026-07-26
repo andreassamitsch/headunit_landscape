@@ -196,6 +196,7 @@ fun PhysicalRadioPlayerPane(
                 FmStationArtwork(
                     stationName = state.displayStation,
                     frequency = state.frequency,
+                    pi = state.pi,
                     size = artworkSize,
                 )
             }

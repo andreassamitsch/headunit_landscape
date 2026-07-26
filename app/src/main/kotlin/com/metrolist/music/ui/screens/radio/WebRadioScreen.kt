@@ -82,6 +82,7 @@ import com.metrolist.music.constants.WebRadioViewTypeKey
 import com.metrolist.music.extensions.move
 import com.metrolist.music.playback.queues.ListQueue
 import com.metrolist.music.radio.RadioBrowserClient
+import com.metrolist.music.radio.RadioLogoCandidate
 import com.metrolist.music.radio.RadioStation
 import com.metrolist.music.radio.RadioStationLogoCache
 import com.metrolist.music.radio.RadioStationLogoResolver
@@ -868,7 +869,7 @@ private fun RadioStationEditorDialog(
     var streamUrl by remember(initial) { mutableStateOf(initial?.streamUrl.orEmpty()) }
     var favicon by remember(initial) { mutableStateOf(initial?.favicon.orEmpty()) }
     var manualFavicon by remember(initial) { mutableStateOf(initial?.manualFavicon == true) }
-    var logoCandidates by remember(initial) { mutableStateOf<List<String>>(emptyList()) }
+    var logoCandidates by remember(initial) { mutableStateOf<List<RadioLogoCandidate>>(emptyList()) }
     var logoSearchLoading by remember(initial) { mutableStateOf(false) }
     var logoSaving by remember(initial) { mutableStateOf(false) }
     var logoSearchError by remember(initial) { mutableStateOf<String?>(null) }
@@ -968,18 +969,27 @@ private fun RadioStationEditorDialog(
                 }
                 if (logoCandidates.isNotEmpty()) {
                     Text("Logo auswählen", style = MaterialTheme.typography.labelLarge)
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(logoCandidates, key = { it }) { candidate ->
-                            AsyncImage(
-                                model = candidate,
-                                contentDescription = "Logo auswählen",
-                                contentScale = ContentScale.Fit,
-                                modifier =
-                                    Modifier
-                                        .size(72.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .clickable(enabled = !logoSaving) { selectFixedLogo(candidate) },
-                            )
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        items(logoCandidates, key = { it.url }) { candidate ->
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                AsyncImage(
+                                    model = candidate.url,
+                                    contentDescription = "Logo auswählen: ${candidate.displayDetails}",
+                                    contentScale = ContentScale.Fit,
+                                    modifier =
+                                        Modifier
+                                            .size(82.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                                            .clickable(enabled = !logoSaving) { selectFixedLogo(candidate.url) },
+                                )
+                                Text(
+                                    candidate.displayDetails,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                     }
                 }
