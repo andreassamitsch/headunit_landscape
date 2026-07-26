@@ -7,6 +7,7 @@ package com.metrolist.music.radio
 import android.os.Bundle
 import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.MediaMetadata.MEDIA_TYPE_RADIO_STATION
 import com.metrolist.music.models.MediaMetadata
 
@@ -43,6 +44,12 @@ data class RadioStation(
         return MediaItem.Builder()
             .setMediaId(mediaId)
             .setUri(streamUrl)
+            .setMimeType(
+                streamUrl
+                    .substringBefore('?')
+                    .takeIf { it.endsWith(".m3u8", ignoreCase = true) }
+                    ?.let { MimeTypes.APPLICATION_M3U8 },
+            )
             .setCustomCacheKey(mediaId)
             .setTag(appMetadata)
             .setMediaMetadata(

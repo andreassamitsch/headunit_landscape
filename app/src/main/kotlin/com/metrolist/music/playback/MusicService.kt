@@ -2219,7 +2219,27 @@ class MusicService :
                 database.query {
                     update(it.song.toggleLibrary())
                 }
-                currentMediaMetadata.value = player.currentMetadata
+                val resolvedMetadata = player.currentMetadata
+            val radioItemMetadata =
+                player.currentMediaItem?.localConfiguration?.tag as? com.metrolist.music.models.MediaMetadata
+            val previousMetadata = currentMediaMetadata.value
+            currentMediaMetadata.value =
+                if (resolvedMetadata != null &&
+                    isRadioMediaId(resolvedMetadata.id) &&
+                    resolvedMetadata.thumbnailUrl.isNullOrBlank()
+                ) {
+                    resolvedMetadata.copy(
+                        thumbnailUrl =
+                            radioItemMetadata
+                                ?.takeIf { it.id == resolvedMetadata.id }
+                                ?.thumbnailUrl
+                                ?: previousMetadata
+                                    ?.takeIf { it.id == resolvedMetadata.id }
+                                    ?.thumbnailUrl,
+                    )
+                } else {
+                    resolvedMetadata
+                }
             }
         }
     }
