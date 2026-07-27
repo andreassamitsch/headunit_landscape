@@ -1,0 +1,96 @@
+name: Build Metrolist dudu7 13.7.15 FM Complete
+
+on:
+  pull_request:
+    branches:
+      - agent/fm-radio-ui-logos-tabs
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dudu7-13715-fm-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout focused branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Apply focused FM integration
+        run: |
+          python3 -m py_compile scripts/apply_dudu7_13715_fm_remaining.py
+          python3 scripts/apply_dudu7_13715_fm_remaining.py
+          git diff --check
+
+      - name: Persist generated source changes
+        if: github.event_name == 'pull_request'
+        run: |
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add app/build.gradle.kts \
+              app/src/main/kotlin/com/metrolist/music/radio/RadioDnsLogoResolver.kt \
+              app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt \
+              app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt \
+              app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
+            git commit -m "feat(dudu7): complete FM optimization integration [skip ci]"
+            git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          fi
+
+      - name: Build Dudu7 APK
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleGmsDudu7Debug --no-daemon --stacktrace
+
+      - name: Verify update-compatible APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$(find app/build/outputs/apk -type f -name '*.apk' | head -n 1)"
+          test -n "$APK"
+          mkdir -p dist
+          cp "$APK" dist/Metrolist-dudu7-13.7.15.apk
+
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          BADGING="$($BUILD_TOOLS/aapt dump badging "$APK")"
+          echo "$BADGING"
+          echo "$BADGING" | grep -F "package: name='com.metrolist.music.dudu7.debug' versionCode='1370024' versionName='13.7.15-dudu7'"
+          echo "$BADGING" | grep -F "application-label:'Metrolist dudu7'"
+
+          SIGNING="$($BUILD_TOOLS/apksigner verify --print-certs "$APK")"
+          echo "$SIGNING"
+          echo "$SIGNING" | tr '[:upper:]' '[:lower:]' | grep -F "138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee"
+
+          unzip -l "$APK" | tee dist/apk-contents.txt
+          grep -F "lib/arm64-v8a/" dist/apk-contents.txt
+          grep -F "lib/armeabi-v7a/" dist/apk-contents.txt
+          sha256sum dist/Metrolist-dudu7-13.7.15.apk | tee dist/Metrolist-dudu7-13.7.15.apk.sha256
+
+      - name: Upload focused APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.15
+          path: |
+            dist/Metrolist-dudu7-13.7.15.apk
+            dist/Metrolist-dudu7-13.7.15.apk.sha256
+          if-no-files-found: error
+          retention-days: 14
