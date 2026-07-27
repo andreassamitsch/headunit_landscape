@@ -1,4 +1,4 @@
-name: Build Dudu7 13.7.11 FM Final
+name: Build Metrolist dudu7 13.7.12
 
 on:
   pull_request:
@@ -19,18 +19,54 @@ jobs:
           submodules: recursive
           ref: ${{ github.head_ref || github.ref }}
 
-      - name: Apply and verify 13.7.11 final correction
+      - name: Apply and verify 13.7.12 correction
         shell: bash
         run: |
           set -euxo pipefail
-          python3 scripts/apply_dudu7_13711_fm_editor_decimal_final.py
-          python3 -m py_compile scripts/apply_dudu7_13711_fm_editor_decimal_final.py
+          python3 - <<'PY'
+          from pathlib import Path
+
+          build = Path('app/build.gradle.kts')
+          text = build.read_text()
+
+          replacements = {
+              'versionCode = 170': 'versionCode = 171',
+              'versionName = "13.7.11"': 'versionName = "13.7.12"',
+              'resValue("string", "app_name", appNameOverride ?: "Metrolist")':
+                  'resValue("string", "app_name", appNameOverride ?: "Metrolist dudu7")',
+              'resValue("string", "app_name", "Metrolist Debug")':
+                  'resValue("string", "app_name", "Metrolist dudu7")',
+          }
+          for old, new in replacements.items():
+              if old in text:
+                  text = text.replace(old, new)
+              elif new not in text:
+                  raise SystemExit(f'Missing build.gradle insertion point: {old}')
+
+          updater_true = 'buildConfigField("Boolean", "UPDATER_AVAILABLE", "true")'
+          updater_false = 'buildConfigField("Boolean", "UPDATER_AVAILABLE", "false")'
+          if updater_true in text:
+              text = text.replace(updater_true, updater_false)
+          if updater_true in text or updater_false not in text:
+              raise SystemExit('Could not disable the original Metrolist updater')
+
+          build.write_text(text)
+          PY
           git diff --check
 
-          grep -q 'versionCode = 170' app/build.gradle.kts
-          grep -q 'versionName = "13.7.11"' app/build.gradle.kts
+          grep -q 'versionCode = 171' app/build.gradle.kts
+          grep -q 'versionName = "13.7.12"' app/build.gradle.kts
+          grep -q 'appNameOverride ?: "Metrolist dudu7"' app/build.gradle.kts
+          grep -q 'resValue("string", "app_name", "Metrolist dudu7")' app/build.gradle.kts
+          ! grep -q 'UPDATER_AVAILABLE", "true"' app/build.gradle.kts
 
-          # Preserve the complete 13.7.10 FM implementation and previous radio fixes.
+          # Duplicate PI/name/frequency identities are collapsed before Compose receives keys.
+          grep -q 'duplicate station identities never reach' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmPresetOrderStore.kt
+          grep -q 'ordered.none { existing -> samePreset(existing, preset) }' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmPresetOrderStore.kt
+          grep -q 'map { FytPhysicalRadio.stablePresetKey(it) }' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmPresetOrderStore.kt
+          grep -q '\.distinct()' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmPresetOrderStore.kt
+
+          # Preserve the complete latest FM/WebRadio/HLS/logo/fingerprint baseline.
           grep -q 'public int getStereoState()' app/src/dudu7/java/com/android/fmradio/FmNative.java
           grep -q 'public native short\[\] getAFList()' app/src/dudu7/java/com/android/fmradio/FmNative.java
           grep -q 'private fun groupScanResults' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
@@ -44,14 +80,15 @@ jobs:
           ! grep -q 'radio.toggleMute()' app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
           ! grep -q '−0,1' app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
           ! grep -q '+0,1' app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
-
           grep -q 'HlsRecognitionDecoder.decode' app/src/main/kotlin/com/metrolist/music/recognition/MusicRecognitionService.kt
           grep -q 'FLAG_IGNORE_CACHE_FOR_UNSET_LENGTH_REQUESTS' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
           grep -q 'builder.setCustomCacheKey(mediaId)' app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt
           grep -q 'RadioDnsLogoResolver.resolveFm' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmStationArtwork.kt
+          grep -q 'radioAtStationImageUrl' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
+          grep -q 'isStationFragment' app/src/main/kotlin/com/metrolist/music/radio/RadioTrackMetadata.kt
           grep -q 'rememberReorderableLazyListState' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
 
-      - name: Commit source correction
+      - name: Commit version and Dudu7 identity
         if: github.event_name == 'pull_request'
         shell: bash
         run: |
@@ -60,8 +97,8 @@ jobs:
           else
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add app/build.gradle.kts app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt
-            git commit -m 'fix(dudu7): accept German decimal commas in FM editor [skip ci]'
+            git add app/build.gradle.kts
+            git commit -m 'build(dudu7): set 13.7.12 app identity and disable updater [skip ci]'
             git push origin HEAD:${GITHUB_HEAD_REF}
           fi
 
@@ -87,17 +124,18 @@ jobs:
           mkdir -p dist
           APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
           test -n "$APK"
-          cp "$APK" dist/MetroList-Dudu7-13.7.11-FM-Favorites-Stereo-AF.apk
+          cp "$APK" dist/Metrolist-dudu7-13.7.12.apk
           build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
-          "$build_tools/aapt" dump badging dist/MetroList-Dudu7-13.7.11-FM-Favorites-Stereo-AF.apk > dist/apk-badging.txt
-          "$build_tools/apksigner" verify --verbose --print-certs dist/MetroList-Dudu7-13.7.11-FM-Favorites-Stereo-AF.apk > dist/apk-signature.txt
-          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='170'" dist/apk-badging.txt
-          unzip -l dist/MetroList-Dudu7-13.7.11-FM-Favorites-Stereo-AF.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
-          sha256sum dist/MetroList-Dudu7-13.7.11-FM-Favorites-Stereo-AF.apk > dist/MetroList-Dudu7-13.7.11-FM-Favorites-Stereo-AF.apk.sha256
+          "$build_tools/aapt" dump badging dist/Metrolist-dudu7-13.7.12.apk > dist/apk-badging.txt
+          "$build_tools/apksigner" verify --verbose --print-certs dist/Metrolist-dudu7-13.7.12.apk > dist/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='171'" dist/apk-badging.txt
+          grep -q "application-label:'Metrolist dudu7'" dist/apk-badging.txt
+          unzip -l dist/Metrolist-dudu7-13.7.12.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
+          sha256sum dist/Metrolist-dudu7-13.7.12.apk > dist/Metrolist-dudu7-13.7.12.apk.sha256
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MetroList-Dudu7-13.7.11-FM-Favorites-Stereo-AF
+          name: Metrolist-dudu7-13.7.12
           path: dist/*
           if-no-files-found: error
           retention-days: 14
