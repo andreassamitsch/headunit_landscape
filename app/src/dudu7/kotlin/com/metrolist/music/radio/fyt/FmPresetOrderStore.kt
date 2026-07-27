@@ -44,18 +44,31 @@ object FmPresetOrderStore {
                 frequencyKey(it.frequency) == key && ordered.none { existing -> samePreset(existing, it) }
             }?.let(ordered::add)
         }
-        val missing = presets.filterNot { preset -> ordered.any { samePreset(it, preset) } }
-        return ordered + missing
+
+        // RDS identity can arrive after a frequency was already stored. During that
+        // transition the source list may briefly contain two records for the same PI.
+        // Add presets incrementally so duplicate station identities never reach the
+        // Compose LazyColumn, where equal stable keys would otherwise crash the app.
+        presets.forEach { preset ->
+            if (ordered.none { existing -> samePreset(existing, preset) }) {
+                ordered += preset
+            }
+        }
+        return ordered
     }
 
     fun persist(
         context: Context,
         presets: List<FytPhysicalRadio.Preset>,
     ) {
+        val stableOrder =
+            presets
+                .map { FytPhysicalRadio.stablePresetKey(it) }
+                .distinct()
         context.applicationContext
             .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
-            .putString(KEY_ORDER, presets.joinToString("\n") { FytPhysicalRadio.stablePresetKey(it) })
+            .putString(KEY_ORDER, stableOrder.joinToString("\n"))
             .remove(LEGACY_KEY_ORDER)
             .apply()
     }
