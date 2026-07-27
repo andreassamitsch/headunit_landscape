@@ -44,18 +44,28 @@ object FmPresetOrderStore {
                 frequencyKey(it.frequency) == key && ordered.none { existing -> samePreset(existing, it) }
             }?.let(ordered::add)
         }
-        val missing = presets.filterNot { preset -> ordered.any { samePreset(it, preset) } }
-        return ordered + missing
+        presets.forEach { preset ->
+            if (ordered.none { existing -> samePreset(existing, preset) }) {
+                ordered += preset
+            }
+        }
+        return ordered
     }
 
     fun persist(
         context: Context,
         presets: List<FytPhysicalRadio.Preset>,
     ) {
+        val uniquePresets = mutableListOf<FytPhysicalRadio.Preset>()
+        presets.forEach { preset ->
+            if (uniquePresets.none { existing -> samePreset(existing, preset) }) {
+                uniquePresets += preset
+            }
+        }
         context.applicationContext
             .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
-            .putString(KEY_ORDER, presets.joinToString("\n") { FytPhysicalRadio.stablePresetKey(it) })
+            .putString(KEY_ORDER, uniquePresets.joinToString("\n") { FytPhysicalRadio.stablePresetKey(it) })
             .remove(LEGACY_KEY_ORDER)
             .apply()
     }
