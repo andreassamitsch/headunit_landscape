@@ -2067,14 +2067,10 @@ fun BottomSheetPlayer(
                                                 ?: currentMediaMetadata.artists.joinToString(" ") { it.name }
                                             SearchRoutes.resultRoute("$artist ${currentMediaMetadata.title}".trim())
                                         } else {
-                                            val albumId = currentMediaMetadata.album?.id
-                                                ?: currentSong?.album?.id
-                                                ?: currentSong?.song?.albumId
-                                            albumId?.let { "album/$it" }
-                                                ?: SearchRoutes.resultRoute(
-                                                    "${currentMediaMetadata.artists.joinToString(" ") { it.name }} ${currentMediaMetadata.title}".trim(),
-                                                )
-                                        }
+                                    SearchRoutes.resultRoute(
+                                        "${currentMediaMetadata.artists.joinToString(" ") { it.name }} ${currentMediaMetadata.title}".trim(),
+                                    )
+                                }
                                     if (!playerConnection.requestRightPaneNavigation(route)) navController.navigate(route)
                                 },
                                 onArtistClick = {
