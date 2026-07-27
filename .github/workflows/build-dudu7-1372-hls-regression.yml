@@ -3,8 +3,6 @@ name: Build Metrolist dudu7 13.7.12
 on:
   pull_request:
     branches: [agent/fm-radio-ui-logos-tabs]
-  push:
-    branches: [agent/fm-radio-ui-logos-tabs]
   workflow_dispatch:
 
 permissions:
