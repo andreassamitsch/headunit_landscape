@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: metrolist-dudu7-${{ github.event.pull_request.number || github.ref }}
@@ -118,20 +118,3 @@ jobs:
           path: dist/*
           if-no-files-found: error
           retention-days: 14
-
-      - name: Publish APK to branch
-        if: github.event_name == 'push'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p releases
-          cp "dist/Metrolist dudu7.apk" "releases/Metrolist dudu7.apk"
-          cp "dist/Metrolist dudu7.apk.sha256" "releases/Metrolist dudu7.apk.sha256"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "releases/Metrolist dudu7.apk" "releases/Metrolist dudu7.apk.sha256"
-          if git diff --cached --quiet; then
-            exit 0
-          fi
-          git commit -m "Publish Metrolist dudu7 APK [skip ci]"
-          git push origin HEAD:agent/fm-radio-ui-logos-tabs
