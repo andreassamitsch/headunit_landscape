@@ -285,7 +285,9 @@ private fun FmPresetEditorDialog(
     fun submit() {
         val tokens =
             frequencies
-                .split(';', ',')
+                // Semicolon/newline separate entries. A comma remains part of
+                // the German decimal value, e.g. 99,4; 103,2.
+                .split(';', '\n')
                 .map(String::trim)
                 .filter(String::isNotBlank)
         val parsed = tokens.mapNotNull { value -> value.replace(',', '.').toFloatOrNull() }
