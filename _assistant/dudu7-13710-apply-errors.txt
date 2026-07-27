@@ -1,7 +1,0 @@
-+ grep -q 'versionCode = 169' app/build.gradle.kts
-+ python3 scripts/apply_dudu7_13710_fm_favourites_stereo_af.py
-identity/persistence marker missing
-+ status=1
-+ '[' 1 -ne 0 ']'
-+ mkdir -p _assistant
-+ cp apply-output.log _assistant/dudu7-13710-apply-errors.txt
