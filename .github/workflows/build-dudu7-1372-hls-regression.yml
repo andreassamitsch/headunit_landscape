@@ -22,7 +22,10 @@ jobs:
       - name: Apply and verify focused 13.7.10 changes
         shell: bash
         run: |
-          set -euxo pipefail
+          set -uo pipefail
+          exec > >(tee apply-output.log) 2>&1
+          trap 'status=$?; if [ "$status" -ne 0 ]; then mkdir -p _assistant; cp apply-output.log _assistant/dudu7-13710-apply-errors.txt; git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"; git add _assistant/dudu7-13710-apply-errors.txt; git commit -m "diag(dudu7): capture 13.7.10 apply errors [skip ci]" || true; git push origin HEAD:${GITHUB_HEAD_REF} || true; fi; exit "$status"' EXIT
+          set -ex
           if grep -q 'versionCode = 169' app/build.gradle.kts \
              && grep -q 'fun updatePreset(' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt \
              && grep -q 'public int getStereoState()' app/src/dudu7/java/com/android/fmradio/FmNative.java; then
@@ -80,6 +83,7 @@ jobs:
           ! grep -q '−0,1' app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
           ! grep -q '+0,1' app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
           grep -q 'radio.powerOff()' app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
+          trap - EXIT
 
       - name: Commit applied source changes
         if: github.event_name == 'pull_request'
