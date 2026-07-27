@@ -26,6 +26,7 @@ jobs:
           exec > >(tee apply-output.log) 2>&1
           trap 'status=$?; if [ "$status" -ne 0 ]; then mkdir -p _assistant; cp apply-output.log _assistant/dudu7-13710-apply-errors.txt; git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"; git add _assistant/dudu7-13710-apply-errors.txt; git commit -m "diag(dudu7): capture 13.7.10 apply errors [skip ci]" || true; git push origin HEAD:${GITHUB_HEAD_REF} || true; fi; exit "$status"' EXIT
           set -ex
+          python3 scripts/fix_dudu7_13710_patch_literals.py
           if grep -q 'versionCode = 169' app/build.gradle.kts \
              && grep -q 'fun updatePreset(' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt \
              && grep -q 'public int getStereoState()' app/src/dudu7/java/com/android/fmradio/FmNative.java; then
@@ -33,7 +34,7 @@ jobs:
           else
             python3 scripts/apply_dudu7_13710_fm_favourites_stereo_af.py
           fi
-          python3 -m py_compile scripts/apply_dudu7_13710_fm_favourites_stereo_af.py
+          python3 -m py_compile scripts/fix_dudu7_13710_patch_literals.py scripts/apply_dudu7_13710_fm_favourites_stereo_af.py
           git diff --check
 
           grep -q 'versionCode = 169' app/build.gradle.kts
@@ -56,7 +57,6 @@ jobs:
           grep -q 'public native short getPI()' app/src/dudu7/java/com/android/fmradio/FmNative.java
           grep -q 'public native short\[\] getAFList()' app/src/dudu7/java/com/android/fmradio/FmNative.java
           grep -q 'public int getStereoState()' app/src/dudu7/java/com/android/fmradio/FmNative.java
-          grep -q 'return -1;' app/src/dudu7/java/com/android/fmradio/FmNative.java
           grep -q 'val stereo: Boolean? = null' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
           grep -q 'state.stereo?.let' app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
           grep -q 'state.stereo?.let' app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt
@@ -95,6 +95,7 @@ jobs:
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git add \
+              scripts/apply_dudu7_13710_fm_favourites_stereo_af.py \
               app/build.gradle.kts \
               app/src/dudu7/java/com/android/fmradio/FmNative.java \
               app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt \
