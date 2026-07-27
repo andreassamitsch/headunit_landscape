@@ -13,11 +13,13 @@ import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.util.Locale
+import timber.log.Timber
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /** RadioDNS Project Logo lookup for an FM bearer using RDS PI, frequency and GCC. */
 object RadioDnsLogoResolver {
+    private const val TAG = "RadioDNS"
     private const val USER_AGENT = "MetrolistHU/13.7.8 (RadioDNS receiver)"
     private const val DNS_ENDPOINT = "https://dns.google/resolve"
     private const val MAX_SI_BYTES = 3_000_000
@@ -35,15 +37,32 @@ object RadioDnsLogoResolver {
             val gcc = "${piHex.first()}$resolvedEcc"
             val frequencyCode = (frequency * 100f).roundToInt().toString().padStart(5, '0')
             val lookup = "$frequencyCode.$piHex.$gcc.fm.radiodns.org"
-            val authoritative = dnsAnswers(lookup, 5).firstOrNull()?.trimEnd('.') ?: return@withContext emptyList()
-            val srv = dnsAnswers("_radioepg._tcp.$authoritative", 33).mapNotNull(::parseSrv).minByOrNull { it.priority }
-                ?: return@withContext emptyList()
-            val bearer = "fm:$gcc.$piHex.$frequencyCode"
-            serviceInformationUrls(srv).forEach { siUrl ->
-                val xml = download(siUrl) ?: return@forEach
-                val logos = parseServiceInformation(xml, siUrl, bearer)
-                if (logos.isNotEmpty()) return@withContext logos.sortedByDescending { it.ranking }
+            Timber.tag(TAG).d("lookup=%s PI=%s ECC=%s GCC=%s", lookup, piHex, resolvedEcc, gcc)
+            val authoritative = dnsAnswers(lookup, 5).firstOrNull()?.trimEnd('.')
+            if (authoritative.isNullOrBlank()) {
+                Timber.tag(TAG).d("No CNAME for %s", lookup)
+                return@withContext emptyList()
             }
+            val srv = dnsAnswers("_radioepg._tcp.$authoritative", 33).mapNotNull(::parseSrv).minByOrNull { it.priority }
+            if (srv == null) {
+                Timber.tag(TAG).d("No RadioEPG SRV for %s", authoritative)
+                return@withContext emptyList()
+            }
+            val bearer = "fm:$gcc.$piHex.$frequencyCode"
+            Timber.tag(TAG).d("CNAME=%s SRV=%s:%d bearer=%s", authoritative, srv.target, srv.port, bearer)
+            serviceInformationUrls(srv).forEach { siUrl ->
+                val xml = download(siUrl)
+                if (xml == null) {
+                    Timber.tag(TAG).d("SPI unavailable %s", siUrl)
+                    return@forEach
+                }
+                val logos = parseServiceInformation(xml, siUrl, bearer)
+                if (logos.isNotEmpty()) {
+                    Timber.tag(TAG).i("Resolved %d logo(s) for %s via %s", logos.size, bearer, siUrl)
+                    return@withContext logos.sortedByDescending { it.ranking }
+                }
+            }
+            Timber.tag(TAG).d("No matching multimedia entry for %s", bearer)
             emptyList()
         }
 

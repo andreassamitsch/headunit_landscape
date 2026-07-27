@@ -47,6 +47,7 @@ object FytPhysicalRadio {
     private const val SEEK_RSSI_THRESHOLD = 38
     private const val SCAN_RSSI_THRESHOLD = 36
     private const val AF_POLL_INTERVAL_MS = 6_000L
+    private const val AF_SWITCH_COOLDOWN_MS = 20_000L
 
     data class Preset(
         val frequency: Float,
@@ -62,6 +63,7 @@ object FytPhysicalRadio {
         val rssi: Int,
         val stereo: Boolean?,
         val pi: Int,
+        val ecc: String = "",
         val pty: Int,
         val tp: Boolean,
         val alternativeFrequencies: List<Float> = emptyList(),
@@ -114,6 +116,10 @@ object FytPhysicalRadio {
     private var audioManager: AudioManager? = null
     private var focusRequest: AudioFocusRequest? = null
     private var lastAfAttemptAt = 0L
+    private var lastAfSwitchAt = 0L
+    private var pendingPresetIdentity: Preset? = null
+    private var pendingPs = ""
+    private var pendingPsCount = 0
 
     fun get(context: Context): FytPhysicalRadio {
         initialize(context)
@@ -192,6 +198,10 @@ object FytPhysicalRadio {
                     error("Tuner-Initialisierung fehlgeschlagen (open=$openOk, power=$powerOk, tune=$tuneOk)")
                 }
 
+                val presetIdentity = pendingPresetIdentity?.takeIf { presetContainsFrequency(it, target) }
+                pendingPresetIdentity = null
+                pendingPs = ""
+                pendingPsCount = 0
                 persistFrequency(target)
                 _state.update {
                     it.copy(
@@ -199,12 +209,12 @@ object FytPhysicalRadio {
                         isMuted = false,
                         isBusy = false,
                         frequency = target,
-                        ps = "",
+                        ps = presetIdentity?.name.orEmpty(),
                         rt = "",
                         stereo = null,
-                        pi = 0,
-                        ecc = "",
-                        alternativeFrequencies = emptyList(),
+                        pi = presetIdentity?.pi ?: 0,
+                        ecc = presetIdentity?.ecc.orEmpty(),
+                        alternativeFrequencies = presetIdentity?.alternativeFrequencies.orEmpty(),
                         pty = 0,
                         error = null,
                     )
@@ -258,16 +268,20 @@ object FytPhysicalRadio {
         }
         scope.launch {
             if (_state.value.isScanning) stopAutoScan()
+            val presetIdentity = pendingPresetIdentity?.takeIf { presetContainsFrequency(it, target) }
+            pendingPresetIdentity = null
+            pendingPs = ""
+            pendingPsCount = 0
             _state.update {
                 it.copy(
                     isBusy = true,
                     error = null,
-                    ps = "",
+                    ps = presetIdentity?.name.orEmpty(),
                     rt = "",
                     stereo = null,
-                    pi = 0,
-                    ecc = "",
-                    alternativeFrequencies = emptyList(),
+                    pi = presetIdentity?.pi ?: 0,
+                    ecc = presetIdentity?.ecc.orEmpty(),
+                    alternativeFrequencies = presetIdentity?.alternativeFrequencies.orEmpty(),
                     pty = 0,
                 )
             }
@@ -442,6 +456,7 @@ object FytPhysicalRadio {
                             rssi = rssi,
                             stereo = stereoState.takeIf { it >= 0 }?.let { it == 1 },
                             pi = directPi.takeIf { it > 0 } ?: snapshot.pi,
+                            ecc = directEcc.ifBlank { snapshot.ecc },
                             pty = snapshot.pty,
                             tp = snapshot.tp,
                             alternativeFrequencies = afList,
@@ -489,6 +504,7 @@ object FytPhysicalRadio {
                     frequency = it.frequency,
                     name = it.name,
                     pi = it.pi,
+                    ecc = it.ecc,
                     alternativeFrequencies = it.alternativeFrequencies,
                 )
             }
@@ -540,6 +556,7 @@ object FytPhysicalRadio {
             scope.launch {
                 val fm = native ?: return@launch
                 val before = _state.value
+                if (System.currentTimeMillis() - lastAfSwitchAt < AF_SWITCH_COOLDOWN_MS) return@launch
                 if (
                     !before.isActive ||
                     !before.afEnabled ||
@@ -560,6 +577,7 @@ object FytPhysicalRadio {
                 val frequency = decodeFrequency(raw.toFloat())
                 if (frequency != null && abs(frequency - before.frequency) >= 0.05f) {
                     Timber.tag(TAG).i("AF switched %.1f -> %.1f for PI=%04X", before.frequency, frequency, before.pi)
+                    lastAfSwitchAt = System.currentTimeMillis()
                     persistFrequency(frequency)
                     _state.update {
                         it.copy(
@@ -604,6 +622,7 @@ object FytPhysicalRadio {
     }
 
     fun tunePreset(preset: Preset) {
+        pendingPresetIdentity = preset
         tune(preset.frequency)
     }
 
@@ -731,7 +750,25 @@ object FytPhysicalRadio {
         val fm = native ?: return
         if (!_state.value.isActive || _state.value.isScanning) return
         runCatching { fm.readRds() }
-        val ps = runCatching { fm.psString }.getOrDefault("")
+        val rawPs = runCatching { fm.psString }.getOrDefault("").trim()
+        val stablePs =
+            when {
+                rawPs.isBlank() -> _state.value.ps
+                rawPs == _state.value.ps -> {
+                    pendingPs = ""
+                    pendingPsCount = 0
+                    rawPs
+                }
+                rawPs == pendingPs -> {
+                    pendingPsCount += 1
+                    if (pendingPsCount >= 2) rawPs else _state.value.ps
+                }
+                else -> {
+                    pendingPs = rawPs
+                    pendingPsCount = 1
+                    _state.value.ps
+                }
+            }
         val rt = runCatching { fm.radioText }.getOrDefault("")
         val rssi = runCatching { fm.rssi }.getOrDefault(_state.value.rssi)
         val stereoState = runCatching { fm.stereoState }.getOrDefault(-1)
@@ -742,7 +779,7 @@ object FytPhysicalRadio {
                 .getOrDefault(emptyList())
         _state.update { current ->
             current.copy(
-                ps = ps.ifBlank { current.ps },
+                ps = stablePs.ifBlank { current.ps },
                 rt = rt.ifBlank { current.rt },
                 rssi = rssi,
                 stereo = stereoState.takeIf { it >= 0 }?.let { it == 1 } ?: current.stereo,
@@ -956,6 +993,7 @@ object FytPhysicalRadio {
                     group.flatMap(::scanFrequencies),
                 )
             strongest.copy(
+                ecc = group.firstOrNull { it.ecc.isNotBlank() }?.ecc ?: strongest.ecc,
                 alternativeFrequencies =
                     frequencies.filterNot { abs(it - strongest.frequency) < 0.05f },
                 stereo =
