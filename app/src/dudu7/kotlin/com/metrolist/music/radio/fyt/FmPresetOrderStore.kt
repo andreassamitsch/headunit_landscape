@@ -4,27 +4,47 @@ import android.content.Context
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-/** Keeps the visible FM-favourite order independent from the tuner backend. */
+/** Keeps FM-favourite order stable while AF changes the currently used frequency. */
 object FmPresetOrderStore {
     private const val PREFS = "dudu7_physical_radio"
-    private const val KEY_ORDER = "preset_order"
+    private const val KEY_ORDER = "preset_order_v2"
+    private const val LEGACY_KEY_ORDER = "preset_order"
 
     fun ordered(
         context: Context,
         presets: List<FytPhysicalRadio.Preset>,
     ): List<FytPhysicalRadio.Preset> {
         if (presets.isEmpty()) return emptyList()
-        val byKey = presets.associateBy { frequencyKey(it.frequency) }
+        val preferences = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val storedKeys =
-            context.applicationContext
-                .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            preferences
                 .getString(KEY_ORDER, null)
+                .orEmpty()
+                .lineSequence()
+                .map(String::trim)
+                .filter(String::isNotBlank)
+                .distinct()
+                .toList()
+        val legacyFrequencies =
+            preferences
+                .getString(LEGACY_KEY_ORDER, null)
                 .orEmpty()
                 .split(',')
                 .mapNotNull(String::toIntOrNull)
                 .distinct()
-        val ordered = storedKeys.mapNotNull(byKey::get)
-        val missing = presets.filterNot { preset -> ordered.any { sameFrequency(it.frequency, preset.frequency) } }
+
+        val ordered = mutableListOf<FytPhysicalRadio.Preset>()
+        storedKeys.forEach { key ->
+            presets.firstOrNull {
+                FytPhysicalRadio.stablePresetKey(it) == key && ordered.none { existing -> samePreset(existing, it) }
+            }?.let(ordered::add)
+        }
+        legacyFrequencies.forEach { key ->
+            presets.firstOrNull {
+                frequencyKey(it.frequency) == key && ordered.none { existing -> samePreset(existing, it) }
+            }?.let(ordered::add)
+        }
+        val missing = presets.filterNot { preset -> ordered.any { samePreset(it, preset) } }
         return ordered + missing
     }
 
@@ -35,17 +55,27 @@ object FmPresetOrderStore {
         context.applicationContext
             .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
-            .putString(KEY_ORDER, presets.joinToString(",") { frequencyKey(it.frequency).toString() })
+            .putString(KEY_ORDER, presets.joinToString("\n") { FytPhysicalRadio.stablePresetKey(it) })
+            .remove(LEGACY_KEY_ORDER)
             .apply()
     }
 
     fun remove(
         context: Context,
-        frequency: Float,
+        preset: FytPhysicalRadio.Preset,
         remainingPresets: List<FytPhysicalRadio.Preset>,
     ) {
-        persist(context, remainingPresets.filterNot { sameFrequency(it.frequency, frequency) })
+        persist(context, remainingPresets.filterNot { samePreset(it, preset) })
     }
+
+    private fun samePreset(
+        first: FytPhysicalRadio.Preset,
+        second: FytPhysicalRadio.Preset,
+    ): Boolean =
+        FytPhysicalRadio.stablePresetKey(first) == FytPhysicalRadio.stablePresetKey(second) ||
+            FytPhysicalRadio.presetFrequencies(first).any { frequency ->
+                FytPhysicalRadio.presetContainsFrequency(second, frequency)
+            }
 
     private fun frequencyKey(value: Float): Int = (value * 10f).roundToInt()
 
@@ -66,7 +96,10 @@ fun FytPhysicalRadio.tuneAdjacentFavourite(
         return
     }
 
-    val currentIndex = favourites.indexOfFirst { FmPresetOrderStore.sameFrequency(it.frequency, snapshot.frequency) }
+    val currentIndex =
+        favourites.indexOfFirst {
+            FytPhysicalRadio.presetMatches(it, snapshot.frequency, snapshot.pi)
+        }
     val targetIndex =
         when {
             currentIndex < 0 && next -> 0
@@ -74,5 +107,5 @@ fun FytPhysicalRadio.tuneAdjacentFavourite(
             next -> (currentIndex + 1) % favourites.size
             else -> (currentIndex - 1 + favourites.size) % favourites.size
         }
-    tune(favourites[targetIndex].frequency)
+    tunePreset(favourites[targetIndex])
 }

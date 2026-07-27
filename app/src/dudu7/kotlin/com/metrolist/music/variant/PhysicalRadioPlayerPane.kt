@@ -133,10 +133,13 @@ fun PhysicalRadioPlayerPane(
             else -> Unit
         }
     }
-    val isStationFavourite =
-        remember(state.frequency, state.presets) {
-            state.presets.any { FmPresetOrderStore.sameFrequency(it.frequency, state.frequency) }
+    val currentPreset =
+        remember(state.frequency, state.pi, state.presets) {
+            state.presets.firstOrNull {
+                FytPhysicalRadio.presetMatches(it, state.frequency, state.pi)
+            }
         }
+    val isStationFavourite = currentPreset != null
 
     LaunchedEffect(state.isActive, state.displayStation, state.rt) {
         if (state.isActive) {
@@ -271,7 +274,7 @@ fun PhysicalRadioPlayerPane(
                         playerConnection?.pause()
                         radio.powerOn()
                     } else {
-                        radio.toggleMute()
+                        radio.powerOff()
                     }
                 },
                 shape = CircleShape,
@@ -286,13 +289,9 @@ fun PhysicalRadioPlayerPane(
                 Icon(
                     painter =
                         painterResource(
-                            when {
-                                !state.isActive -> R.drawable.play
-                                state.isMuted -> R.drawable.volume_off
-                                else -> R.drawable.pause
-                            },
+                            if (!state.isActive) R.drawable.play else R.drawable.pause,
                         ),
-                    contentDescription = if (state.isMuted) "Radio einschalten" else "Radio stummschalten",
+                    contentDescription = if (state.isActive) "FM-Radio ausschalten" else "FM-Radio einschalten",
                     modifier = Modifier.size(39.dp),
                 )
             }
@@ -317,16 +316,12 @@ fun PhysicalRadioPlayerPane(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            IconButton(onClick = { radio.step(false) }, enabled = !state.isBusy) {
-                Text("−0,1", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            }
             IconButton(
                 onClick = {
                     if (isStationFavourite) {
-                        val remaining = state.presets.filterNot {
-                            FmPresetOrderStore.sameFrequency(it.frequency, state.frequency)
-                        }
-                        radio.removePreset(state.frequency)
+                        val preset = currentPreset ?: return@IconButton
+                        val remaining = state.presets.filterNot { it == preset }
+                        radio.removePreset(preset)
                         FmPresetOrderStore.persist(context, remaining)
                     } else {
                         radio.saveCurrentPreset()
@@ -412,16 +407,13 @@ fun PhysicalRadioPlayerPane(
                         },
                 )
             }
-            IconButton(onClick = { radio.step(true) }, enabled = !state.isBusy) {
-                Text("+0,1", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            }
         }
 
         Text(
             text =
                 buildString {
                     append("${state.displayStation} • RSSI ${state.rssi}")
-                    append(if (state.stereo) " • Stereo" else " • Mono")
+                    state.stereo?.let { append(if (it) " • Stereo" else " • Mono") }
                     if (state.pi != 0) append(" • PI ${state.pi.toString(16).uppercase()}")
                     val pty = FytPhysicalRadio.ptyLabel(state.pty)
                     if (pty.isNotBlank()) append(" • $pty")

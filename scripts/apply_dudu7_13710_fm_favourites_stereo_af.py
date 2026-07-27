@@ -758,7 +758,7 @@ if poll_tuner_new not in radio:
         raise SystemExit("poll tuner marker missing")
     radio = radio.replace(poll_tuner_old, poll_tuner_new, 1)
 
-identity_old = '''    private fun updateCurrentPresetIdentity() {
+identity_old = r'''    private fun updateCurrentPresetIdentity() {
         val snapshot = _state.value
         if (snapshot.pi <= 0) return
         var changed = false
@@ -808,7 +808,7 @@ identity_old = '''    private fun updateCurrentPresetIdentity() {
             .sortedBy { it.frequency }
             .toList()
 '''
-identity_new = '''    private fun updateCurrentPresetIdentity() {
+identity_new = r'''    private fun updateCurrentPresetIdentity() {
         val snapshot = _state.value
         val index =
             snapshot.presets.indexOfFirst {
