@@ -88,6 +88,7 @@ fun PhysicalRadioScreen() {
     var section by remember { mutableStateOf(PhysicalRadioSection.FAVOURITES) }
     var frequencyInput by remember { mutableStateOf(FytPhysicalRadio.formatFrequency(state.frequency)) }
     var editingPreset by remember { mutableStateOf<FytPhysicalRadio.Preset?>(null) }
+    var logoPickerPreset by remember { mutableStateOf<FytPhysicalRadio.Preset?>(null) }
 
     val orderedPresets = remember { mutableStateListOf<FytPhysicalRadio.Preset>() }
     val listState = rememberLazyListState()
@@ -260,7 +261,14 @@ fun PhysicalRadioScreen() {
                     editingPreset = null
                 }
             },
+            onChooseLogo = {
+                logoPickerPreset = preset
+                editingPreset = null
+            },
         )
+    }
+    logoPickerPreset?.let { preset ->
+        FmLogoPickerDialog(preset = preset, onDismiss = { logoPickerPreset = null })
     }
 }
 
@@ -270,6 +278,7 @@ private fun FmPresetEditorDialog(
     preset: FytPhysicalRadio.Preset,
     onDismiss: () -> Unit,
     onSave: (String, List<Float>) -> Unit,
+    onChooseLogo: () -> Unit,
 ) {
     var name by remember(preset) { mutableStateOf(preset.name) }
     var frequencies by
@@ -320,6 +329,16 @@ private fun FmPresetEditorDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                 )
+                FmStationArtwork(
+                    stationName = preset.name,
+                    frequency = preset.frequency,
+                    pi = preset.pi,
+                    ecc = preset.ecc,
+                    size = 72.dp,
+                )
+                OutlinedButton(onClick = onChooseLogo, modifier = Modifier.fillMaxWidth()) {
+                    Text("SENDERLOGO AUSWÄHLEN")
+                }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
         },
@@ -375,6 +394,7 @@ private fun FmFavouriteRow(
             stationName = preset.name,
             frequency = preset.frequency,
             pi = pi,
+            ecc = preset.ecc,
             size = 56.dp,
         )
         Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
@@ -599,6 +619,8 @@ private fun FmScanResultRow(
         FmStationArtwork(
             stationName = result.name,
             frequency = result.frequency,
+            pi = result.pi,
+            ecc = result.ecc,
             size = 54.dp,
         )
         Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
@@ -656,6 +678,8 @@ private fun PhysicalRadioManualPanel(
                 FmStationArtwork(
                     stationName = state.displayStation,
                     frequency = state.frequency,
+                    pi = state.pi,
+                    ecc = state.ecc,
                     size = 82.dp,
                 )
                 Column(Modifier.weight(1f)) {
@@ -858,6 +882,7 @@ private fun PhysicalRadioSettingsPanel(radio: FytPhysicalRadio) {
         }
         item { HorizontalDivider() }
         item { RadioStatusLine(state) }
+        item { FmRadioDiagnostics(state) }
         item {
             Text(
                 text =
@@ -908,6 +933,7 @@ private fun RadioStatusLine(state: FytPhysicalRadio.State) {
                 append("  •  RSSI ${state.rssi}")
                 state.stereo?.let { append(if (it) "  •  Stereo" else "  •  Mono") }
                 if (state.pi != 0) append("  •  PI ${state.pi.toString(16).uppercase()}")
+                if (state.ecc.isNotBlank()) append("  •  ECC ${state.ecc.uppercase()}")
                 val pty = FytPhysicalRadio.ptyLabel(state.pty)
                 if (pty.isNotBlank()) append("  •  $pty")
                 if (state.afEnabled) append("  •  AF")
