@@ -1,4 +1,4 @@
-name: Dudu7 APK Build
+name: Metrolist dudu7 APK
 
 on:
   push:
@@ -14,14 +14,16 @@ permissions:
   contents: write
 
 concurrency:
-  group: dudu7-apk-${{ github.event.pull_request.number || github.ref }}
+  group: metrolist-dudu7-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   build-apk:
-    name: Build Dudu7 APK
+    name: Build Metrolist dudu7 APK
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      METROLIST_APP_NAME: Metrolist dudu7
 
     steps:
       - name: Checkout
@@ -36,33 +38,83 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v5
         with:
           cache-disabled: true
 
-      - name: Prepare Gradle wrapper
-        shell: bash
-        run: chmod +x gradlew
-
-      - name: Build Dudu7 debug APK
-        shell: bash
-        run: ./gradlew :app:assembleFossDudu7Debug --no-daemon --stacktrace
-
-      - name: Collect APK
+      - name: Prepare stable Dudu7 identity
         shell: bash
         run: |
           set -euo pipefail
-          APK="$(find app/build/outputs/apk -type f -name '*.apk' -print -quit)"
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          path = Path('app/build.gradle.kts')
+          text = path.read_text(encoding='utf-8')
+          version_code = 1_370_000 + int(os.environ['GITHUB_RUN_NUMBER'])
+          text, code_count = re.subn(
+              r'versionCode = \d+',
+              f'versionCode = {version_code}',
+              text,
+              count=1,
+          )
+          text, name_count = re.subn(
+              r'versionName = "[^"]+"',
+              'versionName = "13.7.12"',
+              text,
+              count=1,
+          )
+          updater_count = text.count('buildConfigField("Boolean", "UPDATER_AVAILABLE", "true")')
+          text = text.replace(
+              'buildConfigField("Boolean", "UPDATER_AVAILABLE", "true")',
+              'buildConfigField("Boolean", "UPDATER_AVAILABLE", "false")',
+          )
+          if code_count != 1 or name_count != 1 or updater_count < 2:
+              raise SystemExit(
+                  f'Unexpected build configuration: versionCode={code_count}, '
+                  f'versionName={name_count}, updater={updater_count}'
+              )
+          path.write_text(text, encoding='utf-8')
+          Path('dist-version-code.txt').write_text(str(version_code), encoding='utf-8')
+          PY
+          ! grep -q 'UPDATER_AVAILABLE", "true"' app/build.gradle.kts
+          grep -q 'UPDATER_AVAILABLE", "false"' app/build.gradle.kts
+          grep -q 'presets.forEach { preset ->' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmPresetOrderStore.kt
+          chmod +x gradlew
+
+      - name: Build GMS Dudu7 ARM APK
+        shell: bash
+        run: ./gradlew :app:assembleGmsDudu7Debug --no-daemon --stacktrace
+
+      - name: Verify and collect APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$(find app/build/outputs/apk -type f -path '*/gmsDudu7/debug/*.apk' -print -quit)"
           test -n "$APK"
           mkdir -p dist
-          cp "$APK" dist/MetroList-Dudu7-HLS-LogoFix.apk
-          sha256sum dist/MetroList-Dudu7-HLS-LogoFix.apk > dist/MetroList-Dudu7-HLS-LogoFix.apk.sha256
+          cp "$APK" "dist/Metrolist dudu7.apk"
+
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$BUILD_TOOLS/aapt" dump badging "dist/Metrolist dudu7.apk" > dist/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "dist/Metrolist dudu7.apk" > dist/apk-signature.txt
+
+          VERSION_CODE="$(cat dist-version-code.txt)"
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='$VERSION_CODE'" dist/apk-badging.txt
+          grep -q "application-label:'Metrolist dudu7'" dist/apk-badging.txt
+          unzip -l "dist/Metrolist dudu7.apk" | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
+          sha256sum "dist/Metrolist dudu7.apk" > "dist/Metrolist dudu7.apk.sha256"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MetroList-Dudu7-HLS-LogoFix
+          name: Metrolist dudu7
           path: dist/*
           if-no-files-found: error
           retention-days: 14
@@ -73,13 +125,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p releases
-          cp dist/MetroList-Dudu7-HLS-LogoFix.apk releases/MetroList-Dudu7-HLS-LogoFix.apk
-          cp dist/MetroList-Dudu7-HLS-LogoFix.apk.sha256 releases/MetroList-Dudu7-HLS-LogoFix.apk.sha256
+          cp "dist/Metrolist dudu7.apk" "releases/Metrolist dudu7.apk"
+          cp "dist/Metrolist dudu7.apk.sha256" "releases/Metrolist dudu7.apk.sha256"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add releases/MetroList-Dudu7-HLS-LogoFix.apk releases/MetroList-Dudu7-HLS-LogoFix.apk.sha256
+          git add "releases/Metrolist dudu7.apk" "releases/Metrolist dudu7.apk.sha256"
           if git diff --cached --quiet; then
             exit 0
           fi
-          git commit -m "Publish Dudu7 HLS and logo fix APK"
+          git commit -m "Publish Metrolist dudu7 APK [skip ci]"
           git push origin HEAD:agent/fm-radio-ui-logos-tabs
