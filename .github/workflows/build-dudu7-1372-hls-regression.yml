@@ -48,31 +48,32 @@ jobs:
 
           player = Path('app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt')
           player_text = player.read_text()
-          old = '''                                        } else {
-                                              val albumId = currentMediaMetadata.album?.id
-                                                  ?: currentSong?.album?.id
-                                                  ?: currentSong?.song?.albumId
-                                              albumId?.let { "album/$it" }
-                                                  ?: SearchRoutes.resultRoute(
-                                                      "${currentMediaMetadata.artists.joinToString(" ") { it.name }} ${currentMediaMetadata.title}".trim(),
-                                                  )
-                                          }'''
-          new = '''                                        } else {
+          title_click_start = player_text.index('                                onTitleClick = {')
+          title_click_end = player_text.index('                                onArtistClick = {', title_click_start)
+          title_click = player_text[title_click_start:title_click_end]
+
+          album_marker = 'val albumId = currentMediaMetadata.album?.id'
+          expected_query = '"${currentMediaMetadata.artists.joinToString(" ") { it.name }} ${currentMediaMetadata.title}".trim()'
+          if album_marker in title_click:
+              navigation_line = '                                    if (!playerConnection.requestRightPaneNavigation(route))'
+              navigation_start = player_text.index(navigation_line, title_click_start, title_click_end)
+              else_marker = '                                        } else {'
+              else_start = player_text.rfind(else_marker, title_click_start, navigation_start)
+              if else_start < 0:
+                  raise SystemExit('YouTube Music title click else block not found')
+              replacement = '''                                        } else {
                                               SearchRoutes.resultRoute(
                                                   "${currentMediaMetadata.artists.joinToString(" ") { it.name }} ${currentMediaMetadata.title}".trim(),
                                               )
-                                          }'''
-          if old in player_text:
-              player_text = player_text.replace(old, new, 1)
-          elif new not in player_text:
-              raise SystemExit('YouTube Music title click insertion point not found')
+                                          }
+'''
+              player_text = player_text[:else_start] + replacement + player_text[navigation_start:]
 
           title_click_start = player_text.index('                                onTitleClick = {')
           title_click_end = player_text.index('                                onArtistClick = {', title_click_start)
           title_click = player_text[title_click_start:title_click_end]
-          if 'val albumId = currentMediaMetadata.album?.id' in title_click:
+          if album_marker in title_click:
               raise SystemExit('YouTube Music title click still opens an album')
-          expected_query = '"${currentMediaMetadata.artists.joinToString(" ") { it.name }} ${currentMediaMetadata.title}".trim()'
           if expected_query not in title_click:
               raise SystemExit('Current artist and title search query is missing')
           if 'playerConnection.requestRightPaneNavigation(route)' not in title_click:
