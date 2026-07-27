@@ -9,6 +9,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,43 +25,117 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.metrolist.music.R
 import com.metrolist.music.radio.RadioDnsLogoResolver
+import com.metrolist.music.radio.RadioLogoCandidate
+import com.metrolist.music.radio.RadioLogoSource
 import com.metrolist.music.radio.RadioStation
 import com.metrolist.music.radio.RadioStationLogoCache
 import com.metrolist.music.radio.RadioStationLogoResolver
 import com.metrolist.music.radio.RadioStationLogoSearch
 import com.metrolist.music.radio.RadioStationStore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.text.Normalizer
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 
-/** Shared FM logo resolver: RadioDNS first, then fixed WebRadio artwork and multi-source search. */
+/** Shared FM logo resolver: manual override, RadioDNS, local WebRadio and multi-source search. */
 object FmStationLogoResolver {
+    private const val TAG = "FmStationLogo"
     private const val PREFS = "dudu7_fm_station_logos_v2"
-    private const val CACHE_PREFIX = "logo_"
-    private val unresolvedThisSession = ConcurrentHashMap.newKeySet<String>()
+    private const val AUTO_PREFIX = "logo_" // Keep the old key for migration compatibility.
+    private const val MANUAL_PREFIX = "manual_"
+    private const val SOURCE_PREFIX = "source_"
+    private const val SOURCE_URL_PREFIX = "source_url_"
+    private const val UPDATED_PREFIX = "updated_"
+    private const val MANUAL_SOURCE_PREFIX = "manual_source_"
+    private const val MANUAL_SOURCE_URL_PREFIX = "manual_source_url_"
+    private const val MANUAL_UPDATED_PREFIX = "manual_updated_"
+    private const val RETRY_COOLDOWN_MS = 10L * 60L * 1000L
+    private const val AUTO_REFRESH_MS = 30L * 24L * 60L * 60L * 1000L
 
-    fun cachedLogo(context: Context, stationName: String, frequency: Float, pi: Int = 0): String? =
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(CACHE_PREFIX + cacheKey(stationName, frequency, pi), null)
+    data class LogoInfo(
+        val localUri: String,
+        val sourceLabel: String,
+        val sourceUrl: String,
+        val manual: Boolean,
+        val updatedAt: Long,
+    )
+
+    private val failedAt = ConcurrentHashMap<String, Long>()
+    private val _revisions = MutableStateFlow(0L)
+    val revisions: StateFlow<Long> = _revisions.asStateFlow()
+
+    fun logoInfo(
+        context: Context,
+        stationName: String,
+        frequency: Float,
+        pi: Int = 0,
+    ): LogoInfo? {
+        val key = cacheKey(stationName, frequency, pi)
+        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val manual = prefs.getString(MANUAL_PREFIX + key, null)
+        if (!manual.isNullOrBlank()) {
+            return LogoInfo(
+                localUri = manual,
+                sourceLabel = prefs.getString(MANUAL_SOURCE_PREFIX + key, "Manuell gewählt").orEmpty(),
+                sourceUrl = prefs.getString(MANUAL_SOURCE_URL_PREFIX + key, "").orEmpty(),
+                manual = true,
+                updatedAt = prefs.getLong(MANUAL_UPDATED_PREFIX + key, 0L),
+            )
+        }
+        val automatic = prefs.getString(AUTO_PREFIX + key, null) ?: return null
+        return LogoInfo(
+            localUri = automatic,
+            sourceLabel = prefs.getString(SOURCE_PREFIX + key, "Automatik-Cache").orEmpty(),
+            sourceUrl = prefs.getString(SOURCE_URL_PREFIX + key, "").orEmpty(),
+            manual = false,
+            updatedAt = prefs.getLong(UPDATED_PREFIX + key, 0L),
+        )
+    }
+
+    fun cachedLogo(
+        context: Context,
+        stationName: String,
+        frequency: Float,
+        pi: Int = 0,
+    ): String? = logoInfo(context, stationName, frequency, pi)?.localUri
 
     suspend fun resolve(
         context: Context,
         stationName: String,
         frequency: Float,
         pi: Int = 0,
+        ecc: String? = null,
+        force: Boolean = false,
     ): String? =
         withContext(Dispatchers.IO) {
             val appContext = context.applicationContext
             val key = cacheKey(stationName, frequency, pi)
-            cachedLogo(appContext, stationName, frequency, pi)?.let { return@withContext it }
-            if (!isUsefulStationName(stationName) || !unresolvedThisSession.add(key)) return@withContext null
+            val prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+            prefs.getString(MANUAL_PREFIX + key, null)?.takeIf(String::isNotBlank)?.let {
+                return@withContext it
+            }
+
+            val cached = prefs.getString(AUTO_PREFIX + key, null)?.takeIf(String::isNotBlank)
+            val updatedAt = prefs.getLong(UPDATED_PREFIX + key, 0L)
+            val now = System.currentTimeMillis()
+            val cacheFresh = cached != null && (updatedAt <= 0L || now - updatedAt < AUTO_REFRESH_MS)
+            if (!force && cacheFresh) return@withContext cached
+
+            if (pi <= 0 && !isUsefulStationName(stationName)) return@withContext cached
+            val lastFailure = failedAt[key] ?: 0L
+            if (!force && now - lastFailure < RETRY_COOLDOWN_MS) return@withContext cached
 
             if (pi > 0) {
-                RadioDnsLogoResolver.resolveFm(appContext, frequency, pi).forEach { candidate ->
-                    cacheAndPersist(appContext, key, candidate.url)?.let { return@withContext it }
+                RadioDnsLogoResolver.resolveFm(appContext, frequency, pi, ecc).forEach { candidate ->
+                    cacheAndPersistAutomatic(appContext, key, candidate)?.let { return@withContext it }
                 }
             }
 
@@ -73,26 +148,155 @@ object FmStationLogoResolver {
                 }
             }
             if (!fixedLocal.isNullOrBlank()) {
-                cacheAndPersist(appContext, key, fixedLocal)?.let { return@withContext it }
+                val candidate =
+                    RadioLogoCandidate(
+                        url = fixedLocal,
+                        source = RadioLogoSource.STATION_WEBSITE,
+                        matchScore = 100,
+                        title = localMatch?.name.orEmpty(),
+                    )
+                cacheAndPersistAutomatic(appContext, key, candidate)?.let { return@withContext it }
             }
 
             RadioStationLogoSearch.search(stationName, localMatch).getOrDefault(emptyList()).forEach { candidate ->
-                cacheAndPersist(appContext, key, candidate.url)?.let { return@withContext it }
+                cacheAndPersistAutomatic(appContext, key, candidate)?.let { return@withContext it }
             }
-            null
+
+            failedAt[key] = now
+            Timber.tag(TAG).w(
+                "No FM logo resolved station=%s frequency=%.1f PI=%04X ECC=%s; retaining stale=%s",
+                stationName,
+                frequency,
+                pi and 0xffff,
+                ecc.orEmpty(),
+                cached != null,
+            )
+            cached
         }
 
-    fun invalidate(context: Context, stationName: String, frequency: Float, pi: Int = 0) {
+    suspend fun searchCandidates(
+        context: Context,
+        stationName: String,
+        frequency: Float,
+        pi: Int = 0,
+        ecc: String? = null,
+    ): List<RadioLogoCandidate> =
+        withContext(Dispatchers.IO) {
+            val appContext = context.applicationContext
+            val localStations = RadioStationStore.get(appContext).stations.value
+            val localMatch = bestMatch(stationName, localStations)
+            buildList {
+                if (pi > 0) addAll(RadioDnsLogoResolver.resolveFm(appContext, frequency, pi, ecc))
+                localMatch?.let { station ->
+                    val fixed =
+                        when {
+                            station.manualFavicon && station.favicon.isNotBlank() -> station.favicon
+                            else -> RadioStationLogoResolver.resolve(station) ?: station.favicon
+                        }
+                    if (fixed.isNotBlank()) {
+                        add(
+                            RadioLogoCandidate(
+                                url = fixed,
+                                source = RadioLogoSource.STATION_WEBSITE,
+                                matchScore = 100,
+                                title = station.name,
+                            ),
+                        )
+                    }
+                }
+                addAll(RadioStationLogoSearch.search(stationName, localMatch).getOrDefault(emptyList()))
+            }.filter { it.url.startsWith("http://") || it.url.startsWith("https://") }
+                .distinctBy { it.url.substringBefore('#') }
+                .sortedByDescending { it.ranking }
+                .take(36)
+        }
+
+    suspend fun setManualLogo(
+        context: Context,
+        stationName: String,
+        frequency: Float,
+        pi: Int = 0,
+        sourceUrl: String,
+        sourceLabel: String = "Manuell gewählt",
+    ): String? =
+        withContext(Dispatchers.IO) {
+            val appContext = context.applicationContext
+            val key = cacheKey(stationName, frequency, pi)
+            val stable = RadioStationLogoCache.cache(appContext, "fm_manual_$key", sourceUrl) ?: return@withContext null
+            appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putString(MANUAL_PREFIX + key, stable)
+                .putString(MANUAL_SOURCE_PREFIX + key, sourceLabel)
+                .putString(MANUAL_SOURCE_URL_PREFIX + key, sourceUrl)
+                .putLong(MANUAL_UPDATED_PREFIX + key, System.currentTimeMillis())
+                .apply()
+            failedAt.remove(key)
+            bumpRevision()
+            Timber.tag(TAG).i("FM manual logo stored key=%s source=%s url=%s", key, sourceLabel, sourceUrl)
+            stable
+        }
+
+    fun clearManualLogo(
+        context: Context,
+        stationName: String,
+        frequency: Float,
+        pi: Int = 0,
+    ) {
         val key = cacheKey(stationName, frequency, pi)
-        unresolvedThisSession.remove(key)
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(CACHE_PREFIX + key).apply()
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .remove(MANUAL_PREFIX + key)
+            .remove(MANUAL_SOURCE_PREFIX + key)
+            .remove(MANUAL_SOURCE_URL_PREFIX + key)
+            .remove(MANUAL_UPDATED_PREFIX + key)
+            .apply()
+        failedAt.remove(key)
+        bumpRevision()
     }
 
-    private suspend fun cacheAndPersist(context: Context, key: String, source: String): String? {
-        val stable = RadioStationLogoCache.cache(context, "fm_$key", source) ?: return null
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(CACHE_PREFIX + key, stable).apply()
+    fun invalidateAuto(
+        context: Context,
+        stationName: String,
+        frequency: Float,
+        pi: Int = 0,
+    ) {
+        val key = cacheKey(stationName, frequency, pi)
+        failedAt.remove(key)
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .remove(AUTO_PREFIX + key)
+            .remove(SOURCE_PREFIX + key)
+            .remove(SOURCE_URL_PREFIX + key)
+            .remove(UPDATED_PREFIX + key)
+            .apply()
+        bumpRevision()
+    }
+
+    /** Backwards-compatible alias used by earlier code. */
+    fun invalidate(context: Context, stationName: String, frequency: Float, pi: Int = 0) =
+        invalidateAuto(context, stationName, frequency, pi)
+
+    private suspend fun cacheAndPersistAutomatic(
+        context: Context,
+        key: String,
+        candidate: RadioLogoCandidate,
+    ): String? {
+        val stable = RadioStationLogoCache.cache(context, "fm_$key", candidate.url) ?: return null
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(AUTO_PREFIX + key, stable)
+            .putString(SOURCE_PREFIX + key, candidate.source.label)
+            .putString(SOURCE_URL_PREFIX + key, candidate.url)
+            .putLong(UPDATED_PREFIX + key, System.currentTimeMillis())
+            .apply()
+        failedAt.remove(key)
+        bumpRevision()
+        Timber.tag(TAG).i(
+            "FM logo resolved key=%s source=%s url=%s",
+            key,
+            candidate.source.label,
+            candidate.url,
+        )
         return stable
     }
+
+    private fun bumpRevision() = _revisions.update { it + 1L }
 
     private fun bestMatch(requestedName: String, stations: List<RadioStation>): RadioStation? =
         stations.asSequence()
@@ -147,21 +351,28 @@ fun FmStationArtwork(
     stationName: String,
     frequency: Float,
     pi: Int = 0,
+    ecc: String? = null,
     size: Dp,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val revision by FmStationLogoResolver.revisions.collectAsState()
     val artworkKey =
-        remember(stationName, frequency, pi) {
+        remember(stationName, frequency, pi, ecc, revision) {
             if (pi > 0) {
-                "pi-${(pi and 0xffff).toString(16)}"
+                "pi-${(pi and 0xffff).toString(16)}-$revision"
             } else {
-                "${stationName.trim()}-${(frequency * 100f).roundToInt()}"
+                "${stationName.trim()}-${(frequency * 100f).roundToInt()}-$revision"
             }
         }
-    var artworkUrl by remember(artworkKey) { mutableStateOf(FmStationLogoResolver.cachedLogo(context, stationName, frequency, pi)) }
+    var artworkUrl by
+        remember(artworkKey) {
+            mutableStateOf(FmStationLogoResolver.cachedLogo(context, stationName, frequency, pi))
+        }
     LaunchedEffect(artworkKey) {
-        if (artworkUrl.isNullOrBlank()) artworkUrl = FmStationLogoResolver.resolve(context, stationName, frequency, pi)
+        if (artworkUrl.isNullOrBlank()) {
+            artworkUrl = FmStationLogoResolver.resolve(context, stationName, frequency, pi, ecc)
+        }
     }
     val shape = RoundedCornerShape((size.value / 7f).dp)
     if (!artworkUrl.isNullOrBlank()) {
