@@ -1,0 +1,116 @@
+name: Build Metrolist dudu7 update APK
+
+on:
+  pull_request:
+    branches: [agent/fm-radio-ui-logos-tabs]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          ref: ${{ github.head_ref || github.ref }}
+
+      - name: Apply update-compatible version
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          build = Path('app/build.gradle.kts')
+          text = build.read_text()
+          replacements = {
+              'versionCode = 172': 'versionCode = 1370023',
+              'versionName = "13.7.13"': 'versionName = "13.7.14"',
+          }
+          for old, new in replacements.items():
+              if old in text:
+                  text = text.replace(old, new, 1)
+              elif new not in text:
+                  raise SystemExit(f'Missing version insertion point: {old}')
+
+          if 'appNameOverride ?: "Metrolist dudu7"' not in text:
+              raise SystemExit('Metrolist dudu7 app label was lost')
+          if 'resValue("string", "app_name", "Metrolist dudu7")' not in text:
+              raise SystemExit('Metrolist dudu7 debug label was lost')
+          if 'UPDATER_AVAILABLE", "true"' in text:
+              raise SystemExit('Original Metrolist updater was re-enabled')
+          build.write_text(text)
+
+          player = Path('app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt').read_text()
+          start = player.index('                                onTitleClick = {')
+          end = player.index('                                onArtistClick = {', start)
+          block = player[start:end]
+          if 'val albumId = currentMediaMetadata.album?.id' in block:
+              raise SystemExit('YouTube Music title click still opens an album')
+          query = '"${currentMediaMetadata.artists.joinToString(" ") { it.name }} ${currentMediaMetadata.title}".trim()'
+          if query not in block or 'playerConnection.requestRightPaneNavigation(route)' not in block:
+              raise SystemExit('Current-title right-pane search is missing')
+          PY
+
+          git diff --check
+          grep -q 'versionCode = 1370023' app/build.gradle.kts
+          grep -q 'versionName = "13.7.14"' app/build.gradle.kts
+
+      - name: Commit source version
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'Source already uses the update-compatible version.'
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add app/build.gradle.kts
+            git commit -m 'build(dudu7): use update-compatible version code 1370023 [skip ci]'
+            git push origin HEAD:${GITHUB_HEAD_REF}
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Build GMS Dudu7 ARM APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          chmod +x gradlew
+          ./gradlew :app:assembleGmsDudu7Debug --no-daemon --stacktrace
+
+      - name: Verify update APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p dist
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          test -n "$APK"
+          cp "$APK" dist/Metrolist-dudu7-13.7.14.apk
+          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$build_tools/aapt" dump badging dist/Metrolist-dudu7-13.7.14.apk > dist/apk-badging.txt
+          "$build_tools/apksigner" verify --verbose --print-certs dist/Metrolist-dudu7-13.7.14.apk > dist/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370023'" dist/apk-badging.txt
+          grep -q "versionName='13.7.14-dudu7'" dist/apk-badging.txt
+          grep -q "application-label:'Metrolist dudu7'" dist/apk-badging.txt
+          grep -q '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' dist/apk-signature.txt
+          unzip -l dist/Metrolist-dudu7-13.7.14.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
+          sha256sum dist/Metrolist-dudu7-13.7.14.apk > dist/Metrolist-dudu7-13.7.14.apk.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.14
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
