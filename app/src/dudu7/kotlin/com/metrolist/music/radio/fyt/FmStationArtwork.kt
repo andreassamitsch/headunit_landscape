@@ -128,7 +128,8 @@ object FmStationLogoResolver {
     }
 
     private fun cacheKey(stationName: String, frequency: Float, pi: Int): String {
-        val identity = if (pi > 0) "pi_${(pi and 0xffff).toString(16).padStart(4, '0')}" else normalize(stationName).ifBlank { "unknown" }
+        if (pi > 0) return "pi_${(pi and 0xffff).toString(16).padStart(4, '0')}"
+        val identity = normalize(stationName).ifBlank { "unknown" }
         return "${identity}_${(frequency * 100f).roundToInt()}"
     }
 
@@ -150,7 +151,14 @@ fun FmStationArtwork(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val artworkKey = remember(stationName, frequency, pi) { "${stationName.trim()}-${(frequency * 100f).roundToInt()}-$pi" }
+    val artworkKey =
+        remember(stationName, frequency, pi) {
+            if (pi > 0) {
+                "pi-${(pi and 0xffff).toString(16)}"
+            } else {
+                "${stationName.trim()}-${(frequency * 100f).roundToInt()}"
+            }
+        }
     var artworkUrl by remember(artworkKey) { mutableStateOf(FmStationLogoResolver.cachedLogo(context, stationName, frequency, pi)) }
     LaunchedEffect(artworkKey) {
         if (artworkUrl.isNullOrBlank()) artworkUrl = FmStationLogoResolver.resolve(context, stationName, frequency, pi)

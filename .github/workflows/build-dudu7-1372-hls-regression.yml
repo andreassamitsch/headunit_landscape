@@ -1,4 +1,4 @@
-name: Build Dudu7 13.7.9 Logo Preview Refresh
+name: Build Dudu7 13.7.10 FM Favorites Stereo AF
 
 on:
   pull_request:
@@ -19,18 +19,28 @@ jobs:
           submodules: recursive
           ref: ${{ github.head_ref || github.ref }}
 
-      - name: Apply and verify focused 13.7.9 changes
+      - name: Apply and verify focused 13.7.10 changes
         shell: bash
         run: |
-          set -euxo pipefail
-          python3 scripts/apply_dudu7_1379_logo_preview_refresh.py
-          python3 -m py_compile scripts/apply_dudu7_1379_logo_preview_refresh.py
+          set -uo pipefail
+          exec > >(tee apply-output.log) 2>&1
+          trap 'status=$?; if [ "$status" -ne 0 ]; then mkdir -p _assistant; cp apply-output.log _assistant/dudu7-13710-apply-errors.txt; git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"; git add _assistant/dudu7-13710-apply-errors.txt; git commit -m "diag(dudu7): capture 13.7.10 apply errors [skip ci]" || true; git push origin HEAD:${GITHUB_HEAD_REF} || true; fi; exit "$status"' EXIT
+          set -ex
+          python3 scripts/fix_dudu7_13710_patch_literals.py
+          if grep -q 'versionCode = 169' app/build.gradle.kts \
+             && grep -q 'fun updatePreset(' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt \
+             && grep -q 'public int getStereoState()' app/src/dudu7/java/com/android/fmradio/FmNative.java; then
+            echo 'Source already patched.'
+          else
+            python3 scripts/apply_dudu7_13710_fm_favourites_stereo_af.py
+          fi
+          python3 -m py_compile scripts/fix_dudu7_13710_patch_literals.py scripts/apply_dudu7_13710_fm_favourites_stereo_af.py
           git diff --check
 
-          grep -q 'versionCode = 168' app/build.gradle.kts
-          grep -q 'versionName = "13.7.9"' app/build.gradle.kts
+          grep -q 'versionCode = 169' app/build.gradle.kts
+          grep -q 'versionName = "13.7.10"' app/build.gradle.kts
 
-          # Preserve the complete 13.7.8 Dudu7 radio and UI architecture.
+          # Preserve all existing Dudu7/WebRadio/HLS/logo architecture.
           grep -q 'rememberReorderableLazyListState' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'VehicleTabOrderStore.persist' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'VEHICLE_PHYSICAL_RADIO_ROUTE' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
@@ -39,37 +49,61 @@ jobs:
           grep -q 'builder.setCustomCacheKey(mediaId)' app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt
           grep -q 'RadioDnsLogoResolver.resolveFm' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmStationArtwork.kt
           grep -q 'RADIO_AT("radio.at"' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoSearch.kt
-
-          # Only successfully downloaded, decoded and visible candidates reach the UI.
           grep -q 'suspend fun cachePreview' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoCache.kt
-          grep -q 'fun clearPreviews' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoCache.kt
-          grep -q 'download(value)' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoCache.kt
-          grep -q 'hasVisibleContent(decoded)' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoCache.kt
-          grep -q 'cachePreview(context, stationUuid, candidate.url)' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
-          grep -q 'Keine darstellbaren Logos gefunden' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
 
-          # Explicit user selection replaces an old fixed logo immediately.
-          grep -q 'fun replaceFromUser' app/src/main/kotlin/com/metrolist/music/radio/RadioStationStore.kt
-          grep -q 'preserveExistingManualLogo = false' app/src/main/kotlin/com/metrolist/music/radio/RadioStationStore.kt
-          grep -q 'store.replaceFromUser(station)' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
-          grep -q 'orderedSavedStations\[orderedIndex\] = station' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
-          grep -q 'System.currentTimeMillis().toString(36)' app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoCache.kt
+          # FYT native state comes from actual tuner methods; unknown is not Mono.
+          grep -q 'public native boolean stereoMono()' app/src/dudu7/java/com/android/fmradio/FmNative.java
+          grep -q 'public native int readRssi()' app/src/dudu7/java/com/android/fmradio/FmNative.java
+          grep -q 'public native short getPI()' app/src/dudu7/java/com/android/fmradio/FmNative.java
+          grep -q 'public native short\[\] getAFList()' app/src/dudu7/java/com/android/fmradio/FmNative.java
+          grep -q 'public int getStereoState()' app/src/dudu7/java/com/android/fmradio/FmNative.java
+          grep -q 'val stereo: Boolean? = null' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+          grep -q 'state.stereo?.let' app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
+          grep -q 'state.stereo?.let' app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt
+
+          # PI/AF station groups replace frequency-only favorites.
+          grep -q 'val alternativeFrequencies: List<Float>' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+          grep -q 'private fun groupScanResults' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+          grep -q 'private fun mergePresets' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+          grep -q 'fun presetMatches' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+          grep -q 'preset_order_v2' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmPresetOrderStore.kt
+          grep -q 'snapshot.pi > 0' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+          grep -q 'AF_POLL_INTERVAL_MS' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+          ! grep -q 'snapshot.rssi in 1..29' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+          grep -q 'fm.activeAf()' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+          grep -q 'if (pi > 0) return "pi_' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmStationArtwork.kt
+
+          # Favorite long press edits; fake mute and player ±0.1 controls are gone.
+          grep -q 'private fun FmPresetEditorDialog' app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt
+          grep -q 'onLongClick = onEdit' app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt
+          grep -q 'radio.updatePreset' app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt
+          ! grep -q 'onLongClick = onPlay' app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt
+          ! grep -q 'radio.toggleMute()' app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt
+          ! grep -q 'radio.toggleMute()' app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
+          ! grep -q '−0,1' app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
+          ! grep -q '+0,1' app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
+          grep -q 'radio.powerOff()' app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
+          trap - EXIT
 
       - name: Commit applied source changes
         if: github.event_name == 'pull_request'
         shell: bash
         run: |
           if git diff --quiet; then
-            echo 'Source already patched.'
+            echo 'Source already committed.'
           else
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git add \
+              scripts/apply_dudu7_13710_fm_favourites_stereo_af.py \
               app/build.gradle.kts \
-              app/src/main/kotlin/com/metrolist/music/radio/RadioStationStore.kt \
-              app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoCache.kt \
-              app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
-            git commit -m 'fix(dudu7): validate logo previews and refresh favorites immediately [skip ci]'
+              app/src/dudu7/java/com/android/fmradio/FmNative.java \
+              app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt \
+              app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmPresetOrderStore.kt \
+              app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmStationArtwork.kt \
+              app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt \
+              app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
+            git commit -m 'fix(dudu7): edit FM favorites and correct stereo grouping AF [skip ci]'
             git push origin HEAD:${GITHUB_HEAD_REF}
           fi
 
@@ -92,15 +126,15 @@ jobs:
           set -e
           if [ "$status" -ne 0 ]; then
             mkdir -p _assistant
-            grep -E '(^e: | error: |Compilation error|FAILURE:)' build-output.log | tail -n 300 > _assistant/dudu7-1379-build-errors.txt || true
-            if [ ! -s _assistant/dudu7-1379-build-errors.txt ]; then
-              tail -n 300 build-output.log > _assistant/dudu7-1379-build-errors.txt
+            grep -E '(^e: | error: |Compilation error|FAILURE:)' build-output.log | tail -n 400 > _assistant/dudu7-13710-build-errors.txt || true
+            if [ ! -s _assistant/dudu7-13710-build-errors.txt ]; then
+              tail -n 400 build-output.log > _assistant/dudu7-13710-build-errors.txt
             fi
-            cat _assistant/dudu7-1379-build-errors.txt
+            cat _assistant/dudu7-13710-build-errors.txt
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add _assistant/dudu7-1379-build-errors.txt
-            git commit -m 'diag(dudu7): capture 13.7.9 compiler errors [skip ci]' || true
+            git add _assistant/dudu7-13710-build-errors.txt
+            git commit -m 'diag(dudu7): capture 13.7.10 compiler errors [skip ci]' || true
             git push origin HEAD:${GITHUB_HEAD_REF} || true
             exit "$status"
           fi
@@ -113,17 +147,17 @@ jobs:
           mkdir -p dist
           APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
           test -n "$APK"
-          cp "$APK" dist/MetroList-Dudu7-13.7.9-Logo-Preview-Refresh.apk
+          cp "$APK" dist/MetroList-Dudu7-13.7.10-FM-Favorites-Stereo-AF.apk
           build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
-          "$build_tools/aapt" dump badging dist/MetroList-Dudu7-13.7.9-Logo-Preview-Refresh.apk > dist/apk-badging.txt
-          "$build_tools/apksigner" verify --verbose --print-certs dist/MetroList-Dudu7-13.7.9-Logo-Preview-Refresh.apk > dist/apk-signature.txt
-          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='168'" dist/apk-badging.txt
-          unzip -l dist/MetroList-Dudu7-13.7.9-Logo-Preview-Refresh.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
-          sha256sum dist/MetroList-Dudu7-13.7.9-Logo-Preview-Refresh.apk > dist/MetroList-Dudu7-13.7.9-Logo-Preview-Refresh.apk.sha256
+          "$build_tools/aapt" dump badging dist/MetroList-Dudu7-13.7.10-FM-Favorites-Stereo-AF.apk > dist/apk-badging.txt
+          "$build_tools/apksigner" verify --verbose --print-certs dist/MetroList-Dudu7-13.7.10-FM-Favorites-Stereo-AF.apk > dist/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='169'" dist/apk-badging.txt
+          unzip -l dist/MetroList-Dudu7-13.7.10-FM-Favorites-Stereo-AF.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
+          sha256sum dist/MetroList-Dudu7-13.7.10-FM-Favorites-Stereo-AF.apk > dist/MetroList-Dudu7-13.7.10-FM-Favorites-Stereo-AF.apk.sha256
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MetroList-Dudu7-13.7.9-Logo-Preview-Refresh
+          name: MetroList-Dudu7-13.7.10-FM-Favorites-Stereo-AF
           path: dist/*
           if-no-files-found: error
           retention-days: 14

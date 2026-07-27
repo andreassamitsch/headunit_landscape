@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -86,6 +87,7 @@ fun PhysicalRadioScreen() {
 
     var section by remember { mutableStateOf(PhysicalRadioSection.FAVOURITES) }
     var frequencyInput by remember { mutableStateOf(FytPhysicalRadio.formatFrequency(state.frequency)) }
+    var editingPreset by remember { mutableStateOf<FytPhysicalRadio.Preset?>(null) }
 
     val orderedPresets = remember { mutableStateListOf<FytPhysicalRadio.Preset>() }
     val listState = rememberLazyListState()
@@ -105,7 +107,7 @@ fun PhysicalRadioScreen() {
     LaunchedEffect(state.presets, isDragging) {
         if (!isDragging && !wasDragging) {
             val ordered = FmPresetOrderStore.ordered(context, state.presets)
-            if (orderedPresets.map { it.frequency } != ordered.map { it.frequency }) {
+            if (orderedPresets != ordered) {
                 orderedPresets.clear()
                 orderedPresets.addAll(ordered)
             }
@@ -174,34 +176,29 @@ fun PhysicalRadioScreen() {
                     ) {
                         itemsIndexed(
                             items = orderedPresets,
-                            key = { _, preset -> "fm-${(preset.frequency * 10).toInt()}" },
+                            key = { _, preset -> FytPhysicalRadio.stablePresetKey(preset) },
                         ) { _, preset ->
-                            ReorderableItem(reorderState, key = "fm-${(preset.frequency * 10).toInt()}") {
+                            ReorderableItem(reorderState, key = FytPhysicalRadio.stablePresetKey(preset)) {
                                 val isActive =
                                     state.isActive &&
-                                        FmPresetOrderStore.sameFrequency(state.frequency, preset.frequency)
+                                        FytPhysicalRadio.presetMatches(preset, state.frequency, state.pi)
                                 FmFavouriteRow(
                                     preset = preset,
                                     pi = if (isActive && state.pi > 0) state.pi else preset.pi,
                                     isActive = isActive,
-                                    isMuted = isActive && state.isMuted,
                                     onPlay = {
-                                        if (isActive) {
-                                            radio.toggleMute()
-                                        } else {
+                                        if (!isActive) {
                                             playerConnection?.pause()
-                                            radio.tune(preset.frequency)
+                                            radio.tunePreset(preset)
                                         }
                                     },
+                                    onEdit = { editingPreset = preset },
                                     onDelete = {
-                                        val remaining =
-                                            orderedPresets.filterNot {
-                                                FmPresetOrderStore.sameFrequency(it.frequency, preset.frequency)
-                                            }
+                                        val remaining = orderedPresets.filterNot { it == preset }
                                         orderedPresets.clear()
                                         orderedPresets.addAll(remaining)
                                         FmPresetOrderStore.persist(context, remaining)
-                                        radio.removePreset(preset.frequency)
+                                        radio.removePreset(preset)
                                     },
                                     dragHandle = {
                                         IconButton(
@@ -253,6 +250,80 @@ fun PhysicalRadioScreen() {
             }
         }
     }
+
+    editingPreset?.let { preset ->
+        FmPresetEditorDialog(
+            preset = preset,
+            onDismiss = { editingPreset = null },
+            onSave = { name, frequencies ->
+                if (radio.updatePreset(preset, name, frequencies)) {
+                    editingPreset = null
+                }
+            },
+        )
+    }
+}
+
+
+@Composable
+private fun FmPresetEditorDialog(
+    preset: FytPhysicalRadio.Preset,
+    onDismiss: () -> Unit,
+    onSave: (String, List<Float>) -> Unit,
+) {
+    var name by remember(preset) { mutableStateOf(preset.name) }
+    var frequencies by
+        remember(preset) {
+            mutableStateOf(
+                FytPhysicalRadio
+                    .presetFrequencies(preset)
+                    .joinToString("; ") { FytPhysicalRadio.formatFrequency(it) },
+            )
+        }
+    var error by remember(preset) { mutableStateOf<String?>(null) }
+
+    fun submit() {
+        val tokens =
+            frequencies
+                .split(';', ',')
+                .map(String::trim)
+                .filter(String::isNotBlank)
+        val parsed = tokens.mapNotNull { value -> value.replace(',', '.').toFloatOrNull() }
+        when {
+            name.isBlank() -> error = "Sendername fehlt"
+            parsed.size != tokens.size -> error = "Mindestens eine Frequenz ist ungültig"
+            parsed.isEmpty() -> error = "Mindestens eine Frequenz angeben"
+            parsed.any { it !in 87.5f..108.0f } -> error = "Frequenzen müssen zwischen 87,5 und 108,0 MHz liegen"
+            else -> onSave(name.trim(), parsed)
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("FM-Favorit bearbeiten") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Sendername") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = frequencies,
+                    onValueChange = { frequencies = it },
+                    label = { Text("Frequenzen, durch Semikolon getrennt") },
+                    supportingText = { Text("Beispiel: 99,4; 103,2") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            }
+        },
+        confirmButton = { Button(onClick = ::submit) { Text("Speichern") } },
+        dismissButton = { OutlinedButton(onClick = onDismiss) { Text("Abbrechen") } },
+    )
 }
 
 @Composable
@@ -278,8 +349,8 @@ private fun FmFavouriteRow(
     preset: FytPhysicalRadio.Preset,
     pi: Int,
     isActive: Boolean,
-    isMuted: Boolean,
     onPlay: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit,
     dragHandle: @Composable () -> Unit,
 ) {
@@ -295,7 +366,7 @@ private fun FmFavouriteRow(
                     } else {
                         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
                     },
-                ).combinedClickable(onClick = onPlay, onLongClick = onPlay)
+                ).combinedClickable(onClick = onPlay, onLongClick = onEdit)
                 .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
         FmStationArtwork(
@@ -313,14 +384,16 @@ private fun FmFavouriteRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = "${FytPhysicalRadio.formatFrequency(preset.frequency)} MHz",
+                text = FytPhysicalRadio.formatFrequencies(FytPhysicalRadio.presetFrequencies(preset)),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         if (isActive) {
             Text(
-                text = if (isMuted) "STUMM" else "● LÄUFT",
+                text = "● LÄUFT",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
@@ -536,9 +609,9 @@ private fun FmScanResultRow(
             )
             Text(
                 buildString {
-                    append("${FytPhysicalRadio.formatFrequency(result.frequency)} MHz")
+                    append(FytPhysicalRadio.formatFrequencies(FytPhysicalRadio.scanFrequencies(result)))
                     append("  •  RSSI ${result.rssi}")
-                    append(if (result.stereo) "  •  Stereo" else "  •  Mono")
+                    result.stereo?.let { append(if (it) "  •  Stereo" else "  •  Mono") }
                     val pty = FytPhysicalRadio.ptyLabel(result.pty)
                     if (pty.isNotBlank()) append("  •  $pty")
                     if (result.tp) append("  •  TP")
@@ -561,8 +634,11 @@ private fun PhysicalRadioManualPanel(
     val context = LocalContext.current
     val playerConnection = LocalPlayerConnection.current
     val state by radio.state.collectAsStateWithLifecycle()
-    val isFavourite =
-        state.presets.any { FmPresetOrderStore.sameFrequency(it.frequency, state.frequency) }
+    val currentPreset =
+        state.presets.firstOrNull {
+            FytPhysicalRadio.presetMatches(it, state.frequency, state.pi)
+        }
+    val isFavourite = currentPreset != null
 
     LazyColumn(
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
@@ -660,24 +736,11 @@ private fun PhysicalRadioManualPanel(
                     Text(if (state.isActive) "AUS" else "RADIO EIN", modifier = Modifier.padding(start = 6.dp))
                 }
                 OutlinedButton(
-                    onClick = radio::toggleMute,
-                    enabled = state.isActive && !state.isBusy,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Icon(
-                        painter = painterResource(if (state.isMuted) R.drawable.volume_off else R.drawable.volume_up),
-                        contentDescription = null,
-                    )
-                    Text(if (state.isMuted) "STUMM" else "TON", modifier = Modifier.padding(start = 6.dp))
-                }
-                OutlinedButton(
                     onClick = {
                         if (isFavourite) {
-                            val remaining =
-                                state.presets.filterNot {
-                                    FmPresetOrderStore.sameFrequency(it.frequency, state.frequency)
-                                }
-                            radio.removePreset(state.frequency)
+                            val preset = currentPreset ?: return@OutlinedButton
+                            val remaining = state.presets.filterNot { it == preset }
+                            radio.removePreset(preset)
                             FmPresetOrderStore.persist(context, remaining)
                         } else {
                             radio.saveCurrentPreset()
@@ -841,7 +904,7 @@ private fun RadioStatusLine(state: FytPhysicalRadio.State) {
             buildString {
                 append("${FytPhysicalRadio.formatFrequency(state.frequency)} MHz")
                 append("  •  RSSI ${state.rssi}")
-                append(if (state.stereo) "  •  Stereo" else "  •  Mono")
+                state.stereo?.let { append(if (it) "  •  Stereo" else "  •  Mono") }
                 if (state.pi != 0) append("  •  PI ${state.pi.toString(16).uppercase()}")
                 val pty = FytPhysicalRadio.ptyLabel(state.pty)
                 if (pty.isNotBlank()) append("  •  $pty")
