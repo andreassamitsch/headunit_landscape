@@ -91,6 +91,9 @@ import com.metrolist.music.radio.RadioStationStore
 import com.metrolist.music.radio.mergeSavedStationUpdates
 import com.metrolist.music.utils.rememberEnumPreference
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import sh.calvin.reorderable.ReorderableItem
@@ -584,7 +587,14 @@ fun WebRadioScreen() {
                     RadioBrowserClient.resolveStreamUrl(draft.streamUrl)
                         .onSuccess { resolved ->
                             val station = draft.copy(streamUrl = resolved)
-                            store.addOrUpdate(station)
+                            store.replaceFromUser(station)
+                            val orderedIndex = orderedSavedStations.indexOfFirst { it.uuid == station.uuid }
+                            if (orderedIndex >= 0) {
+                                orderedSavedStations[orderedIndex] = station
+                            } else {
+                                orderedSavedStations.add(station)
+                            }
+                            refreshedFavoriteCache.remove(station.uuid)
                             showAddDialog = false
                             editingStation = null
                             section = WebRadioSection.SAVED
@@ -909,11 +919,28 @@ private fun RadioStationEditorDialog(
                     favicon = favicon.trim(),
                     manualFavicon = manualFavicon,
                 )
-            RadioStationLogoSearch.search(name.trim(), currentStation)
-                .onSuccess { candidates ->
-                    logoCandidates = candidates
-                    if (logoCandidates.isEmpty()) logoSearchError = "Keine passenden Logos gefunden"
-                }.onFailure { logoSearchError = it.message ?: "Logosuche fehlgeschlagen" }
+            val candidates =
+                RadioStationLogoSearch.search(name.trim(), currentStation).getOrElse { error ->
+                    logoSearchError = error.message ?: "Logosuche fehlgeschlagen"
+                    logoSearchLoading = false
+                    return@launch
+                }
+            RadioStationLogoCache.clearPreviews(context, stationUuid)
+            val validated = mutableListOf<RadioLogoCandidate>()
+            candidates.take(30).chunked(6).forEach { batch ->
+                validated +=
+                    coroutineScope {
+                        batch.map { candidate ->
+                            async {
+                                RadioStationLogoCache
+                                    .cachePreview(context, stationUuid, candidate.url)
+                                    ?.let { preview -> candidate.copy(url = preview) }
+                            }
+                        }.awaitAll().filterNotNull()
+                    }
+            }
+            logoCandidates = validated
+            if (logoCandidates.isEmpty()) logoSearchError = "Keine darstellbaren Logos gefunden"
             logoSearchLoading = false
         }
     }
