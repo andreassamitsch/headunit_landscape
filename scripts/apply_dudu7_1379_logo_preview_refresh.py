@@ -1,4 +1,86 @@
-package com.metrolist.music.radio
+from pathlib import Path
+
+
+def replace_once(path: str, old: str, new: str) -> None:
+    file = Path(path)
+    text = file.read_text(encoding="utf-8")
+    if new in text:
+        return
+    if old not in text:
+        raise SystemExit(f"Patch marker missing in {path}: {old[:160]!r}")
+    file.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+
+replace_once(
+    "app/build.gradle.kts",
+    '        versionCode = 167\n        versionName = "13.7.8"',
+    '        versionCode = 168\n        versionName = "13.7.9"',
+)
+
+store_path = Path("app/src/main/kotlin/com/metrolist/music/radio/RadioStationStore.kt")
+store = store_path.read_text(encoding="utf-8")
+old_store = '''    @Synchronized
+    fun addOrUpdate(station: RadioStation) {
+        val list = _stations.value.toMutableList()
+        val index = list.indexOfFirst { it.uuid == station.uuid }
+        if (index >= 0) {
+            val previous = list[index]
+            val stableStation =
+                when {
+                    previous.manualFavicon && previous.favicon.isNotBlank() ->
+                        station.copy(favicon = previous.favicon, manualFavicon = true)
+                    station.favicon.isBlank() && previous.favicon.isNotBlank() ->
+                        station.copy(favicon = previous.favicon)
+                    else -> station
+                }
+            list[index] = stableStation
+        } else {
+            list.add(station)
+        }
+        persist(list)
+    }
+'''
+new_store = '''    /** Background catalogue/metadata updates may not replace a fixed user logo. */
+    @Synchronized
+    fun addOrUpdate(station: RadioStation) {
+        addOrUpdateInternal(station, preserveExistingManualLogo = true)
+    }
+
+    /** An explicit edit is allowed to replace or clear the previously fixed logo. */
+    @Synchronized
+    fun replaceFromUser(station: RadioStation) {
+        addOrUpdateInternal(station, preserveExistingManualLogo = false)
+    }
+
+    private fun addOrUpdateInternal(
+        station: RadioStation,
+        preserveExistingManualLogo: Boolean,
+    ) {
+        val list = _stations.value.toMutableList()
+        val index = list.indexOfFirst { it.uuid == station.uuid }
+        if (index >= 0) {
+            val previous = list[index]
+            val stableStation =
+                when {
+                    preserveExistingManualLogo && previous.manualFavicon && previous.favicon.isNotBlank() ->
+                        station.copy(favicon = previous.favicon, manualFavicon = true)
+                    preserveExistingManualLogo && station.favicon.isBlank() && previous.favicon.isNotBlank() ->
+                        station.copy(favicon = previous.favicon)
+                    else -> station
+                }
+            list[index] = stableStation
+        } else {
+            list.add(station)
+        }
+        persist(list)
+    }
+'''
+if new_store not in store:
+    if old_store not in store:
+        raise SystemExit("RadioStationStore addOrUpdate marker missing")
+    store_path.write_text(store.replace(old_store, new_store, 1), encoding="utf-8")
+
+cache_content = r'''package com.metrolist.music.radio
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -203,3 +285,71 @@ object RadioStationLogoCache {
         return scheme.equals("file", ignoreCase = true) || scheme.equals("content", ignoreCase = true)
     }
 }
+'''
+Path("app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoCache.kt").write_text(cache_content, encoding="utf-8")
+
+screen_path = Path("app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt")
+screen = screen_path.read_text(encoding="utf-8")
+
+screen = screen.replace(
+    "import kotlinx.coroutines.Job\nimport kotlinx.coroutines.launch\n",
+    "import kotlinx.coroutines.Job\nimport kotlinx.coroutines.async\nimport kotlinx.coroutines.awaitAll\nimport kotlinx.coroutines.coroutineScope\nimport kotlinx.coroutines.launch\n",
+    1,
+)
+
+old_search = '''            RadioStationLogoSearch.search(name.trim(), currentStation)
+                .onSuccess { candidates ->
+                    logoCandidates = candidates
+                    if (logoCandidates.isEmpty()) logoSearchError = "Keine passenden Logos gefunden"
+                }.onFailure { logoSearchError = it.message ?: "Logosuche fehlgeschlagen" }
+            logoSearchLoading = false
+'''
+new_search = '''            val candidates =
+                RadioStationLogoSearch.search(name.trim(), currentStation).getOrElse { error ->
+                    logoSearchError = error.message ?: "Logosuche fehlgeschlagen"
+                    logoSearchLoading = false
+                    return@launch
+                }
+            RadioStationLogoCache.clearPreviews(context, stationUuid)
+            val validated = mutableListOf<RadioLogoCandidate>()
+            candidates.take(30).chunked(6).forEach { batch ->
+                validated +=
+                    coroutineScope {
+                        batch.map { candidate ->
+                            async {
+                                RadioStationLogoCache
+                                    .cachePreview(context, stationUuid, candidate.url)
+                                    ?.let { preview -> candidate.copy(url = preview) }
+                            }
+                        }.awaitAll().filterNotNull()
+                    }
+            }
+            logoCandidates = validated
+            if (logoCandidates.isEmpty()) logoSearchError = "Keine darstellbaren Logos gefunden"
+            logoSearchLoading = false
+'''
+if old_search not in screen:
+    raise SystemExit("WebRadio logo search marker missing")
+screen = screen.replace(old_search, new_search, 1)
+
+old_save = '''                            val station = draft.copy(streamUrl = resolved)
+                            store.addOrUpdate(station)
+                            showAddDialog = false
+'''
+new_save = '''                            val station = draft.copy(streamUrl = resolved)
+                            store.replaceFromUser(station)
+                            val orderedIndex = orderedSavedStations.indexOfFirst { it.uuid == station.uuid }
+                            if (orderedIndex >= 0) {
+                                orderedSavedStations[orderedIndex] = station
+                            } else {
+                                orderedSavedStations.add(station)
+                            }
+                            refreshedFavoriteCache.remove(station.uuid)
+                            showAddDialog = false
+'''
+if old_save not in screen:
+    raise SystemExit("WebRadio explicit save marker missing")
+screen = screen.replace(old_save, new_save, 1)
+
+screen_path.write_text(screen, encoding="utf-8")
+print("Applied Dudu7 13.7.9 logo preview validation and immediate favourite refresh")
