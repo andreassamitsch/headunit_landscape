@@ -1971,7 +1971,7 @@ fun BottomSheetPlayer(
                                     currentSong?.song?.liked == true
                                 }
                             val likeEnabled = !isWebRadio || resolvedRadioSong != null
-                            val showRadioRecognition = isWebRadio && !radioHasTrackMetadata
+                            val showRadioRecognition = isWebRadio && resolvedRadioSong == null
                             VehiclePlayerControls(
                                 title = currentMediaMetadata.title,
                                 artists = currentMediaMetadata.artists.joinToString(", ") { it.name },

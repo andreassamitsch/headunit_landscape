@@ -170,13 +170,19 @@ object RadioStationLogoSearch {
                 val pageName = extractPageName(page.html)
                 val match = stationMatchScore(query, pageName)
                 if (match < 72) return@forEach
-                val images = extractMetaImages(page.html, page.finalUrl)
+                val images =
+                    buildList {
+                        radioAtStationImageUrl(page.finalUrl)?.let(::add)
+                        addAll(extractMetaImages(page.html, page.finalUrl))
+                    }.distinct()
                 if (images.isNotEmpty()) {
                     return@withContext images.map { url ->
                         RadioLogoCandidate(
                             url = url,
                             source = RadioLogoSource.RADIO_AT,
                             matchScore = match,
+                            width = if (url.contains("/300/")) 300 else 0,
+                            height = if (url.contains("/300/")) 300 else 0,
                             title = pageName,
                         )
                     }
@@ -185,7 +191,7 @@ object RadioStationLogoSearch {
             emptyList()
         }
 
-    private fun radioAtSlugs(value: String): List<String> {
+    internal fun radioAtSlugs(value: String): List<String> {
         val aliases = stationAliases(value)
         val slugs = linkedSetOf<String>()
         aliases.forEach { alias ->
@@ -196,12 +202,32 @@ object RadioStationLogoSearch {
                     .replace("ü", "ue")
                     .replace("ß", "ss")
             val compact = transliterated.replace(Regex("[^a-z0-9]+"), "")
-            if (compact.isNotBlank()) slugs += compact
             val withoutRadio = transliterated.replace(Regex("^radio\\s+"), "").replace(Regex("[^a-z0-9]+"), "")
-            if (withoutRadio.isNotBlank()) slugs += withoutRadio
+            fun addSlugVariants(candidate: String) {
+                if (candidate.isBlank()) return
+                slugs += candidate
+                // radio.at uses "partymix" for several stations whose displayed
+                // name contains "Partyhitmix" or "Party Hitmix".
+                candidate
+                    .replace("partyhitsmix", "partymix")
+                    .replace("partyhitmix", "partymix")
+                    .takeIf { it != candidate }
+                    ?.let(slugs::add)
+            }
+            addSlugVariants(compact)
+            addSlugVariants(withoutRadio)
             if ("ö3" in alias.lowercase(Locale.ROOT) || "oe3" in compact) slugs += "oe3"
         }
         return slugs.toList()
+    }
+
+    internal fun radioAtStationImageUrl(pageUrl: String): String? {
+        val slug =
+            runCatching { URI(pageUrl).path.substringAfterLast('/').lowercase(Locale.ROOT) }
+                .getOrNull()
+                ?.takeIf { it.matches(Regex("[a-z0-9-]+")) }
+                ?: return null
+        return "https://www.radio.at/300/$slug.png?version="
     }
 
     private suspend fun searchCommons(query: String): List<RadioLogoCandidate> =
@@ -293,7 +319,11 @@ object RadioStationLogoSearch {
         val right = normalize(candidate)
         if (left.isBlank() || right.isBlank()) return 0
         if (left == right) return 100
+        val compactLeft = left.replace(" ", "")
+        val compactRight = right.replace(" ", "")
+        if (compactLeft == compactRight) return 100
         if (right.contains(left) || left.contains(right)) return 90
+        if (compactRight.contains(compactLeft) || compactLeft.contains(compactRight)) return 90
         val expectedTokens = left.split(' ').filter { it.length >= 2 }.toSet()
         val candidateTokens = right.split(' ').filter { it.length >= 2 }.toSet()
         if (expectedTokens.isEmpty() || candidateTokens.isEmpty()) return 0

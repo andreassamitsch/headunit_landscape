@@ -38,7 +38,10 @@ import com.metrolist.music.playback.MusicService.MusicBinder
 import com.metrolist.music.playback.queues.ListQueue
 import com.metrolist.music.playback.queues.Queue
 import com.metrolist.music.radio.RadioStationStore
+import com.metrolist.music.radio.isClearRadioTrackMetadata
 import com.metrolist.music.radio.isRadioMediaId
+import com.metrolist.music.radio.normalizeRadioTrackText
+import com.metrolist.music.radio.parseRadioStreamTitle
 import com.metrolist.music.radio.radioFavoriteNeighbor
 import com.metrolist.shazamkit.models.RecognitionResult
 import com.metrolist.music.utils.dataStore
@@ -782,7 +785,7 @@ class PlayerConnection(
                 ?: base.title
         val parsed = parseRadioStreamTitle(rawTitle)
         val metadataKey =
-            "${base.id}|${normalizeTrackText(parsed.first.orEmpty())}|${normalizeTrackText(parsed.second)}"
+            "${base.id}|${normalizeRadioTrackText(parsed.first.orEmpty())}|${normalizeRadioTrackText(parsed.second)}"
         if (lastAppliedRadioMetadataKey == metadataKey) return
         lastAppliedRadioMetadataKey = metadataKey
         val dynamic =
@@ -817,7 +820,7 @@ class PlayerConnection(
         if (!isRadioMediaId(base.id)) return
         val preferredCover = result.coverArtHqUrl ?: result.coverArtUrl
         lastAppliedRadioMetadataKey =
-            "${base.id}|${normalizeTrackText(result.artist)}|${normalizeTrackText(result.title)}"
+            "${base.id}|${normalizeRadioTrackText(result.artist)}|${normalizeRadioTrackText(result.title)}"
         mediaMetadata.value =
             base.copy(
                 title = result.title,
@@ -829,59 +832,6 @@ class PlayerConnection(
             lookupRadioSong(base, result.artist, result.title, preferredCover)
         }
     }
-
-    private fun parseRadioStreamTitle(raw: String): Pair<String?, String> {
-        val cleaned = raw.substringBefore(" [").trim()
-        val separator = listOf(" - ", " – ", " — ", " | ").firstOrNull { it in cleaned }
-        if (separator == null) return null to cleaned
-        val artist = cleaned.substringBefore(separator).trim().takeIf { it.isNotBlank() }
-        val title = cleaned.substringAfter(separator).trim().ifBlank { cleaned }
-        return artist to title
-    }
-
-    private fun isClearRadioTrackMetadata(
-        artist: String?,
-        title: String,
-        stationName: String,
-    ): Boolean {
-        if (artist.isNullOrBlank() || title.isBlank()) return false
-        val normalizedArtist = normalizeTrackText(artist)
-        val normalizedTitle = normalizeTrackText(title)
-        val normalizedStation = normalizeTrackText(stationName)
-        if (normalizedArtist.length < 2 || normalizedTitle.length < 2) return false
-        if (normalizedArtist == normalizedStation || normalizedTitle == normalizedStation) return false
-        if ("http" in normalizedArtist || "http" in normalizedTitle || "www" in normalizedArtist || "www" in normalizedTitle) return false
-
-        val generic =
-            setOf(
-                "radio",
-                "webradio",
-                "live",
-                "stream",
-                "unknown",
-                "unbekannt",
-                "station identification",
-                "jingle",
-                "promo",
-                "advertisement",
-                "commercial",
-                "werbung",
-                "news",
-                "nachrichten",
-            )
-        return normalizedArtist !in generic && normalizedTitle !in generic
-    }
-
-    private fun normalizeTrackText(value: String): String =
-        value
-            .lowercase()
-            .replace(
-                Regex("""[\(\[][^(\[]*(official|music video|video|audio|lyrics?|remaster(?:ed)?|live)[^\)\]]*[\)\]]"""),
-                " ",
-            ).replace(Regex("""\b(feat|ft)\.?\b.*"""), " ")
-            .replace(Regex("""[^\p{L}\p{N}]+"""), " ")
-            .trim()
-            .replace(Regex("""\s+"""), " ")
 
     private fun tokenCoverage(expected: String, actual: String): Double {
         if (expected.isBlank() || actual.isBlank()) return 0.0
@@ -897,10 +847,10 @@ class PlayerConnection(
         artist: String,
         title: String,
     ): Boolean {
-        val expectedTitle = normalizeTrackText(title)
-        val actualTitle = normalizeTrackText(song.title)
-        val expectedArtist = normalizeTrackText(artist)
-        val actualArtist = normalizeTrackText(song.artists.joinToString(" ") { it.name })
+        val expectedTitle = normalizeRadioTrackText(title)
+        val actualTitle = normalizeRadioTrackText(song.title)
+        val expectedArtist = normalizeRadioTrackText(artist)
+        val actualArtist = normalizeRadioTrackText(song.artists.joinToString(" ") { it.name })
         return tokenCoverage(expectedTitle, actualTitle) >= 0.80 &&
             tokenCoverage(expectedArtist, actualArtist) >= 0.70
     }
@@ -911,7 +861,7 @@ class PlayerConnection(
         title: String,
         preferredCover: String? = null,
     ) {
-        val key = "${normalizeTrackText(artist)}|${normalizeTrackText(title)}"
+        val key = "${normalizeRadioTrackText(artist)}|${normalizeRadioTrackText(title)}"
         if (radioSongCache.containsKey(key)) {
             applyResolvedRadioSong(base, title, radioSongCache[key], preferredCover)
             return
