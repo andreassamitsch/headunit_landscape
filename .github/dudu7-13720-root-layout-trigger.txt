@@ -1,0 +1,1 @@
+Run the focused Dudu7 emulator validation after constraining the original artist category and album detail screens to a single root layout.
