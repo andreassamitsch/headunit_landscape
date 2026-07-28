@@ -876,9 +876,6 @@ private fun PhysicalRadioSettingsPanel(radio: FytPhysicalRadio) {
         }
         item {
             RadioSettingRow(
-                title = "AF – Alternative Frequenzen",
-        item {
-            RadioSettingRow(
                 title = "GPS-Sendererkennung (RTR)",
                 description = when {
                     !state.geoEnabled -> "Aus. Aktivieren lädt das österreichische RTR-Frequenzbuch und nutzt GPS nur lokal im Fahrzeug."
