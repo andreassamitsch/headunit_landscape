@@ -69,9 +69,12 @@ jobs:
           set -euxo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add app/build.gradle.kts app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt
+          git add \
+            app/build.gradle.kts \
+            app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt \
+            app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistItemsScreen.kt
           if ! git diff --cached --quiet; then
-            git commit -m 'fix(dudu7): use original MetroList artist subpages [skip ci]'
+            git commit -m 'fix(dudu7): use visible original MetroList artist subpages [skip ci]'
             git push origin HEAD:${GITHUB_HEAD_REF}
           fi
 
@@ -86,6 +89,8 @@ jobs:
           grep -q 'ArtistItemsScreen(navController)' app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt
           ! grep -q 'EmbeddedArtistItemsScreen' app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt
           grep -q 'LazyVerticalGrid' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistItemsScreen.kt
+          grep -q 'LocalRightPaneScrollBridge.current != null' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistItemsScreen.kt
+          grep -q 'if (embeddedInPlayer) Modifier else Modifier.animateItem()' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistItemsScreen.kt
           grep -q 'navController.navigate("album/${item.id}")' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistItemsScreen.kt
           grep -q 'route = "album/{albumId}"' app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt
           grep -q 'AlbumScreen(navController)' app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt
@@ -120,7 +125,6 @@ jobs:
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
 
       - name: Build and verify update-compatible ARM APK
-        id: arm
         shell: bash
         run: |
           set -euxo pipefail
@@ -198,10 +202,10 @@ jobs:
           grep -q 'PASS: Albums opened the original MetroList adaptive grid' "$RESULTS_DIR/summary.md"
           grep -q 'PASS: Singles & EPs opened the original MetroList adaptive grid' "$RESULTS_DIR/summary.md"
           test -s "$RESULTS_DIR/dudu7-artist-subpages.mp4"
-          test -s "$RESULTS_DIR/albums-original-grid.png"
-          test -s "$RESULTS_DIR/album-detail-with-songs.png"
-          test -s "$RESULTS_DIR/singles-eps-original-grid.png"
-          test -s "$RESULTS_DIR/single-ep-detail-with-songs.png"
+          compgen -G "$RESULTS_DIR/*-albums-original-grid.png" >/dev/null
+          compgen -G "$RESULTS_DIR/*-album-detail-with-songs.png" >/dev/null
+          compgen -G "$RESULTS_DIR/*-singles-eps-original-grid.png" >/dev/null
+          compgen -G "$RESULTS_DIR/*-single-ep-detail-with-songs.png" >/dev/null
 
       - name: Upload APK and emulator evidence
         if: always()
