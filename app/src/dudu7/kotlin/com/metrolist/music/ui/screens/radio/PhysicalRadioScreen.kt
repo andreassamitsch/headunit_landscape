@@ -187,6 +187,9 @@ fun PhysicalRadioScreen() {
                                 FmFavouriteRow(
                                     preset = preset,
                                     pi = if (isActive && state.pi > 0) state.pi else preset.pi,
+                                    activeFrequency = state.frequency,
+                                    activeEcc = state.ecc,
+                                    activeAlternativeFrequencies = state.alternativeFrequencies,
                                     isActive = isActive,
                                     onPlay = {
                                         if (!isActive) {
@@ -344,6 +347,7 @@ private fun FmPresetEditorDialog(
                     pi = preset.pi,
                     ecc = preset.ecc,
                     size = 72.dp,
+                    allFrequencies = FytPhysicalRadio.presetFrequencies(preset),
                 )
                 OutlinedButton(onClick = onChooseLogo, modifier = Modifier.fillMaxWidth()) {
                     Text("SENDERLOGO AUSWÄHLEN")
@@ -378,6 +382,9 @@ private fun EmptyFmFavourites(onOpenSearch: () -> Unit) {
 private fun FmFavouriteRow(
     preset: FytPhysicalRadio.Preset,
     pi: Int,
+    activeFrequency: Float,
+    activeEcc: String,
+    activeAlternativeFrequencies: List<Float>,
     isActive: Boolean,
     onPlay: () -> Unit,
     onNextAf: () -> Unit,
@@ -406,10 +413,13 @@ private fun FmFavouriteRow(
     ) {
         FmStationArtwork(
             stationName = preset.name,
-            frequency = preset.frequency,
+            frequency = if (isActive) activeFrequency else preset.frequency,
             pi = pi,
-            ecc = preset.ecc,
+            ecc = if (isActive) activeEcc.ifBlank { preset.ecc } else preset.ecc,
             size = 56.dp,
+            allFrequencies =
+                FytPhysicalRadio.presetFrequencies(preset) +
+                    if (isActive) activeAlternativeFrequencies else emptyList(),
         )
         Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
             Text(
@@ -636,6 +646,7 @@ private fun FmScanResultRow(
             pi = result.pi,
             ecc = result.ecc,
             size = 54.dp,
+            allFrequencies = FytPhysicalRadio.scanFrequencies(result),
         )
         Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
             Text(
@@ -695,6 +706,7 @@ private fun PhysicalRadioManualPanel(
                     pi = state.pi,
                     ecc = state.ecc,
                     size = 82.dp,
+                    allFrequencies = listOf(state.frequency) + state.alternativeFrequencies,
                 )
                 Column(Modifier.weight(1f)) {
                     Text(

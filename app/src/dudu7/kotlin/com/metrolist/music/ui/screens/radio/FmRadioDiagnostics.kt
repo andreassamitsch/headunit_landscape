@@ -14,7 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.metrolist.music.radio.RadioDnsLogoResolver
-import com.metrolist.music.radio.fyt.FmStationLogoResolver
+import com.metrolist.music.radio.fyt.ReliableReliableFmStationLogoResolver
 import com.metrolist.music.radio.fyt.FytPhysicalRadio
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -24,8 +24,11 @@ import kotlin.math.roundToInt
 internal fun FmRadioDiagnostics(state: FytPhysicalRadio.State) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val revision by FmStationLogoResolver.revisions.collectAsState()
-    val info = FmStationLogoResolver.logoInfo(context, state.displayStation, state.frequency, state.pi)
+    val revision by ReliableFmStationLogoResolver.revisions.collectAsState()
+    val info = ReliableFmStationLogoResolver.logoInfo(
+        context, state.displayStation, state.frequency, state.pi, state.ecc,
+        listOf(state.frequency) + state.alternativeFrequencies,
+    )
     val piHex = (state.pi and 0xffff).toString(16).padStart(4, '0')
     val ecc = state.ecc.ifBlank { RadioDnsLogoResolver.defaultEcc(context).orEmpty() }.lowercase(Locale.ROOT)
     val gcc = if (state.pi > 0 && ecc.matches(Regex("[0-9a-f]{2}"))) "${piHex.first()}$ecc" else ""
@@ -60,14 +63,17 @@ internal fun FmRadioDiagnostics(state: FytPhysicalRadio.State) {
         Button(
             onClick = {
                 scope.launch {
-                    FmStationLogoResolver.invalidateAuto(context, state.displayStation, state.frequency, state.pi)
-                    FmStationLogoResolver.resolve(
-                        context,
-                        state.displayStation,
-                        state.frequency,
-                        state.pi,
-                        state.ecc,
+                    ReliableFmStationLogoResolver.invalidateAuto(
+                        context, state.displayStation, state.frequency, state.pi, state.ecc,
+                    )
+                    ReliableFmStationLogoResolver.resolve(
+                        context = context,
+                        stationName = state.displayStation,
+                        frequency = state.frequency,
+                        pi = state.pi,
+                        ecc = state.ecc,
                         force = true,
+                        allFrequencies = listOf(state.frequency) + state.alternativeFrequencies,
                     )
                 }
             },
