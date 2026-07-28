@@ -1,6 +1,10 @@
 package com.metrolist.music.ui.screens.radio
 
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -60,6 +64,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.content.ContextCompat
 import com.metrolist.music.LocalPlayerConnection
 import com.metrolist.music.R
 import com.metrolist.music.extensions.move
@@ -842,7 +847,15 @@ private fun PhysicalRadioManualPanel(
 
 @Composable
 private fun PhysicalRadioSettingsPanel(radio: FytPhysicalRadio) {
+    val context = LocalContext.current
     val state by radio.state.collectAsStateWithLifecycle()
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { result ->
+        val granted = result.values.any { it }
+        radio.setGeoEnabled(granted)
+        radio.onLocationPermissionChanged()
+    }
 
     LazyColumn(
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
@@ -860,6 +873,45 @@ private fun PhysicalRadioSettingsPanel(radio: FytPhysicalRadio) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+        item {
+            RadioSettingRow(
+                title = "AF – Alternative Frequenzen",
+        item {
+            RadioSettingRow(
+                title = "GPS-Sendererkennung (RTR)",
+                description = when {
+                    !state.geoEnabled -> "Aus. Aktivieren lädt das österreichische RTR-Frequenzbuch und nutzt GPS nur lokal im Fahrzeug."
+                    !state.geoPermissionGranted -> "Standortberechtigung fehlt. GPS-Daten werden nicht an RTR übertragen."
+                    else -> "${state.geoLocationStatus} • ${state.rtrCatalogStatus}"
+                },
+                checked = state.geoEnabled,
+                onCheckedChange = { enabled ->
+                    if (!enabled) {
+                        radio.setGeoEnabled(false)
+                    } else if (
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                    ) {
+                        radio.setGeoEnabled(true)
+                        radio.onLocationPermissionChanged()
+                    } else {
+                        locationPermissionLauncher.launch(arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                        ))
+                    }
+                },
+            )
+        }
+        item {
+            OutlinedButton(
+                onClick = radio::refreshRtrData,
+                enabled = !state.rtrCatalogLoading,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (state.rtrCatalogLoading) "RTR-DATEN WERDEN GELADEN …" else "RTR-FREQUENZDATEN AKTUALISIEREN")
+            }
         }
         item {
             RadioSettingRow(
