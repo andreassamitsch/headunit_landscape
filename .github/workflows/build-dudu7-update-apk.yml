@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: dudu7-update-${{ github.event.pull_request.number || github.ref }}
@@ -35,38 +35,11 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Apply artist album navigation
-        shell: bash
-        run: |
-          set -euxo pipefail
-          python3 -m py_compile scripts/apply_dudu7_13718_artist_album_navigation.py
-          python3 scripts/apply_dudu7_13718_artist_album_navigation.py
-          git diff --check
-
-      - name: Persist generated source changes
-        if: github.event_name == 'pull_request'
-        shell: bash
-        run: |
-          set -euxo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add app/build.gradle.kts \
-            app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
-          if ! git diff --cached --quiet; then
-            git commit -m 'fix(dudu7): open artist albums and singles in right pane [skip ci]'
-            git push origin HEAD:${GITHUB_HEAD_REF}
-          fi
-
       - name: Validate Dudu7 source configuration
         shell: bash
         run: |
           set -euxo pipefail
           git diff --check
-          grep -q 'versionCode = 1370027' app/build.gradle.kts
-          grep -q 'versionName = "13.7.18"' app/build.gradle.kts
-          grep -q 'val albumTapKey = "artist_album_${index}_${item.id}"' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
-          grep -q 'Dudu7ArtistAlbumTap' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
-          grep -q 'navController.navigate("album/$albumId")' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
           grep -q 'appNameOverride ?: "Metrolist dudu7"' app/build.gradle.kts
           grep -q 'resValue("string", "app_name", "Metrolist dudu7")' app/build.gradle.kts
           if grep -q 'UPDATER_AVAILABLE", "true"' app/build.gradle.kts; then
