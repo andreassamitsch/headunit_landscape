@@ -853,6 +853,12 @@ fun ArtistScreen(
                                         items = distinctItemsBySection[index] ?: section.items,
                                         key = { "youtube_album_${it.id}" },
                                     ) { item ->
+                                        val albumTapKey = "artist_album_${index}_${item.id}"
+                                        DisposableEffect(albumTapKey) {
+                                            onDispose {
+                                                rightPaneTapTargets.remove(albumTapKey)
+                                            }
+                                        }
                                         YouTubeGridItem(
                                             item = item,
                                             isActive =
@@ -866,6 +872,21 @@ fun ArtistScreen(
                                             thumbnailRatio = 1f, // Use square thumbnails for all items in horizontal scroll
                                             modifier =
                                                 Modifier
+                                                    .onGloballyPositioned { coordinates ->
+                                                        if (embeddedInPlayer && item is AlbumItem) {
+                                                            val albumId = item.id
+                                                            rightPaneTapTargets[albumTapKey] =
+                                                                coordinates.boundsInRoot() to {
+                                                                    timber.log.Timber.tag("Dudu7ArtistAlbumTap").i(
+                                                                        "Opening artist album item id=%s",
+                                                                        albumId,
+                                                                    )
+                                                                    navController.navigate("album/$albumId")
+                                                                }
+                                                        } else {
+                                                            rightPaneTapTargets.remove(albumTapKey)
+                                                        }
+                                                    }
                                                     .combinedClickable(
                                                         onClick = {
                                                             when (item) {
