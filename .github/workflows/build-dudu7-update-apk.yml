@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: dudu7-update-${{ github.event.pull_request.number || github.ref }}
@@ -35,38 +35,16 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Apply requested source integration
+      - name: Validate Dudu7 source configuration
         shell: bash
         run: |
           set -euxo pipefail
-          if [[ -f scripts/apply_dudu7_13716_af_sensitivity.py ]]; then
-            sed -i 's/averageRssi < snapshot.afSensitivity/snapshot.afAverageRssi < snapshot.afSensitivity/' scripts/apply_dudu7_13716_af_sensitivity.py
-            python3 -m py_compile scripts/apply_dudu7_13716_af_sensitivity.py
-            python3 scripts/apply_dudu7_13716_af_sensitivity.py
-          fi
           git diff --check
-
           grep -q 'appNameOverride ?: "Metrolist dudu7"' app/build.gradle.kts
           grep -q 'resValue("string", "app_name", "Metrolist dudu7")' app/build.gradle.kts
           if grep -q 'UPDATER_AVAILABLE", "true"' app/build.gradle.kts; then
             echo 'Original Metrolist updater was re-enabled' >&2
             exit 1
-          fi
-
-      - name: Persist generated source changes
-        if: github.event_name == 'pull_request'
-        shell: bash
-        run: |
-          set -euxo pipefail
-          if ! git diff --quiet; then
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add app/build.gradle.kts \
-              app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt \
-              app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt \
-              app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/FmRadioDiagnostics.kt
-            git commit -m 'feat(dudu7): add adjustable AF sensitivity and manual AF cycling [skip ci]'
-            git push origin HEAD:${GITHUB_HEAD_REF}
           fi
 
       - name: Read APK version
