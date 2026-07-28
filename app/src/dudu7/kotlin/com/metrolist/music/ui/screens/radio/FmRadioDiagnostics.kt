@@ -14,8 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.metrolist.music.radio.RadioDnsLogoResolver
-import com.metrolist.music.radio.fyt.ReliableFmStationLogoResolver
 import com.metrolist.music.radio.fyt.FytPhysicalRadio
+import com.metrolist.music.radio.fyt.ReliableFmStationLogoResolver
 import kotlinx.coroutines.launch
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -25,10 +25,15 @@ internal fun FmRadioDiagnostics(state: FytPhysicalRadio.State) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val revision by ReliableFmStationLogoResolver.revisions.collectAsState()
-    val info = ReliableFmStationLogoResolver.logoInfo(
-        context, state.displayStation, state.frequency, state.pi, state.ecc,
-        listOf(state.frequency) + state.alternativeFrequencies,
-    )
+    val info =
+        ReliableFmStationLogoResolver.logoInfo(
+            context,
+            state.displayStation,
+            state.frequency,
+            state.pi,
+            state.ecc,
+            listOf(state.frequency) + state.alternativeFrequencies,
+        )
     val piHex = (state.pi and 0xffff).toString(16).padStart(4, '0')
     val ecc = state.ecc.ifBlank { RadioDnsLogoResolver.defaultEcc(context).orEmpty() }.lowercase(Locale.ROOT)
     val gcc = if (state.pi > 0 && ecc.matches(Regex("[0-9a-f]{2}"))) "${piHex.first()}$ecc" else ""
@@ -38,7 +43,8 @@ internal fun FmRadioDiagnostics(state: FytPhysicalRadio.State) {
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("FM-Diagnose", style = MaterialTheme.typography.titleMedium)
-        Text("PS: ${state.ps.ifBlank { "–" }}")
+        Text("RDS-PS roh: ${state.ps.ifBlank { "–" }}")
+        Text("Sender: ${state.displayStation}  •  ID: ${state.stableStationId}")
         Text(
             "PI: ${if (state.pi > 0) piHex.uppercase(Locale.ROOT) else "–"}  •  " +
                 "ECC: ${state.ecc.ifBlank { "– (Fallback $ecc)" }}  •  GCC: ${gcc.ifBlank { "–" }}",
@@ -52,8 +58,11 @@ internal fun FmRadioDiagnostics(state: FytPhysicalRadio.State) {
             "RSSI: aktuell ${state.rssi}  •  Mittel ${state.afAverageRssi.takeIf { it > 0 } ?: "–"}  •  " +
                 "Schwelle ${state.afSensitivity}  •  schwach ${state.afWeakSamples}/3",
         )
+        if (state.afLastResult.isNotBlank()) {
+            Text("Letzte AF-Prüfung: ${state.afLastResult}", style = MaterialTheme.typography.bodySmall)
+        }
         Text(
-            "FYT ro.fyt.fmsens: ${state.firmwareFmSensitivity ?: "–"}",
+            "FYT activeAf(): ${state.afLastNativeResult ?: "–"}  •  ro.fyt.fmsens: ${state.firmwareFmSensitivity ?: "–"}",
             style = MaterialTheme.typography.bodySmall,
         )
         Text("Logoquelle: ${info?.sourceLabel ?: "–"}${if (info?.manual == true) " (manuell)" else ""}")
@@ -64,7 +73,11 @@ internal fun FmRadioDiagnostics(state: FytPhysicalRadio.State) {
             onClick = {
                 scope.launch {
                     ReliableFmStationLogoResolver.invalidateAuto(
-                        context, state.displayStation, state.frequency, state.pi, state.ecc,
+                        context,
+                        state.displayStation,
+                        state.frequency,
+                        state.pi,
+                        state.ecc,
                     )
                     ReliableFmStationLogoResolver.resolve(
                         context = context,

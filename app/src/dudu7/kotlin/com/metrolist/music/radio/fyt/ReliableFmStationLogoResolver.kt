@@ -132,8 +132,9 @@ object ReliableFmStationLogoResolver {
             val cacheFresh = cached != null && (updatedAt <= 0L || now - updatedAt < AUTO_REFRESH_MS)
             if (!force && cacheFresh) return@withContext cached
 
-            val identity = AustrianFmStationCatalog.identify(stationName, frequencies)
-            if (pi <= 0 && identity == null && !isSafeAutomaticName(stationName)) return@withContext cached
+            val resolvedStation = FmStationIdentity.resolve(stationName, null, frequencies, pi, ecc)
+            val identity = AustrianFmStationCatalog.identify(resolvedStation.canonicalName, frequencies)
+            if (pi <= 0 && identity == null && !isSafeAutomaticName(resolvedStation.canonicalName)) return@withContext cached
             val lastFailure = failedAt[key] ?: 0L
             if (!force && now - lastFailure < RETRY_COOLDOWN_MS) return@withContext cached
 
@@ -150,7 +151,7 @@ object ReliableFmStationLogoResolver {
                 cacheAndPersistAutomatic(appContext, key, candidate)?.let { return@withContext it }
             }
 
-            val exactLocal = exactLocalMatch(identity?.canonicalName ?: stationName, RadioStationStore.get(appContext).stations.value)
+            val exactLocal = exactLocalMatch(identity?.canonicalName ?: resolvedStation.canonicalName, RadioStationStore.get(appContext).stations.value)
             val fixedLocal = exactLocal?.let { station ->
                 when {
                     station.manualFavicon && station.favicon.isNotBlank() -> station.favicon
@@ -191,8 +192,9 @@ object ReliableFmStationLogoResolver {
         withContext(Dispatchers.IO) {
             val appContext = context.applicationContext
             val frequencies = orderedFrequencies(frequency, allFrequencies)
-            val identity = AustrianFmStationCatalog.identify(stationName, frequencies)
-            val query = identity?.canonicalName ?: stationName
+            val resolvedStation = FmStationIdentity.resolve(stationName, null, frequencies, pi, ecc)
+            val identity = AustrianFmStationCatalog.identify(resolvedStation.canonicalName, frequencies)
+            val query = identity?.canonicalName ?: resolvedStation.canonicalName
             val localStations = RadioStationStore.get(appContext).stations.value
             val localMatch = bestManualMatch(query, localStations)
 
@@ -362,13 +364,15 @@ object ReliableFmStationLogoResolver {
         pi: Int,
         ecc: String?,
     ): String {
+        val resolved = FmStationIdentity.resolve(stationName, null, listOf(frequency), pi, ecc)
+        if (resolved.recognized) return "station_${resolved.stableId.replace(':', '_')}"
         if (pi > 0) {
             val piHex = (pi and 0xffff).toString(16).padStart(4, '0')
             val resolvedEcc = normaliseEcc(ecc) ?: RadioDnsLogoResolver.defaultEcc(context)
             val gcc = resolvedEcc?.let { "${piHex.first()}$it" } ?: "unknown"
             return "gcc_${gcc}_pi_$piHex"
         }
-        val identity = normalizeAlias(stationName).ifBlank { "unknown" }.replace(' ', '_')
+        val identity = normalizeAlias(resolved.canonicalName).ifBlank { "unknown" }.replace(' ', '_')
         return "name_${identity}_${(frequency * 100f).roundToInt()}"
     }
 
