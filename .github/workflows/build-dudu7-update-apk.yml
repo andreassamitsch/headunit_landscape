@@ -41,6 +41,8 @@ jobs:
           set -euxo pipefail
           python3 -m py_compile scripts/apply_dudu7_13719_album_parser_fix.py
           python3 scripts/apply_dudu7_13719_album_parser_fix.py
+          python3 -m py_compile scripts/apply_dudu7_13719_album_song_shelf_fix.py
+          python3 scripts/apply_dudu7_13719_album_song_shelf_fix.py
           git diff --check
 
       - name: Persist generated source and regression test
@@ -57,7 +59,7 @@ jobs:
             innertube/src/main/kotlin/com/metrolist/innertube/pages/AlbumPage.kt \
             innertube/src/test/kotlin/com/metrolist/innertube/pages/AlbumPageTest.kt
           if ! git diff --cached --quiet; then
-            git commit -m 'fix(dudu7): parse single-column album responses [skip ci]'
+            git commit -m 'fix(dudu7): parse single-column album song shelves [skip ci]'
             git push origin HEAD:${GITHUB_HEAD_REF}
           fi
 
@@ -69,8 +71,10 @@ jobs:
           grep -q 'versionCode = 1370028' app/build.gradle.kts
           grep -q 'versionName = "13.7.19"' app/build.gradle.kts
           grep -q 'AlbumPage.getAlbum(response, browseId)' innertube/src/main/kotlin/com/metrolist/innertube/YouTube.kt
-          grep -q 'fun getAlbum(response: BrowseResponse, browseId: String)' innertube/src/main/kotlin/com/metrolist/innertube/pages/AlbumPage.kt
+          grep -q 'val shelfContents = AlbumPage.getShelfContents(response)' innertube/src/main/kotlin/com/metrolist/innertube/YouTube.kt
+          grep -q 'fun getShelfContents(response: BrowseResponse)' innertube/src/main/kotlin/com/metrolist/innertube/pages/AlbumPage.kt
           grep -q 'parsesSingleColumnResponsiveAlbumResponse' innertube/src/test/kotlin/com/metrolist/innertube/pages/AlbumPageTest.kt
+          grep -q 'assertEquals(1, AlbumPage.getShelfContents(response).size)' innertube/src/test/kotlin/com/metrolist/innertube/pages/AlbumPageTest.kt
           grep -q 'Album konnte nicht geladen werden.' app/src/main/kotlin/com/metrolist/music/ui/screens/AlbumScreen.kt
           grep -q 'appNameOverride ?: "Metrolist dudu7"' app/build.gradle.kts
           grep -q 'resValue("string", "app_name", "Metrolist dudu7")' app/build.gradle.kts
