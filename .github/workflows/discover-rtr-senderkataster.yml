@@ -1,0 +1,75 @@
+name: Discover RTR Senderkataster endpoints
+
+on:
+  push:
+    branches:
+      - agent/rtr-endpoint-discovery
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Inspect official RTR endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/assets
+          curl -fL --retry 3 --connect-timeout 20 https://senderkataster.rtr.at/ -o out/index.html
+          curl -fL --retry 3 --connect-timeout 20 'https://data.rtr.at/api/v1/tables/MedienFrequenzbuch/description?lang=de' -o out/frequency-description.json
+          curl -fL --retry 3 --connect-timeout 20 'https://data.rtr.at/api/v1/tables/MedienFrequenzbuch?programm_typ=H%C3%B6rfunk&size=5' -o out/frequency-sample.json
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          from urllib.parse import urljoin
+          import subprocess
+
+          class P(HTMLParser):
+              def __init__(self):
+                  super().__init__(); self.urls=[]
+              def handle_starttag(self, tag, attrs):
+                  a=dict(attrs)
+                  if tag=='script' and a.get('src'): self.urls.append(a['src'])
+                  if tag=='link' and a.get('href'): self.urls.append(a['href'])
+          p=P(); p.feed(Path('out/index.html').read_text(errors='ignore'))
+          urls=[]
+          for raw in p.urls:
+              u=urljoin('https://senderkataster.rtr.at/', raw)
+              if u not in urls: urls.append(u)
+          Path('out/assets.txt').write_text('\n'.join(urls))
+          for i,u in enumerate(urls):
+              if not any(x in u.lower() for x in ('.js','.css')): continue
+              suffix='.js' if '.js' in u.lower() else '.css'
+              subprocess.run(['curl','-fL','--retry','2','--connect-timeout','20',u,'-o',f'out/assets/{i:03d}{suffix}'], check=False)
+          PY
+          cat out/assets/*.js out/assets/*.css 2>/dev/null > out/all-assets.txt || true
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          text=Path('out/all-assets.txt').read_text(errors='ignore')
+          patterns=[
+            r'https?://[^"\'\\ )]+',
+            r'/(?:api|ajax|geo|map|coverage|versorgung|sender|station)[A-Za-z0-9_./?=&%{}:$-]*',
+            r'[A-Za-z0-9_./-]*(?:geojson|wms|wfs|coverage|versorgung|fieldstrength|signal)[A-Za-z0-9_./?=&%{}:$-]*',
+          ]
+          found=[]
+          for pattern in patterns:
+              for value in re.findall(pattern,text,re.I):
+                  value=value[:500]
+                  if value not in found: found.append(value)
+          Path('out/candidates.txt').write_text('\n'.join(found))
+          print('=== ASSETS ===')
+          print(Path('out/assets.txt').read_text())
+          print('=== ENDPOINT CANDIDATES ===')
+          print('\n'.join(found[:500]))
+          print('=== FREQUENCY SAMPLE ===')
+          print(Path('out/frequency-sample.json').read_text()[:8000])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rtr-endpoint-discovery
+          path: out
+          retention-days: 2
