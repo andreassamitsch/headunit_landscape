@@ -2,6 +2,7 @@ package com.metrolist.innertube.pages
 
 import com.metrolist.innertube.models.BrowseEndpoint
 import com.metrolist.innertube.models.MusicResponsiveHeaderRenderer
+import com.metrolist.innertube.models.MusicShelfRenderer
 import com.metrolist.innertube.models.NavigationEndpoint
 import com.metrolist.innertube.models.ResponseContext
 import com.metrolist.innertube.models.Run
@@ -79,6 +80,31 @@ class AlbumPageTest {
                                                                                 gridRenderer = null,
                                                                                 itemSectionRenderer = null,
                                                                             ),
+                                                                            SectionListRenderer.Content(
+                                                                                musicCarouselShelfRenderer = null,
+                                                                                musicShelfRenderer =
+                                                                                    MusicShelfRenderer(
+                                                                                        title = null,
+                                                                                        contents =
+                                                                                            listOf(
+                                                                                                MusicShelfRenderer.Content(
+                                                                                                    musicResponsiveListItemRenderer = null,
+                                                                                                    musicMultiRowListItemRenderer = null,
+                                                                                                    continuationItemRenderer = null,
+                                                                                                ),
+                                                                                            ),
+                                                                                        continuations = null,
+                                                                                        bottomEndpoint = null,
+                                                                                        moreContentButton = null,
+                                                                                    ),
+                                                                                musicCardShelfRenderer = null,
+                                                                                musicPlaylistShelfRenderer = null,
+                                                                                musicDescriptionShelfRenderer = null,
+                                                                                musicResponsiveHeaderRenderer = null,
+                                                                                musicEditablePlaylistDetailHeaderRenderer = null,
+                                                                                gridRenderer = null,
+                                                                                itemSectionRenderer = null,
+                                                                            ),
                                                                         ),
                                                                     continuations = null,
                                                                 ),
@@ -115,6 +141,7 @@ class AlbumPageTest {
         assertEquals("AVEC", album.artists?.single()?.name)
         assertEquals(2026, album.year)
         assertEquals(thumbnailUrl, album.thumbnail)
+        assertEquals(1, AlbumPage.getShelfContents(response).size)
     }
 
     private fun thumbnail(url: String) =

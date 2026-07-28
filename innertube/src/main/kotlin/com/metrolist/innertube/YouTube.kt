@@ -433,17 +433,7 @@ object YouTube {
     ): Result<List<SongItem>> =
         runCatching {
             var response = innerTube.browse(WEB_REMIX, "VL$playlistId").body<BrowseResponse>()
-            val shelf =
-                response.contents
-                    ?.twoColumnBrowseResultsRenderer
-                    ?.secondaryContents
-                    ?.sectionListRenderer
-                    ?.contents
-                    ?.firstOrNull()
-            val shelfContents =
-                shelf?.musicPlaylistShelfRenderer?.contents
-                    ?: shelf?.musicShelfRenderer?.contents
-                    ?: emptyList()
+            val shelfContents = AlbumPage.getShelfContents(response)
             val songs =
                 shelfContents
                     .getItems()

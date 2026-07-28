@@ -5,6 +5,7 @@ import com.metrolist.innertube.models.AlbumItem
 import com.metrolist.innertube.models.Artist
 import com.metrolist.innertube.models.MusicResponsiveHeaderRenderer
 import com.metrolist.innertube.models.MusicResponsiveListItemRenderer
+import com.metrolist.innertube.models.MusicShelfRenderer
 import com.metrolist.innertube.models.SongItem
 import com.metrolist.innertube.models.getItems
 import com.metrolist.innertube.models.oddElements
@@ -116,16 +117,34 @@ data class AlbumPage(
             return header
         }
 
-        fun getSongs(response: BrowseResponse, album: AlbumItem): List<SongItem> {
-            val tabs = response.contents?.singleColumnBrowseResultsRenderer?.tabs ?: response.contents?.twoColumnBrowseResultsRenderer?.tabs
-            val shelfRenderer = tabs?.firstOrNull()?.tabRenderer?.content?.sectionListRenderer?.contents?.firstOrNull()?.musicShelfRenderer ?:
-                response.contents?.twoColumnBrowseResultsRenderer?.secondaryContents?.sectionListRenderer?.contents?.firstOrNull()?.musicShelfRenderer
+        fun getShelfContents(response: BrowseResponse): List<MusicShelfRenderer.Content> {
+            val tabSections =
+                (response.contents?.singleColumnBrowseResultsRenderer?.tabs
+                    ?: response.contents?.twoColumnBrowseResultsRenderer?.tabs)
+                    ?.firstOrNull()
+                    ?.tabRenderer
+                    ?.content
+                    ?.sectionListRenderer
+                    ?.contents
+            val secondarySections =
+                response.contents
+                    ?.twoColumnBrowseResultsRenderer
+                    ?.secondaryContents
+                    ?.sectionListRenderer
+                    ?.contents
 
-            val songs = shelfRenderer?.contents?.getItems()?.mapNotNull {
-                getSong(it, album)
-            }
-            return songs ?: emptyList()
+            return (tabSections ?: secondarySections)
+                .orEmpty()
+                .firstNotNullOfOrNull { section ->
+                    section.musicPlaylistShelfRenderer?.contents?.takeIf { it.isNotEmpty() }
+                        ?: section.musicShelfRenderer?.contents?.takeIf { it.isNotEmpty() }
+                }.orEmpty()
         }
+
+        fun getSongs(response: BrowseResponse, album: AlbumItem): List<SongItem> =
+            getShelfContents(response)
+                .getItems()
+                .mapNotNull { getSong(it, album) }
 
         fun getSong(renderer: MusicResponsiveListItemRenderer, album: AlbumItem? = null): SongItem? {
             // Extract library tokens using the new method that properly handles multiple toggle items
