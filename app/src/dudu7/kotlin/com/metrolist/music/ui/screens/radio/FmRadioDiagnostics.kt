@@ -45,6 +45,14 @@ internal fun FmRadioDiagnostics(state: FytPhysicalRadio.State) {
         Text(
             "AF: ${if (state.alternativeFrequencies.isEmpty()) "–" else FytPhysicalRadio.formatFrequencies(state.alternativeFrequencies)}",
         )
+        Text(
+            "RSSI: aktuell ${state.rssi}  •  Mittel ${state.afAverageRssi.takeIf { it > 0 } ?: "–"}  •  " +
+                "Schwelle ${state.afSensitivity}  •  schwach ${state.afWeakSamples}/3",
+        )
+        Text(
+            "FYT ro.fyt.fmsens: ${state.firmwareFmSensitivity ?: "–"}",
+            style = MaterialTheme.typography.bodySmall,
+        )
         Text("Logoquelle: ${info?.sourceLabel ?: "–"}${if (info?.manual == true) " (manuell)" else ""}")
         if (!info?.sourceUrl.isNullOrBlank()) {
             Text("Logo-URL: ${info?.sourceUrl}", style = MaterialTheme.typography.bodySmall, maxLines = 3)
