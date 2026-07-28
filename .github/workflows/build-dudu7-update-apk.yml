@@ -40,6 +40,7 @@ jobs:
         run: |
           set -euxo pipefail
           if [[ -f scripts/apply_dudu7_13716_af_sensitivity.py ]]; then
+            sed -i 's/averageRssi < snapshot.afSensitivity/snapshot.afAverageRssi < snapshot.afSensitivity/' scripts/apply_dudu7_13716_af_sensitivity.py
             python3 -m py_compile scripts/apply_dudu7_13716_af_sensitivity.py
             python3 scripts/apply_dudu7_13716_af_sensitivity.py
           fi
