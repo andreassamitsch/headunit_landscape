@@ -1,6 +1,8 @@
 name: Build Metrolist dudu7 update APK
 
 on:
+  push:
+    branches: [agent/fm-radio-ui-logos-tabs]
   pull_request:
     branches: [agent/fm-radio-ui-logos-tabs]
   workflow_dispatch:
@@ -26,7 +28,6 @@ jobs:
           ref: ${{ github.head_ref || github.ref }}
 
       - name: Apply and persist artist album navigation
-        if: github.event_name == 'pull_request'
         shell: bash
         run: |
           set -euxo pipefail
@@ -107,13 +108,14 @@ jobs:
           grep -q 'versionName = "13.7.18"' app/build.gradle.kts
 
           git checkout c220a05270ffcd513ee640d7913f08ef4358335e -- .github/workflows/build-dudu7-update-apk.yml
-          rm -f .github/dudu7-13718-build-trigger.txt
+          rm -f .github/dudu7-13718-build-trigger.txt .github/dudu7-13718-ref-trigger.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add app/build.gradle.kts app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt .github/workflows/build-dudu7-update-apk.yml .github/dudu7-13718-build-trigger.txt
+          git add -A
           if ! git diff --cached --quiet; then
+            TARGET_BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
             git commit -m 'fix(dudu7): open artist albums and singles in right pane [skip ci]'
-            git push origin HEAD:${GITHUB_HEAD_REF}
+            git push origin HEAD:"${TARGET_BRANCH}"
           fi
 
       - name: Set up Java 21
