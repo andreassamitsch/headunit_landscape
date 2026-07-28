@@ -1,0 +1,34 @@
+name: Diagnose RTR integration patch
+
+on:
+  pull_request:
+    branches: [agent/fm-radio-ui-logos-tabs]
+    paths:
+      - .github/workflows/diagnose-rtr-patch.yml
+      - scripts/apply_dudu7_13722_rtr_gps.py
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - name: Capture deterministic patch result
+        shell: bash
+        run: |
+          set +e
+          python3 scripts/apply_dudu7_13722_rtr_gps.py > patch.log 2>&1
+          STATUS=$?
+          echo "exit=$STATUS" >> patch.log
+          cat patch.log
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rtr-patch-diagnostic
+          path: patch.log
+          retention-days: 1
