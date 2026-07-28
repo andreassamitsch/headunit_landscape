@@ -378,180 +378,53 @@ object YouTube {
     ): Result<AlbumPage> =
         runCatching {
             val response = innerTube.browse(WEB_REMIX, browseId).body<BrowseResponse>()
-            if (browseId.contains("FEmusic_library_privately_owned_release_detail")) {
-                val playlistId =
-                    response.header
-                        ?.musicDetailHeaderRenderer
-                        ?.menu
-                        ?.menuRenderer
-                        ?.topLevelButtons
-                        ?.firstOrNull()
-                        ?.buttonRenderer
-                        ?.navigationEndpoint
-                        ?.watchPlaylistEndpoint
-                        ?.playlistId!!
-                val albumItem =
-                    AlbumItem(
-                        browseId = browseId,
-                        playlistId = playlistId,
-                        title =
-                            response.header.musicDetailHeaderRenderer.title.runs
-                                ?.firstOrNull()
-                                ?.text!!,
-                        artists =
-                            response.header.musicDetailHeaderRenderer.subtitle.runs?.filter { it.navigationEndpoint != null }?.map {
-                                Artist(
-                                    name = it.text,
-                                    id = it.navigationEndpoint?.browseEndpoint?.browseId,
-                                )
-                            },
-                        year =
-                            response.header.musicDetailHeaderRenderer.subtitle.runs
-                                ?.lastOrNull()
-                                ?.text
-                                ?.toIntOrNull(),
-                        thumbnail =
-                            response.header.musicDetailHeaderRenderer.thumbnail.croppedSquareThumbnailRenderer
-                                ?.thumbnail
-                                ?.thumbnails
-                                ?.lastOrNull()!!
-                                .url,
-                        explicit = false, // TODO: Extract explicit badge for albums from YouTube response
-                    )
-                return@runCatching AlbumPage(
-                    album = albumItem,
-                    songs =
-                        response.contents
-                            ?.singleColumnBrowseResultsRenderer
-                            ?.tabs
-                            ?.firstOrNull()
-                            ?.tabRenderer
-                            ?.content
-                            ?.sectionListRenderer
-                            ?.contents
-                            ?.firstOrNull()
-                            ?.musicShelfRenderer
-                            ?.contents
-                            ?.getItems()
-                            ?.mapNotNull {
-                                AlbumPage.getSong(it, albumItem)
-                            }!!
-                            .toMutableList(),
-                    otherVersions = emptyList(),
-                )
-            } else {
-                val playlistId =
-                    response.microformat
-                        ?.microformatDataRenderer
-                        ?.urlCanonical
-                        ?.substringAfterLast('=')!!
-                val albumItem =
-                    AlbumItem(
-                        browseId = browseId,
-                        playlistId = playlistId,
-                        title =
-                            response.contents
-                                ?.twoColumnBrowseResultsRenderer
-                                ?.tabs
-                                ?.firstOrNull()
-                                ?.tabRenderer
-                                ?.content
-                                ?.sectionListRenderer
-                                ?.contents
-                                ?.firstOrNull()
-                                ?.musicResponsiveHeaderRenderer
-                                ?.title
-                                ?.runs
-                                ?.firstOrNull()
-                                ?.text!!,
-                        artists =
-                            response.contents.twoColumnBrowseResultsRenderer.tabs
-                                .firstOrNull()
-                                ?.tabRenderer
-                                ?.content
-                                ?.sectionListRenderer
-                                ?.contents
-                                ?.firstOrNull()
-                                ?.musicResponsiveHeaderRenderer
-                                ?.straplineTextOne
-                                ?.runs
-                                ?.oddElements()
-                                ?.map {
-                                    Artist(
-                                        name = it.text,
-                                        id = it.navigationEndpoint?.browseEndpoint?.browseId,
-                                    )
-                                }!!,
-                        year =
-                            response.contents.twoColumnBrowseResultsRenderer.tabs
-                                .firstOrNull()
-                                ?.tabRenderer
-                                ?.content
-                                ?.sectionListRenderer
-                                ?.contents
-                                ?.firstOrNull()
-                                ?.musicResponsiveHeaderRenderer
-                                ?.subtitle
-                                ?.runs
-                                ?.lastOrNull()
-                                ?.text
-                                ?.toIntOrNull(),
-                        thumbnail =
-                            response.contents.twoColumnBrowseResultsRenderer.tabs
-                                .firstOrNull()
-                                ?.tabRenderer
-                                ?.content
-                                ?.sectionListRenderer
-                                ?.contents
-                                ?.firstOrNull()
-                                ?.musicResponsiveHeaderRenderer
-                                ?.thumbnail
-                                ?.musicThumbnailRenderer
-                                ?.thumbnail
-                                ?.thumbnails
-                                ?.lastOrNull()
-                                ?.url!!,
-                        explicit = false, // TODO: Extract explicit badge for albums from YouTube response
-                    )
-                val albumSongsList =
-                    if (withSongs) {
-                        albumSongs(
-                            playlistId,
-                            albumItem,
-                        ).getOrThrow()
-                    } else {
-                        emptyList()
-                    }
-                // When YouTube credits the album to a label/distributor channel (the header
-                // strapline) but every track names the same performing artist, surface the
-                // performer as the album artist instead of the label.
-                val performer =
-                    albumSongsList.firstOrNull()?.artists?.firstOrNull()?.takeIf { first ->
-                        first.name.isNotBlank() &&
-                            albumSongsList.all { it.artists.firstOrNull()?.name == first.name }
-                    }
-                val resolvedAlbum =
-                    if (performer != null && albumItem.artists?.any { it.name == performer.name } != true) {
-                        albumItem.copy(artists = listOf(performer))
-                    } else {
-                        albumItem
-                    }
-                return@runCatching AlbumPage(
-                    album = resolvedAlbum,
-                    songs = albumSongsList,
-                    otherVersions =
-                        response.contents.twoColumnBrowseResultsRenderer.secondaryContents
-                            ?.sectionListRenderer
-                            ?.contents
-                            ?.getOrNull(
-                                1,
-                            )?.musicCarouselShelfRenderer
-                            ?.contents
-                            ?.mapNotNull { it.musicTwoRowItemRenderer }
-                            ?.mapNotNull(NewReleaseAlbumPage::fromMusicTwoRowItemRenderer)
-                            .orEmpty(),
-                )
-            }
+            val parsedAlbum =
+                AlbumPage.getAlbum(response, browseId)
+                    ?: error("Album response did not contain usable metadata for $browseId")
+            val inlineSongs =
+                if (withSongs) {
+                    AlbumPage.getSongs(response, parsedAlbum)
+                } else {
+                    emptyList()
+                }
+            val albumSongsList =
+                when {
+                    !withSongs -> emptyList()
+                    inlineSongs.isNotEmpty() -> inlineSongs
+                    else -> albumSongs(parsedAlbum.playlistId, parsedAlbum).getOrThrow()
+                }
+
+            // When YouTube credits the album to a label/distributor channel but every
+            // track names the same performing artist, surface the performer instead.
+            val performer =
+                albumSongsList.firstOrNull()?.artists?.firstOrNull()?.takeIf { first ->
+                    first.name.isNotBlank() &&
+                        albumSongsList.all { it.artists.firstOrNull()?.name == first.name }
+                }
+            val resolvedAlbum =
+                if (performer != null && parsedAlbum.artists?.any { it.name == performer.name } != true) {
+                    parsedAlbum.copy(artists = listOf(performer))
+                } else {
+                    parsedAlbum
+                }
+            val otherVersions =
+                response.contents
+                    ?.twoColumnBrowseResultsRenderer
+                    ?.secondaryContents
+                    ?.sectionListRenderer
+                    ?.contents
+                    ?.getOrNull(1)
+                    ?.musicCarouselShelfRenderer
+                    ?.contents
+                    ?.mapNotNull { it.musicTwoRowItemRenderer }
+                    ?.mapNotNull(NewReleaseAlbumPage::fromMusicTwoRowItemRenderer)
+                    .orEmpty()
+
+            AlbumPage(
+                album = resolvedAlbum,
+                songs = albumSongsList,
+                otherVersions = otherVersions,
+            )
         }
 
     suspend fun albumSongs(
@@ -560,17 +433,7 @@ object YouTube {
     ): Result<List<SongItem>> =
         runCatching {
             var response = innerTube.browse(WEB_REMIX, "VL$playlistId").body<BrowseResponse>()
-            val shelf =
-                response.contents
-                    ?.twoColumnBrowseResultsRenderer
-                    ?.secondaryContents
-                    ?.sectionListRenderer
-                    ?.contents
-                    ?.firstOrNull()
-            val shelfContents =
-                shelf?.musicPlaylistShelfRenderer?.contents
-                    ?: shelf?.musicShelfRenderer?.contents
-                    ?: emptyList()
+            val shelfContents = AlbumPage.getShelfContents(response)
             val songs =
                 shelfContents
                     .getItems()
