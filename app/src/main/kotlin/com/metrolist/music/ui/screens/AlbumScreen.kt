@@ -187,6 +187,8 @@ fun AlbumScreen(
         }
     }
 
+    // One root prevents the TopAppBar from becoming a full-pane overlay in Dudu7.
+    Box(modifier = Modifier.fillMaxSize()) {
     LazyColumn(
         contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues(),
     ) {
@@ -619,4 +621,5 @@ fun AlbumScreen(
             }
         },
     )
+    }
 }
