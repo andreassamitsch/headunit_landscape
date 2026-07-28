@@ -104,13 +104,34 @@ object FytPhysicalRadio {
         val taEnabled: Boolean = true,
         val regEnabled: Boolean = false,
         val afSupported: Boolean = true,
+        val afLastResult: String = "",
+        val afLastNativeResult: Int? = null,
         val presets: List<Preset> = emptyList(),
         val radioType: String = "",
         val platform: String = "",
         val error: String? = null,
     ) {
+        val currentPreset: Preset?
+            get() = presets.firstOrNull { FytPhysicalRadio.presetMatches(it, frequency, pi) }
+
+        private val resolvedStationIdentity: FmResolvedStationIdentity
+            get() =
+                FmStationIdentity.resolve(
+                    rawPs = ps,
+                    storedName = currentPreset?.name,
+                    frequencies =
+                        listOf(frequency) +
+                            alternativeFrequencies +
+                            currentPreset?.let(FytPhysicalRadio::presetFrequencies).orEmpty(),
+                    pi = pi,
+                    ecc = ecc,
+                )
+
         val displayStation: String
-            get() = ps.ifBlank { "FM ${formatFrequency(frequency)} MHz" }
+            get() = resolvedStationIdentity.canonicalName
+
+        val stableStationId: String
+            get() = resolvedStationIdentity.stableId
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -595,89 +616,245 @@ object FytPhysicalRadio {
     }
 
     private fun launchAlternativeFrequencyCheck(manual: Boolean) {
-        if (afJob?.isActive == true) return
+        if (afJob?.isActive == true) {
+            _state.update { it.copy(afLastResult = "AF-Prüfung läuft bereits") }
+            return
+        }
         afJob =
             scope.launch {
-                val fm = native ?: return@launch
-                val before = _state.value
-                val now = System.currentTimeMillis()
-                if (!manual && now - lastAfSwitchAt < AF_SWITCH_COOLDOWN_MS) return@launch
-                if (
-                    !before.isActive ||
-                    !before.afEnabled ||
-                    before.isScanning ||
-                    before.isBusy ||
-                    before.pi <= 0
-                ) {
+                val fm = native
+                if (fm == null) {
+                    _state.update { it.copy(afLastResult = "FM-Tuner nicht verfügbar") }
                     return@launch
                 }
-                if (
-                    !manual &&
-                    (before.afAverageRssi <= 0 ||
-                        before.afAverageRssi >= before.afSensitivity ||
-                        before.afWeakSamples < AF_WEAK_SAMPLE_COUNT)
-                ) {
+                val before = _state.value
+                val now = System.currentTimeMillis()
+                val blockedReason =
+                    when {
+                        !before.isActive -> "FM-Radio ist nicht aktiv"
+                        !before.afEnabled -> "AF ist ausgeschaltet"
+                        before.isScanning -> "AF während Sendersuchlauf nicht möglich"
+                        before.isBusy -> "Radio ist gerade beschäftigt"
+                        !manual && now - lastAfSwitchAt < AF_SWITCH_COOLDOWN_MS -> "AF-Umschaltsperre aktiv"
+                        !manual &&
+                            (before.afAverageRssi <= 0 ||
+                                before.afAverageRssi >= before.afSensitivity ||
+                                before.afWeakSamples < AF_WEAK_SAMPLE_COUNT) -> "Empfang liegt noch nicht unter der AF-Schwelle"
+                        else -> null
+                    }
+                if (blockedReason != null) {
+                    _state.update { it.copy(afLastResult = blockedReason) }
                     return@launch
                 }
 
-                Timber.tag(TAG).d(
-                    "AF check manual=%s RSSI=%d average=%d threshold=%d weakSamples=%d PI=%04X",
-                    manual,
-                    before.rssi,
-                    before.afAverageRssi,
-                    before.afSensitivity,
-                    before.afWeakSamples,
-                    before.pi,
-                )
-                val knownAlternatives =
-                    runCatching { fm.alternativeFrequencies.toList() }
-                        .getOrDefault(emptyList())
-                val raw = runCatching { fm.activeAf() }.getOrElse {
-                    Timber.tag(TAG).w(it, "AF request failed")
-                    _state.update { state -> state.copy(afSupported = false) }
-                    return@launch
-                }
-                val frequency = decodeFrequency(raw.toFloat())
-                if (frequency != null && abs(frequency - before.frequency) >= 0.05f) {
-                    Timber.tag(TAG).i(
-                        "AF switched %.1f -> %.1f for PI=%04X manual=%s averageRSSI=%d threshold=%d",
-                        before.frequency,
-                        frequency,
-                        before.pi,
-                        manual,
-                        before.afAverageRssi,
-                        before.afSensitivity,
+                val preset = before.currentPreset
+                val expectedPi = before.pi.takeIf { it > 0 } ?: preset?.pi.orZero()
+                val storedFrequencies = preset?.let(::presetFrequencies).orEmpty()
+                val nativeFrequencies = runCatching { fm.alternativeFrequencies.toList() }.getOrDefault(emptyList())
+                val knownFrequencies =
+                    normalizeFrequencyList(
+                        storedFrequencies + before.alternativeFrequencies + nativeFrequencies + before.frequency,
                     )
-                    lastAfSwitchAt = System.currentTimeMillis()
-                    persistFrequency(frequency)
-                    rssiWindow.clear()
+                val candidates =
+                    (storedFrequencies.map { FmAfCandidate(it, true) } +
+                        (before.alternativeFrequencies + nativeFrequencies).map { FmAfCandidate(it, false) })
+                        .filter { abs(it.frequency - before.frequency) >= 0.05f }
+                        .distinctBy { frequencyKey(it.frequency) }
+                        .take(12)
+                val currentRssi = before.rssi.takeIf { it > 0 } ?: runCatching { fm.rssi }.getOrDefault(0)
+
+                _state.update {
+                    it.copy(
+                        isBusy = true,
+                        error = null,
+                        afLastResult = if (candidates.isEmpty()) "FYT-AF wird geprüft …" else "${candidates.size} AF-Frequenz(en) werden gemessen …",
+                        afLastNativeResult = null,
+                    )
+                }
+                runCatching { fm.setMute(true) }
+                try {
+                    val measurements = candidates.mapNotNull { measureAlternativeFrequency(fm, it) }
+                    val selected =
+                        FmAlternativeFrequencySelector.choose(
+                            currentFrequency = before.frequency,
+                            currentRssi = currentRssi,
+                            expectedPi = expectedPi,
+                            measurements = measurements,
+                            minimumImprovement = if (manual) 1 else 3,
+                        )
+                    if (selected != null) {
+                        runCatching { fm.tune(selected.frequency) }
+                        delay(220)
+                        commitAlternativeFrequencySwitch(
+                            before = before,
+                            target = selected.frequency,
+                            targetRssi = selected.rssi,
+                            targetPi = selected.pi,
+                            knownFrequencies = knownFrequencies,
+                            result =
+                                "Gewechselt ${formatFrequency(before.frequency)} → ${formatFrequency(selected.frequency)} MHz " +
+                                    "(RSSI $currentRssi → ${selected.rssi})",
+                            nativeResult = null,
+                        )
+                        return@launch
+                    }
+
+                    if (tryNativeAfFallback(fm, before, expectedPi, knownFrequencies, manual)) return@launch
+
+                    runCatching { fm.tune(before.frequency) }
+                    delay(180)
                     _state.update {
                         it.copy(
-                            frequency = frequency,
-                            rt = "",
-                            stereo = null,
+                            isBusy = false,
+                            frequency = before.frequency,
+                            ps = before.ps,
                             pi = before.pi,
                             ecc = before.ecc,
-                            afAverageRssi = 0,
-                            afWeakSamples = 0,
+                            rssi = currentRssi,
                             alternativeFrequencies =
-                                normalizeFrequencyList(
-                                    before.alternativeFrequencies + knownAlternatives + before.frequency,
-                                ),
+                                knownFrequencies.filterNot { frequency -> abs(frequency - before.frequency) < 0.05f },
+                            afLastResult =
+                                if (candidates.isEmpty()) "Keine alternative Frequenz verfügbar"
+                                else "Keine stärkere passende Frequenz gefunden",
                         )
                     }
                     updateCurrentPresetIdentity()
                     triggerRdsRead()
-                } else if (knownAlternatives.isNotEmpty()) {
+                } catch (error: Throwable) {
+                    Timber.tag(TAG).w(error, "AF candidate check failed")
+                    runCatching { fm.tune(before.frequency) }
                     _state.update {
                         it.copy(
-                            alternativeFrequencies =
-                                normalizeFrequencyList(it.alternativeFrequencies + knownAlternatives),
+                            isBusy = false,
+                            frequency = before.frequency,
+                            ps = before.ps,
+                            pi = before.pi,
+                            ecc = before.ecc,
+                            afLastResult = "AF-Prüfung fehlgeschlagen: ${error.message ?: error.javaClass.simpleName}",
                         )
                     }
-                    updateCurrentPresetIdentity()
+                    triggerRdsRead()
+                } finally {
+                    runCatching { fm.setMute(before.isMuted) }
                 }
             }
+    }
+
+    private suspend fun measureAlternativeFrequency(
+        fm: FmNative,
+        candidate: FmAfCandidate,
+    ): FmAfMeasurement? {
+        if (!runCatching { fm.tune(candidate.frequency) }.getOrDefault(false)) return null
+        delay(240)
+        repeat(4) {
+            runCatching { fm.readRds() }
+            delay(110)
+        }
+        return FmAfMeasurement(
+            frequency = candidate.frequency,
+            rssi = runCatching { fm.rssi }.getOrDefault(0),
+            pi = runCatching { fm.programIdentifier }.getOrDefault(0),
+            trustedPresetFrequency = candidate.trustedPresetFrequency,
+        )
+    }
+
+    private suspend fun tryNativeAfFallback(
+        fm: FmNative,
+        before: State,
+        expectedPi: Int,
+        knownFrequencies: List<Float>,
+        manual: Boolean,
+    ): Boolean {
+        runCatching { fm.tune(before.frequency) }
+        delay(180)
+        val raw =
+            runCatching { fm.activeAf() }.getOrElse { error ->
+                Timber.tag(TAG).w(error, "Native AF request failed")
+                _state.update {
+                    it.copy(
+                        isBusy = false,
+                        afSupported = false,
+                        afLastResult = "FYT activeAf() nicht unterstützt: ${error.message ?: error.javaClass.simpleName}",
+                    )
+                }
+                return true
+            }
+        val rawInt = raw.toInt()
+        _state.update { it.copy(afLastNativeResult = rawInt) }
+        val target = decodeFrequency(raw.toFloat())
+        if (target == null || abs(target - before.frequency) < 0.05f) return false
+
+        delay(260)
+        repeat(4) {
+            runCatching { fm.readRds() }
+            delay(110)
+        }
+        val receivedPi = runCatching { fm.programIdentifier }.getOrDefault(0)
+        if (expectedPi > 0 && receivedPi > 0 && !samePi(expectedPi, receivedPi)) {
+            runCatching { fm.tune(before.frequency) }
+            _state.update {
+                it.copy(
+                    isBusy = false,
+                    frequency = before.frequency,
+                    ps = before.ps,
+                    pi = before.pi,
+                    ecc = before.ecc,
+                    afLastResult = "FYT-AF verworfen: andere PI ${receivedPi.toString(16).uppercase()}",
+                    afLastNativeResult = rawInt,
+                )
+            }
+            triggerRdsRead()
+            return true
+        }
+        val targetRssi = runCatching { fm.rssi }.getOrDefault(before.rssi)
+        commitAlternativeFrequencySwitch(
+            before = before,
+            target = target,
+            targetRssi = targetRssi,
+            targetPi = receivedPi,
+            knownFrequencies = knownFrequencies,
+            result =
+                "${if (manual) "FYT-AF" else "Automatisches FYT-AF"}: " +
+                    "${formatFrequency(before.frequency)} → ${formatFrequency(target)} MHz",
+            nativeResult = rawInt,
+        )
+        return true
+    }
+
+    private fun commitAlternativeFrequencySwitch(
+        before: State,
+        target: Float,
+        targetRssi: Int,
+        targetPi: Int,
+        knownFrequencies: List<Float>,
+        result: String,
+        nativeResult: Int?,
+    ) {
+        lastAfSwitchAt = System.currentTimeMillis()
+        persistFrequency(target)
+        rssiWindow.clear()
+        _state.update {
+            it.copy(
+                isBusy = false,
+                frequency = target,
+                ps = before.ps,
+                rt = "",
+                rssi = targetRssi,
+                stereo = null,
+                pi = targetPi.takeIf { value -> value > 0 } ?: before.pi,
+                ecc = before.ecc,
+                alternativeFrequencies =
+                    normalizeFrequencyList(knownFrequencies + before.frequency)
+                        .filterNot { frequency -> abs(frequency - target) < 0.05f },
+                afAverageRssi = 0,
+                afWeakSamples = 0,
+                afLastResult = result,
+                afLastNativeResult = nativeResult,
+            )
+        }
+        updateCurrentPresetIdentity()
+        triggerRdsRead()
+        Timber.tag(TAG).i("%s stableId=%s", result, _state.value.stableStationId)
     }
 
     /**
@@ -896,7 +1073,7 @@ object FytPhysicalRadio {
                     val now = System.currentTimeMillis()
                     if (
                         snapshot.afEnabled &&
-                        snapshot.pi > 0 &&
+                        (snapshot.pi > 0 || snapshot.currentPreset?.let { presetFrequencies(it).size > 1 } == true) &&
                         snapshot.afAverageRssi > 0 &&
                         snapshot.afAverageRssi < snapshot.afSensitivity &&
                         snapshot.afWeakSamples >= AF_WEAK_SAMPLE_COUNT &&
@@ -921,7 +1098,7 @@ object FytPhysicalRadio {
 
     private fun pollTuner() {
         val fm = native ?: return
-        if (!_state.value.isActive || _state.value.isScanning) return
+        if (!_state.value.isActive || _state.value.isScanning || _state.value.isBusy) return
         runCatching { fm.readRds() }
         val rawPs = runCatching { fm.psString }.getOrDefault("").trim()
         val stablePs =
@@ -1090,7 +1267,14 @@ object FytPhysicalRadio {
         val updatedPreset =
             current.copy(
                 frequency = primary,
-                name = snapshot.ps.trim().takeIf { it.isNotBlank() } ?: current.name,
+                name =
+                    FmStationIdentity.resolve(
+                        rawPs = snapshot.ps,
+                        storedName = current.name,
+                        frequencies = allFrequencies,
+                        pi = snapshot.pi.takeIf { it > 0 } ?: current.pi,
+                        ecc = snapshot.ecc.ifBlank { current.ecc },
+                    ).canonicalName,
                 pi = snapshot.pi.takeIf { it > 0 } ?: current.pi,
                 ecc = snapshot.ecc.ifBlank { current.ecc },
                 alternativeFrequencies =
@@ -1165,11 +1349,22 @@ object FytPhysicalRadio {
             (pi > 0 && preset.pi > 0 && samePi(pi, preset.pi))
 
     fun stablePresetKey(preset: Preset): String =
-        when {
-            preset.pi > 0 -> "pi:${(preset.pi and 0xffff).toString(16).padStart(4, '0')}"
-            usefulStationIdentity(preset.name).isNotBlank() -> "name:${usefulStationIdentity(preset.name)}"
-            else -> "freq:${frequencyKey(preset.frequency)}"
-        }
+        FmStationIdentity.resolve(
+            rawPs = preset.name,
+            storedName = preset.name,
+            frequencies = presetFrequencies(preset),
+            pi = preset.pi,
+            ecc = preset.ecc,
+        ).stableId
+
+    fun presetOrderKeys(preset: Preset): Set<String> =
+        FmStationIdentity.orderKeys(
+            rawPs = preset.name,
+            storedName = preset.name,
+            frequencies = presetFrequencies(preset),
+            pi = preset.pi,
+            ecc = preset.ecc,
+        )
 
     fun formatFrequencies(values: List<Float>): String =
         normalizeFrequencyList(values).joinToString(" / ") { "${formatFrequency(it)} MHz" }
@@ -1234,10 +1429,13 @@ object FytPhysicalRadio {
             first.copy(
                 frequency = primary,
                 name =
-                    group
-                        .map { it.name.trim() }
-                        .firstOrNull { usefulStationIdentity(it).isNotBlank() }
-                        ?: first.name,
+                    FmStationIdentity.resolve(
+                        rawPs = group.firstOrNull()?.name.orEmpty(),
+                        storedName = group.map { it.name.trim() }.firstOrNull { usefulStationIdentity(it).isNotBlank() },
+                        frequencies = frequencies,
+                        pi = group.firstOrNull { it.pi > 0 }?.pi ?: first.pi,
+                        ecc = group.firstOrNull { it.ecc.isNotBlank() }?.ecc ?: first.ecc,
+                    ).canonicalName,
                 pi = group.firstOrNull { it.pi > 0 }?.pi ?: first.pi,
                 ecc = group.firstOrNull { it.ecc.isNotBlank() }?.ecc ?: first.ecc,
                 alternativeFrequencies =
@@ -1257,9 +1455,7 @@ object FytPhysicalRadio {
             return true
         }
         if (first.pi > 0 && second.pi > 0) return samePi(first.pi, second.pi)
-        val left = usefulStationIdentity(first.name)
-        val right = usefulStationIdentity(second.name)
-        return left.isNotBlank() && left == right
+        return stablePresetKey(first) == stablePresetKey(second)
     }
 
     private fun samePresetRecord(
@@ -1274,9 +1470,9 @@ object FytPhysicalRadio {
         second: ScanResult,
     ): Boolean {
         if (first.pi > 0 && second.pi > 0) return samePi(first.pi, second.pi)
-        val left = usefulStationIdentity(first.name)
-        val right = usefulStationIdentity(second.name)
-        return left.isNotBlank() && left == right
+        val firstIdentity = FmStationIdentity.resolve(first.name, null, scanFrequencies(first), first.pi, first.ecc)
+        val secondIdentity = FmStationIdentity.resolve(second.name, null, scanFrequencies(second), second.pi, second.ecc)
+        return firstIdentity.stableId != "unknown" && firstIdentity.stableId == secondIdentity.stableId
     }
 
     private fun usefulStationIdentity(value: String): String {
@@ -1299,6 +1495,8 @@ object FytPhysicalRadio {
         first: Int,
         second: Int,
     ): Boolean = (first and 0xffff) == (second and 0xffff)
+
+    private fun Int?.orZero(): Int = this ?: 0
 
     private fun frequencyKey(value: Float): Int = (normalizeFrequency(value) * 10f).roundToInt()
 

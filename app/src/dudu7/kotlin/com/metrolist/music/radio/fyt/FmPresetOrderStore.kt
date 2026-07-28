@@ -36,7 +36,7 @@ object FmPresetOrderStore {
         val ordered = mutableListOf<FytPhysicalRadio.Preset>()
         storedKeys.forEach { key ->
             presets.firstOrNull {
-                FytPhysicalRadio.stablePresetKey(it) == key && ordered.none { existing -> samePreset(existing, it) }
+                key in FytPhysicalRadio.presetOrderKeys(it) && ordered.none { existing -> samePreset(existing, it) }
             }?.let(ordered::add)
         }
         legacyFrequencies.forEach { key ->
