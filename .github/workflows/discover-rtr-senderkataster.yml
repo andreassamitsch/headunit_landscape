@@ -22,15 +22,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p out/assets
+          mkdir -p out/assets out/coverage
           curl -fL --retry 3 --connect-timeout 20 https://senderkataster.rtr.at/ -o out/index.html
+          curl -fL --retry 3 --connect-timeout 20 https://senderkataster.rtr.at/programs/ -o out/senderkataster-programs.json
           curl -fL --retry 3 --connect-timeout 20 'https://data.rtr.at/api/v1/tables/MedienFrequenzbuch/description?lang=de' -o out/frequency-description.json
-          curl -fL --retry 3 --connect-timeout 20 'https://data.rtr.at/api/v1/tables/MedienFrequenzbuch?programm_typ=H%C3%B6rfunk&size=5' -o out/frequency-sample.json
+          curl -fL --retry 3 --connect-timeout 20 'https://data.rtr.at/api/v1/tables/MedienFrequenzbuch?size=0' -o out/frequency-all.json
           python3 - <<'PY'
           from html.parser import HTMLParser
           from pathlib import Path
           from urllib.parse import urljoin
-          import subprocess
+          import json, subprocess
 
           class P(HTMLParser):
               def __init__(self):
@@ -49,29 +50,45 @@ jobs:
               if not any(x in u.lower() for x in ('.js','.css')): continue
               suffix='.js' if '.js' in u.lower() else '.css'
               subprocess.run(['curl','-fL','--retry','2','--connect-timeout','20',u,'-o',f'out/assets/{i:03d}{suffix}'], check=False)
+
+          payload=json.loads(Path('out/senderkataster-programs.json').read_text())
+          programs=json.loads(payload['programs']) if isinstance(payload.get('programs'),str) else payload.get('programs',[])
+          bounds=json.loads(payload['bounds']) if isinstance(payload.get('bounds'),str) else payload.get('bounds',[])
+          ukw=[r for r in programs if r.get('rtr_programm_typ')=='UKW']
+          sample=ukw[:20]
+          Path('out/ukw-sample.json').write_text(json.dumps(sample,ensure_ascii=False,indent=2))
+          Path('out/bounds-sample.json').write_text(json.dumps(bounds[:20],ensure_ascii=False,indent=2))
+          for row in sample:
+              raw=row.get('rtr_json')
+              if not raw: continue
+              png=raw[:-4]+'png' if raw.lower().endswith('json') else raw
+              url=urljoin('https://senderkataster.rtr.at/',png)
+              target='out/coverage/'+png.rsplit('/',1)[-1]
+              result=subprocess.run(['curl','-fL','--retry','2','--connect-timeout','20',url,'-o',target])
+              if result.returncode==0:
+                  Path('out/coverage-url.txt').write_text(url)
+                  break
           PY
-          cat out/assets/*.js out/assets/*.css 2>/dev/null > out/all-assets.txt || true
+          file out/coverage/* 2>/dev/null | tee out/coverage-file.txt || true
+          identify out/coverage/* 2>/dev/null | tee out/coverage-identify.txt || true
           python3 - <<'PY'
           from pathlib import Path
-          import re
-          text=Path('out/all-assets.txt').read_text(errors='ignore')
-          patterns=[
-            r'https?://[^"\'\\ )]+',
-            r'/(?:api|ajax|geo|map|coverage|versorgung|sender|station)[A-Za-z0-9_./?=&%{}:$-]*',
-            r'[A-Za-z0-9_./-]*(?:geojson|wms|wfs|coverage|versorgung|fieldstrength|signal)[A-Za-z0-9_./?=&%{}:$-]*',
-          ]
-          found=[]
-          for pattern in patterns:
-              for value in re.findall(pattern,text,re.I):
-                  value=value[:500]
-                  if value not in found: found.append(value)
-          Path('out/candidates.txt').write_text('\n'.join(found))
-          print('=== ASSETS ===')
-          print(Path('out/assets.txt').read_text())
-          print('=== ENDPOINT CANDIDATES ===')
-          print('\n'.join(found[:500]))
-          print('=== FREQUENCY SAMPLE ===')
-          print(Path('out/frequency-sample.json').read_text()[:8000])
+          import json
+          payload=json.loads(Path('out/senderkataster-programs.json').read_text())
+          programs=json.loads(payload['programs']) if isinstance(payload.get('programs'),str) else payload.get('programs',[])
+          bounds=json.loads(payload['bounds']) if isinstance(payload.get('bounds'),str) else payload.get('bounds',[])
+          data=json.loads(Path('out/frequency-all.json').read_text())
+          rows=data.get('data',[])
+          print('Senderkataster rows:',len(programs),'bounds:',len(bounds))
+          print('RTR frequency rows:',len(rows),'version:',data.get('version'))
+          print('Program types:',sorted({str(r.get('rtr_programm_typ')) for r in programs}))
+          print('OpenData types:',sorted({str(r.get('programm_typ')) for r in rows}))
+          print('=== UKW SAMPLE ===')
+          print(Path('out/ukw-sample.json').read_text()[:16000])
+          print('=== BOUNDS SAMPLE ===')
+          print(Path('out/bounds-sample.json').read_text()[:12000])
+          print('=== COVERAGE ===')
+          print(Path('out/coverage-url.txt').read_text() if Path('out/coverage-url.txt').exists() else 'none')
           PY
       - uses: actions/upload-artifact@v4
         with:
