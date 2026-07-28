@@ -18,14 +18,49 @@ data class AlbumPage(
     val otherVersions: List<AlbumItem>,
 ) {
     companion object {
+        fun getAlbum(response: BrowseResponse, browseId: String): AlbumItem? {
+            val playlistId = getPlaylistId(response)?.takeIf(String::isNotBlank) ?: return null
+            val title = getTitle(response)?.takeIf(String::isNotBlank) ?: return null
+            val thumbnail = getThumbnail(response)?.takeIf(String::isNotBlank) ?: return null
+            return AlbumItem(
+                browseId = browseId,
+                playlistId = playlistId,
+                title = title,
+                artists = getArtists(response).ifEmpty { null },
+                year = getYear(response),
+                thumbnail = thumbnail,
+                explicit = false,
+            )
+        }
+
         fun getPlaylistId(response: BrowseResponse): String? {
-            var playlistId = response.microformat?.microformatDataRenderer?.urlCanonical?.substringAfterLast('=')
-            if (playlistId == null)
-            {
-                playlistId = response.header?.musicDetailHeaderRenderer?.menu?.menuRenderer?.topLevelButtons?.firstOrNull()
-                    ?.buttonRenderer?.navigationEndpoint?.watchPlaylistEndpoint?.playlistId
-            }
-            return playlistId
+            val canonicalPlaylistId =
+                response.microformat
+                    ?.microformatDataRenderer
+                    ?.urlCanonical
+                    ?.substringAfter("list=", missingDelimiterValue = "")
+                    ?.substringBefore('&')
+                    ?.takeIf(String::isNotBlank)
+            if (canonicalPlaylistId != null) return canonicalPlaylistId
+
+            val detailHeaderPlaylistId =
+                response.header
+                    ?.musicDetailHeaderRenderer
+                    ?.menu
+                    ?.menuRenderer
+                    ?.topLevelButtons
+                    .orEmpty()
+                    .firstNotNullOfOrNull { button ->
+                        button.buttonRenderer?.navigationEndpoint?.anyWatchEndpoint?.playlistId
+                    }
+            if (detailHeaderPlaylistId != null) return detailHeaderPlaylistId
+
+            return getHeader(response)
+                ?.buttons
+                .orEmpty()
+                .firstNotNullOfOrNull { button ->
+                    button.musicPlayButtonRenderer?.playNavigationEndpoint?.anyWatchEndpoint?.playlistId
+                }
         }
 
         fun getTitle(response: BrowseResponse): String? {
@@ -38,25 +73,38 @@ data class AlbumPage(
             return title?.runs?.lastOrNull()?.text?.toIntOrNull()
         }
 
-        fun getThumbnail(response: BrowseResponse): String? {
-            return response.background?.getThumbnailUrl() ?: response.header?.musicDetailHeaderRenderer?.thumbnail
-                ?.getThumbnailUrl()
-        }
+        fun getThumbnail(response: BrowseResponse): String? =
+            response.background?.getThumbnailUrl()
+                ?: getHeader(response)?.thumbnail?.getThumbnailUrl()
+                ?: response.header?.musicDetailHeaderRenderer?.thumbnail?.getThumbnailUrl()
 
         fun getArtists(response: BrowseResponse): List<Artist> {
-            val artists = getHeader(response)?.straplineTextOne?.runs?.oddElements()?.map {
-                Artist(
-                    name = it.text,
-                    id = it.navigationEndpoint?.browseEndpoint?.browseId
-                )
-            } ?: response.header?.musicDetailHeaderRenderer?.subtitle?.runs?.splitBySeparator()?.getOrNull(1)?.oddElements()?.map {
-                Artist(
-                    name = it.text,
-                    id = it.navigationEndpoint?.browseEndpoint?.browseId
-                )
-            } ?: emptyList()
+            val responsiveArtists =
+                getHeader(response)
+                    ?.straplineTextOne
+                    ?.runs
+                    ?.oddElements()
+                    ?.map {
+                        Artist(
+                            name = it.text,
+                            id = it.navigationEndpoint?.browseEndpoint?.browseId,
+                        )
+                    }
+                    .orEmpty()
+            if (responsiveArtists.isNotEmpty()) return responsiveArtists
 
-            return artists
+            return response.header
+                ?.musicDetailHeaderRenderer
+                ?.subtitle
+                ?.runs
+                ?.filter { it.navigationEndpoint?.browseEndpoint?.browseId != null }
+                ?.map {
+                    Artist(
+                        name = it.text,
+                        id = it.navigationEndpoint?.browseEndpoint?.browseId,
+                    )
+                }
+                .orEmpty()
         }
 
         private fun getHeader(response: BrowseResponse): MusicResponsiveHeaderRenderer? {
