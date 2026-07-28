@@ -41,6 +41,7 @@ object FytPhysicalRadio {
     private const val KEY_AF = "af_enabled"
     private const val KEY_TA = "ta_enabled"
     private const val KEY_REG = "reg_enabled"
+    private const val KEY_AF_SENSITIVITY = "af_sensitivity"
     private const val FM_MIN = 87.5f
     private const val FM_MAX = 108.0f
     private const val FM_STEP = 0.1f
@@ -48,6 +49,12 @@ object FytPhysicalRadio {
     private const val SCAN_RSSI_THRESHOLD = 36
     private const val AF_POLL_INTERVAL_MS = 6_000L
     private const val AF_SWITCH_COOLDOWN_MS = 20_000L
+    private const val DEFAULT_AF_SENSITIVITY = 30
+    private const val MIN_AF_SENSITIVITY = 15
+    private const val MAX_AF_SENSITIVITY = 50
+    private const val AF_RSSI_WINDOW_SIZE = 4
+    private const val AF_WEAK_SAMPLE_COUNT = 3
+    private const val AF_RSSI_HYSTERESIS = 3
 
     data class Preset(
         val frequency: Float,
@@ -90,6 +97,10 @@ object FytPhysicalRadio {
         val tp: Boolean = false,
         val ta: Boolean = false,
         val afEnabled: Boolean = true,
+        val afSensitivity: Int = DEFAULT_AF_SENSITIVITY,
+        val afAverageRssi: Int = 0,
+        val afWeakSamples: Int = 0,
+        val firmwareFmSensitivity: Int? = null,
         val taEnabled: Boolean = true,
         val regEnabled: Boolean = false,
         val afSupported: Boolean = true,
@@ -120,6 +131,7 @@ object FytPhysicalRadio {
     private var pendingPresetIdentity: Preset? = null
     private var pendingPs = ""
     private var pendingPsCount = 0
+    private val rssiWindow = ArrayDeque<Int>()
 
     fun get(context: Context): FytPhysicalRadio {
         initialize(context)
@@ -145,6 +157,10 @@ object FytPhysicalRadio {
                     frequency = frequency,
                     presets = readPresets(prefs.getString(KEY_PRESETS, null)),
                     afEnabled = prefs.getBoolean(KEY_AF, true),
+                    afSensitivity =
+                        prefs.getInt(KEY_AF_SENSITIVITY, DEFAULT_AF_SENSITIVITY)
+                            .coerceIn(MIN_AF_SENSITIVITY, MAX_AF_SENSITIVITY),
+                    firmwareFmSensitivity = systemProperty("ro.fyt.fmsens").toIntOrNull(),
                     taEnabled = prefs.getBoolean(KEY_TA, true),
                     regEnabled = prefs.getBoolean(KEY_REG, false),
                     radioType = systemProperty("sys.fyt.radio_type"),
@@ -202,6 +218,7 @@ object FytPhysicalRadio {
                 pendingPresetIdentity = null
                 pendingPs = ""
                 pendingPsCount = 0
+                resetAfSampling()
                 persistFrequency(target)
                 _state.update {
                     it.copy(
@@ -215,6 +232,8 @@ object FytPhysicalRadio {
                         pi = presetIdentity?.pi ?: 0,
                         ecc = presetIdentity?.ecc.orEmpty(),
                         alternativeFrequencies = presetIdentity?.alternativeFrequencies.orEmpty(),
+                        afAverageRssi = 0,
+                        afWeakSamples = 0,
                         pty = 0,
                         error = null,
                     )
@@ -251,6 +270,8 @@ object FytPhysicalRadio {
                     pi = 0,
                     ecc = "",
                     alternativeFrequencies = emptyList(),
+                    afAverageRssi = 0,
+                    afWeakSamples = 0,
                     pty = 0,
                     tp = false,
                     ta = false,
@@ -272,6 +293,7 @@ object FytPhysicalRadio {
             pendingPresetIdentity = null
             pendingPs = ""
             pendingPsCount = 0
+            resetAfSampling()
             _state.update {
                 it.copy(
                     isBusy = true,
@@ -539,6 +561,20 @@ object FytPhysicalRadio {
         if (enabled) requestAlternativeFrequency()
     }
 
+    fun setAfSensitivity(value: Int) {
+        val normalized = value.coerceIn(MIN_AF_SENSITIVITY, MAX_AF_SENSITIVITY)
+        persistInt(KEY_AF_SENSITIVITY, normalized)
+        _state.update { current ->
+            val weakSamples =
+                if (current.afAverageRssi > 0 && current.afAverageRssi < normalized) {
+                    current.afWeakSamples.coerceAtLeast(1)
+                } else {
+                    0
+                }
+            current.copy(afSensitivity = normalized, afWeakSamples = weakSamples)
+        }
+    }
+
     fun setTaEnabled(enabled: Boolean) {
         persistBoolean(KEY_TA, enabled)
         _state.update { it.copy(taEnabled = enabled) }
@@ -551,12 +587,21 @@ object FytPhysicalRadio {
     }
 
     fun requestAlternativeFrequency() {
+        launchAlternativeFrequencyCheck(manual = true)
+    }
+
+    private fun requestAutomaticAlternativeFrequency() {
+        launchAlternativeFrequencyCheck(manual = false)
+    }
+
+    private fun launchAlternativeFrequencyCheck(manual: Boolean) {
         if (afJob?.isActive == true) return
         afJob =
             scope.launch {
                 val fm = native ?: return@launch
                 val before = _state.value
-                if (System.currentTimeMillis() - lastAfSwitchAt < AF_SWITCH_COOLDOWN_MS) return@launch
+                val now = System.currentTimeMillis()
+                if (!manual && now - lastAfSwitchAt < AF_SWITCH_COOLDOWN_MS) return@launch
                 if (
                     !before.isActive ||
                     !before.afEnabled ||
@@ -566,6 +611,24 @@ object FytPhysicalRadio {
                 ) {
                     return@launch
                 }
+                if (
+                    !manual &&
+                    (before.afAverageRssi <= 0 ||
+                        before.afAverageRssi >= before.afSensitivity ||
+                        before.afWeakSamples < AF_WEAK_SAMPLE_COUNT)
+                ) {
+                    return@launch
+                }
+
+                Timber.tag(TAG).d(
+                    "AF check manual=%s RSSI=%d average=%d threshold=%d weakSamples=%d PI=%04X",
+                    manual,
+                    before.rssi,
+                    before.afAverageRssi,
+                    before.afSensitivity,
+                    before.afWeakSamples,
+                    before.pi,
+                )
                 val knownAlternatives =
                     runCatching { fm.alternativeFrequencies.toList() }
                         .getOrDefault(emptyList())
@@ -576,9 +639,18 @@ object FytPhysicalRadio {
                 }
                 val frequency = decodeFrequency(raw.toFloat())
                 if (frequency != null && abs(frequency - before.frequency) >= 0.05f) {
-                    Timber.tag(TAG).i("AF switched %.1f -> %.1f for PI=%04X", before.frequency, frequency, before.pi)
+                    Timber.tag(TAG).i(
+                        "AF switched %.1f -> %.1f for PI=%04X manual=%s averageRSSI=%d threshold=%d",
+                        before.frequency,
+                        frequency,
+                        before.pi,
+                        manual,
+                        before.afAverageRssi,
+                        before.afSensitivity,
+                    )
                     lastAfSwitchAt = System.currentTimeMillis()
                     persistFrequency(frequency)
+                    rssiWindow.clear()
                     _state.update {
                         it.copy(
                             frequency = frequency,
@@ -586,6 +658,8 @@ object FytPhysicalRadio {
                             stereo = null,
                             pi = before.pi,
                             ecc = before.ecc,
+                            afAverageRssi = 0,
+                            afWeakSamples = 0,
                             alternativeFrequencies =
                                 normalizeFrequencyList(
                                     before.alternativeFrequencies + knownAlternatives + before.frequency,
@@ -604,6 +678,105 @@ object FytPhysicalRadio {
                     updateCurrentPresetIdentity()
                 }
             }
+    }
+
+    /**
+     * Manual NavRadio+-style AF cycling. A double tap on the active favourite
+     * advances to the next known frequency and rejects a confirmed foreign PI.
+     */
+    fun tuneNextAlternativeFrequency(preset: Preset) {
+        val current = _state.value
+        if (!current.isActive || !presetMatches(preset, current.frequency, current.pi)) {
+            tunePreset(preset)
+            return
+        }
+        val candidates =
+            normalizeFrequencyList(presetFrequencies(preset) + current.alternativeFrequencies)
+        if (candidates.size <= 1) {
+            requestAlternativeFrequency()
+            return
+        }
+
+        scope.launch {
+            val before = _state.value
+            if (before.isBusy || before.isScanning) return@launch
+            val fm = native ?: return@launch
+            val currentIndex =
+                candidates.indexOfFirst { abs(it - before.frequency) < 0.05f }
+                    .takeIf { it >= 0 }
+                    ?: 0
+            val target = candidates[(currentIndex + 1) % candidates.size]
+            if (abs(target - before.frequency) < 0.05f) return@launch
+
+            _state.update {
+                it.copy(
+                    isBusy = true,
+                    error = null,
+                    frequency = target,
+                    ps = preset.name,
+                    rt = "",
+                    stereo = null,
+                    pi = preset.pi.takeIf { value -> value > 0 } ?: before.pi,
+                    ecc = preset.ecc.ifBlank { before.ecc },
+                    alternativeFrequencies = candidates.filterNot { value -> abs(value - target) < 0.05f },
+                    afAverageRssi = 0,
+                    afWeakSamples = 0,
+                )
+            }
+            if (!runCatching { fm.tune(target) }.getOrDefault(false)) {
+                _state.value = before.copy(isBusy = false, error = "AF-Frequenz konnte nicht eingestellt werden")
+                return@launch
+            }
+
+            delay(500)
+            repeat(5) {
+                runCatching { fm.readRds() }
+                delay(150)
+            }
+            val receivedPi = runCatching { fm.programIdentifier }.getOrDefault(0)
+            val expectedPi = before.pi.takeIf { it > 0 } ?: preset.pi
+            if (expectedPi > 0 && receivedPi > 0 && !samePi(expectedPi, receivedPi)) {
+                Timber.tag(TAG).w(
+                    "Manual AF rejected %.1f because PI changed %04X -> %04X",
+                    target,
+                    expectedPi,
+                    receivedPi,
+                )
+                runCatching { fm.tune(before.frequency) }
+                delay(250)
+                _state.value = before.copy(
+                    isBusy = false,
+                    error = "Nächste AF-Frequenz gehört zu einem anderen Sender",
+                )
+                triggerRdsRead()
+                return@launch
+            }
+
+            val targetRssi = runCatching { fm.rssi }.getOrDefault(before.rssi)
+            lastAfSwitchAt = System.currentTimeMillis()
+            persistFrequency(target)
+            rssiWindow.clear()
+            _state.update {
+                it.copy(
+                    isBusy = false,
+                    frequency = target,
+                    rssi = targetRssi,
+                    pi = receivedPi.takeIf { value -> value > 0 } ?: expectedPi,
+                    alternativeFrequencies = candidates.filterNot { value -> abs(value - target) < 0.05f },
+                    afAverageRssi = 0,
+                    afWeakSamples = 0,
+                )
+            }
+            updateCurrentPresetIdentity()
+            triggerRdsRead()
+            Timber.tag(TAG).i(
+                "Manual AF cycle %.1f -> %.1f PI=%04X RSSI=%d",
+                before.frequency,
+                target,
+                receivedPi.takeIf { it > 0 } ?: expectedPi,
+                targetRssi,
+            )
+        }
     }
 
     fun saveCurrentPreset() {
@@ -724,15 +897,15 @@ object FytPhysicalRadio {
                     if (
                         snapshot.afEnabled &&
                         snapshot.pi > 0 &&
+                        snapshot.afAverageRssi > 0 &&
+                        snapshot.afAverageRssi < snapshot.afSensitivity &&
+                        snapshot.afWeakSamples >= AF_WEAK_SAMPLE_COUNT &&
                         !snapshot.isScanning &&
                         !snapshot.isBusy &&
                         now - lastAfAttemptAt >= AF_POLL_INTERVAL_MS
                     ) {
-                        // activeAf() performs the actual field-strength and PI
-                        // validation inside the tuner driver. Do not guess the
-                        // vendor-specific RSSI scale in the app.
                         lastAfAttemptAt = now
-                        requestAlternativeFrequency()
+                        requestAutomaticAlternativeFrequency()
                     }
                     delay(850)
                 }
@@ -771,6 +944,19 @@ object FytPhysicalRadio {
             }
         val rt = runCatching { fm.radioText }.getOrDefault("")
         val rssi = runCatching { fm.rssi }.getOrDefault(_state.value.rssi)
+        if (rssi > 0) {
+            rssiWindow.addLast(rssi)
+            while (rssiWindow.size > AF_RSSI_WINDOW_SIZE) rssiWindow.removeFirst()
+        }
+        val averageRssi =
+            if (rssiWindow.isNotEmpty()) rssiWindow.sum() / rssiWindow.size else _state.value.afAverageRssi
+        val weakSamples =
+            when {
+                averageRssi <= 0 -> 0
+                averageRssi < _state.value.afSensitivity -> (_state.value.afWeakSamples + 1).coerceAtMost(AF_WEAK_SAMPLE_COUNT)
+                averageRssi >= _state.value.afSensitivity + AF_RSSI_HYSTERESIS -> 0
+                else -> (_state.value.afWeakSamples - 1).coerceAtLeast(0)
+            }
         val stereoState = runCatching { fm.stereoState }.getOrDefault(-1)
         val directPi = runCatching { fm.programIdentifier }.getOrDefault(0)
         val directEcc = runCatching { fm.extendedCountryCode }.getOrDefault("")
@@ -782,6 +968,8 @@ object FytPhysicalRadio {
                 ps = stablePs.ifBlank { current.ps },
                 rt = rt.ifBlank { current.rt },
                 rssi = rssi,
+                afAverageRssi = averageRssi,
+                afWeakSamples = weakSamples,
                 stereo = stereoState.takeIf { it >= 0 }?.let { it == 1 } ?: current.stereo,
                 pi = directPi.takeIf { it > 0 } ?: current.pi,
                 ecc = directEcc.ifBlank { current.ecc },
@@ -794,6 +982,11 @@ object FytPhysicalRadio {
             )
         }
         updateCurrentPresetIdentity()
+    }
+
+    private fun resetAfSampling() {
+        rssiWindow.clear()
+        _state.update { it.copy(afAverageRssi = 0, afWeakSamples = 0) }
     }
 
     private fun applyRegionalConfig(fm: FmNative, enabled: Boolean) {
@@ -865,6 +1058,14 @@ object FytPhysicalRadio {
             ?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             ?.edit()
             ?.putBoolean(key, value)
+            ?.apply()
+    }
+
+    private fun persistInt(key: String, value: Int) {
+        appContext
+            ?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            ?.edit()
+            ?.putInt(key, value)
             ?.apply()
     }
 

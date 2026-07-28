@@ -35,6 +35,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -189,6 +190,14 @@ fun PhysicalRadioScreen() {
                                     isActive = isActive,
                                     onPlay = {
                                         if (!isActive) {
+                                            playerConnection?.pause()
+                                            radio.tunePreset(preset)
+                                        }
+                                    },
+                                    onNextAf = {
+                                        if (isActive) {
+                                            radio.tuneNextAlternativeFrequency(preset)
+                                        } else {
                                             playerConnection?.pause()
                                             radio.tunePreset(preset)
                                         }
@@ -371,6 +380,7 @@ private fun FmFavouriteRow(
     pi: Int,
     isActive: Boolean,
     onPlay: () -> Unit,
+    onNextAf: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     dragHandle: @Composable () -> Unit,
@@ -387,7 +397,11 @@ private fun FmFavouriteRow(
                     } else {
                         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
                     },
-                ).combinedClickable(onClick = onPlay, onLongClick = onEdit)
+                ).combinedClickable(
+                    onClick = onPlay,
+                    onDoubleClick = onNextAf,
+                    onLongClick = onEdit,
+                )
                 .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
         FmStationArtwork(
@@ -842,6 +856,40 @@ private fun PhysicalRadioSettingsPanel(radio: FytPhysicalRadio) {
                 checked = state.afEnabled,
                 onCheckedChange = radio::setAfEnabled,
             )
+        }
+        item {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+            ) {
+                Text(
+                    "AF-Sensitivität: ${state.afSensitivity}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "Höher bedeutet einen früheren Wechsel. Aktueller geglätteter Empfang: " +
+                        if (state.afAverageRssi > 0) state.afAverageRssi.toString() else "–",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Slider(
+                    value = state.afSensitivity.toFloat(),
+                    onValueChange = { radio.setAfSensitivity(it.roundToInt()) },
+                    valueRange = 15f..50f,
+                    steps = 34,
+                )
+                Text(
+                    "Automatisches AF startet nach drei schwachen Messungen. Doppeltipp auf den laufenden Favoriten wechselt sofort zur nächsten gespeicherten AF-Frequenz.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         item {
             RadioSettingRow(
