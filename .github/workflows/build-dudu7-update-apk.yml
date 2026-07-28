@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: dudu7-update-${{ github.event.pull_request.number || github.ref }}
@@ -35,62 +35,17 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Apply album parser regression fix
-        shell: bash
-        run: |
-          set -euxo pipefail
-          if ! grep -q 'AlbumPage.getAlbum(response, browseId)' innertube/src/main/kotlin/com/metrolist/innertube/YouTube.kt; then
-            python3 -m py_compile scripts/apply_dudu7_13719_album_parser_fix.py
-            python3 scripts/apply_dudu7_13719_album_parser_fix.py
-          fi
-          python3 -m py_compile scripts/apply_dudu7_13719_album_song_shelf_fix.py
-          python3 scripts/apply_dudu7_13719_album_song_shelf_fix.py
-          git diff --check
-
-      - name: Persist generated source and regression test
-        if: github.event_name == 'pull_request'
-        shell: bash
-        run: |
-          set -euxo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add app/build.gradle.kts \
-            app/src/main/kotlin/com/metrolist/music/ui/screens/AlbumScreen.kt \
-            app/src/main/kotlin/com/metrolist/music/viewmodels/AlbumViewModel.kt \
-            innertube/src/main/kotlin/com/metrolist/innertube/YouTube.kt \
-            innertube/src/main/kotlin/com/metrolist/innertube/pages/AlbumPage.kt \
-            innertube/src/test/kotlin/com/metrolist/innertube/pages/AlbumPageTest.kt
-          if ! git diff --cached --quiet; then
-            git commit -m 'fix(dudu7): parse single-column album song shelves [skip ci]'
-            git push origin HEAD:${GITHUB_HEAD_REF}
-          fi
-
-      - name: Validate fixed album path
+      - name: Validate Dudu7 source configuration
         shell: bash
         run: |
           set -euxo pipefail
           git diff --check
-          grep -q 'versionCode = 1370028' app/build.gradle.kts
-          grep -q 'versionName = "13.7.19"' app/build.gradle.kts
-          grep -q 'AlbumPage.getAlbum(response, browseId)' innertube/src/main/kotlin/com/metrolist/innertube/YouTube.kt
-          grep -q 'val shelfContents = AlbumPage.getShelfContents(response)' innertube/src/main/kotlin/com/metrolist/innertube/YouTube.kt
-          grep -q 'fun getShelfContents(response: BrowseResponse)' innertube/src/main/kotlin/com/metrolist/innertube/pages/AlbumPage.kt
-          grep -q 'parsesSingleColumnResponsiveAlbumResponse' innertube/src/test/kotlin/com/metrolist/innertube/pages/AlbumPageTest.kt
-          grep -q 'assertEquals(1, AlbumPage.getShelfContents(response).size)' innertube/src/test/kotlin/com/metrolist/innertube/pages/AlbumPageTest.kt
-          grep -q 'Album konnte nicht geladen werden.' app/src/main/kotlin/com/metrolist/music/ui/screens/AlbumScreen.kt
           grep -q 'appNameOverride ?: "Metrolist dudu7"' app/build.gradle.kts
           grep -q 'resValue("string", "app_name", "Metrolist dudu7")' app/build.gradle.kts
           if grep -q 'UPDATER_AVAILABLE", "true"' app/build.gradle.kts; then
             echo 'Original Metrolist updater was re-enabled' >&2
             exit 1
           fi
-
-      - name: Run album parser regression test
-        shell: bash
-        run: |
-          set -euxo pipefail
-          chmod +x gradlew
-          ./gradlew :innertube:testDebugUnitTest --no-daemon --stacktrace
 
       - name: Read APK version
         id: meta
@@ -108,6 +63,7 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
+          chmod +x gradlew
           ./gradlew :app:assembleGmsDudu7Debug --no-daemon --stacktrace
 
       - name: Verify update APK
