@@ -39,8 +39,10 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
+          sed -i '/diag = diag.replace("FmStationLogoResolver", "ReliableFmStationLogoResolver")/d' scripts/apply_dudu7_13717_reliable_fm_logos.py
           python3 -m py_compile scripts/apply_dudu7_13717_reliable_fm_logos.py
           python3 scripts/apply_dudu7_13717_reliable_fm_logos.py
+          git checkout -- scripts/apply_dudu7_13717_reliable_fm_logos.py
           git diff --check
 
       - name: Persist generated source changes
@@ -48,15 +50,15 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          if ! git diff --quiet; then
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add app/build.gradle.kts \
-              app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmStationArtwork.kt \
-              app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/FmLogoPickerDialog.kt \
-              app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/FmRadioDiagnostics.kt \
-              app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt \
-              app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/build.gradle.kts \
+            app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmStationArtwork.kt \
+            app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/FmLogoPickerDialog.kt \
+            app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/FmRadioDiagnostics.kt \
+            app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt \
+            app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
+          if ! git diff --cached --quiet; then
             git commit -m 'fix(dudu7): use reliable station identities for FM logos [skip ci]'
             git push origin HEAD:${GITHUB_HEAD_REF}
           fi
