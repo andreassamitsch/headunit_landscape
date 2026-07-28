@@ -5,6 +5,8 @@ import kotlin.math.abs
 data class FmAfCandidate(
     val frequency: Float,
     val trustedPresetFrequency: Boolean,
+    val predictedCoverage: Int = 0,
+    val source: String = "Tuner",
 )
 
 data class FmAfMeasurement(
@@ -12,6 +14,8 @@ data class FmAfMeasurement(
     val rssi: Int,
     val pi: Int,
     val trustedPresetFrequency: Boolean,
+    val predictedCoverage: Int = 0,
+    val source: String = "Tuner",
 )
 
 /** Pure AF decision logic, separated from the FYT hardware calls for regression testing. */
@@ -29,7 +33,11 @@ object FmAlternativeFrequencySelector {
             .filter { it.rssi > 0 }
             .filter { compatiblePi(expectedPi, it.pi, it.trustedPresetFrequency) }
             .filter { currentRssi <= 0 || it.rssi >= currentRssi + minimumImprovement }
-            .maxWithOrNull(compareBy<FmAfMeasurement> { it.rssi }.thenByDescending { it.frequency })
+            .maxWithOrNull(
+                compareBy<FmAfMeasurement> { it.rssi }
+                    .thenBy { it.predictedCoverage }
+                    .thenByDescending { it.frequency },
+            )
 
     fun compatiblePi(
         expectedPi: Int,
