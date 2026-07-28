@@ -1,0 +1,100 @@
+name: Fix and build Dudu7 13.7.22
+
+on:
+  pull_request:
+    branches: [agent/fm-radio-ui-logos-tabs]
+    paths:
+      - scripts/fix_dudu7_13722_settings_layout.py
+      - .github/workflows/fix-build-dudu7-13722.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fix-dudu7-13722-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          ref: ${{ github.head_ref }}
+
+      - name: Apply and persist settings layout correction
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 scripts/fix_dudu7_13722_settings_layout.py
+          git diff --check
+          grep -q 'GPS-Sendererkennung (RTR)' app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt
+          test "$(grep -c 'title = "AF – Alternative Frequenzen"' app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt)" -eq 1
+          rm scripts/fix_dudu7_13722_settings_layout.py .github/workflows/fix-build-dudu7-13722.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix(dudu7): correct RTR settings layout [skip ci]'
+          git push origin HEAD:${GITHUB_HEAD_REF}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-cleanup: on-success
+      - uses: android-actions/setup-android@v3
+
+      - name: Run complete Dudu7 unit tests
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p validation
+          chmod +x gradlew
+          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace 2>&1 | tee validation/unit-tests.log
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+
+      - name: Build and verify update-compatible APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace 2>&1 | tee artifacts/build.log
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          OUT='artifacts/Metrolist-dudu7-13.7.22.apk'
+          test -n "$APK"
+          cp "$APK" "$OUT"
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$BUILD_TOOLS/aapt" dump badging "$OUT" > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/aapt" dump permissions "$OUT" > artifacts/apk-permissions.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$OUT" > artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370031'" artifacts/apk-badging.txt
+          grep -q "versionName='13.7.22-dudu7'" artifacts/apk-badging.txt
+          grep -q "application-label:'Metrolist dudu7'" artifacts/apk-badging.txt
+          grep -q 'android.permission.ACCESS_FINE_LOCATION' artifacts/apk-permissions.txt
+          grep -q 'android.permission.ACCESS_COARSE_LOCATION' artifacts/apk-permissions.txt
+          grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
+          unzip -l "$OUT" | tee artifacts/apk-contents.txt
+          grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
+          grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
+          sha256sum "$OUT" > "$OUT.sha256"
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+
+      - name: Upload validation and APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.22-final
+          path: |
+            artifacts/
+            validation/
+          if-no-files-found: warn
+          retention-days: 14
