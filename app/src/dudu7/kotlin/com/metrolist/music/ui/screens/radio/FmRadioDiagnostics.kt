@@ -17,6 +17,8 @@ import com.metrolist.music.radio.RadioDnsLogoResolver
 import com.metrolist.music.radio.fyt.FytPhysicalRadio
 import com.metrolist.music.radio.fyt.ReliableFmStationLogoResolver
 import kotlinx.coroutines.launch
+import java.text.DateFormat
+import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -25,21 +27,27 @@ internal fun FmRadioDiagnostics(state: FytPhysicalRadio.State) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val revision by ReliableFmStationLogoResolver.revisions.collectAsState()
-    val info =
-        ReliableFmStationLogoResolver.logoInfo(
-            context,
-            state.displayStation,
-            state.frequency,
-            state.pi,
-            state.ecc,
-            listOf(state.frequency) + state.alternativeFrequencies,
-        )
+    val info = ReliableFmStationLogoResolver.logoInfo(
+        context,
+        state.displayStation,
+        state.frequency,
+        state.pi,
+        state.ecc,
+        listOf(state.frequency) + state.alternativeFrequencies + state.rtrAfPredictions.map { it.frequency },
+    )
     val piHex = (state.pi and 0xffff).toString(16).padStart(4, '0')
     val ecc = state.ecc.ifBlank { RadioDnsLogoResolver.defaultEcc(context).orEmpty() }.lowercase(Locale.ROOT)
     val gcc = if (state.pi > 0 && ecc.matches(Regex("[0-9a-f]{2}"))) "${piHex.first()}$ecc" else ""
     val frequencyCode = (state.frequency * 100f).roundToInt().toString().padStart(5, '0')
     val lookup = if (gcc.isNotBlank()) "$frequencyCode.$piHex.$gcc.fm.radiodns.org" else "–"
     val bearer = if (gcc.isNotBlank()) "fm:$gcc.$piHex.$frequencyCode" else "–"
+    val location = if (state.geoLatitude != null && state.geoLongitude != null) {
+        "${"%.5f".format(Locale.ROOT, state.geoLatitude)}, ${"%.5f".format(Locale.ROOT, state.geoLongitude)}" +
+            state.geoAccuracyMeters?.let { " (±${it.roundToInt()} m)" }.orEmpty()
+    } else "–"
+    val rtrUpdated = state.rtrCatalogUpdatedAt.takeIf { it > 0L }?.let {
+        DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
+    } ?: "–"
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("FM-Diagnose", style = MaterialTheme.typography.titleMedium)
@@ -51,9 +59,32 @@ internal fun FmRadioDiagnostics(state: FytPhysicalRadio.State) {
         )
         Text("RadioDNS: $lookup", style = MaterialTheme.typography.bodySmall)
         Text("Bearer: $bearer", style = MaterialTheme.typography.bodySmall)
+        Text("GPS/RTR: ${if (state.geoEnabled) state.geoLocationStatus else "deaktiviert"}", style = MaterialTheme.typography.bodySmall)
+        Text("Position: $location", style = MaterialTheme.typography.bodySmall)
         Text(
-            "AF: ${if (state.alternativeFrequencies.isEmpty()) "–" else FytPhysicalRadio.formatFrequencies(state.alternativeFrequencies)}",
+            "RTR-Katalog: ${state.rtrCatalogStatus} • ${state.rtrCatalogStations} UKW-Einträge • Stand $rtrUpdated",
+            style = MaterialTheme.typography.bodySmall,
         )
+        if (state.rtrStableId.isNotBlank()) {
+            Text(
+                "RTR-Match: ${state.rtrCanonicalName} • ${state.rtrMatchConfidence}% • ${state.rtrMatchSource}",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                "Standort: ${state.rtrStationSite.ifBlank { "–" }} • Gebiet: ${state.rtrCoverageName.ifBlank { "–" }} • " +
+                    "Prognose ${state.rtrCoverageStrength}/7",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (state.rtrAfPredictions.isNotEmpty()) {
+            Text(
+                "RTR-AF: " + state.rtrAfPredictions.take(8).joinToString(" • ") {
+                    "${FytPhysicalRadio.formatFrequency(it.frequency)} (${it.coverageStrength}/7)"
+                },
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        Text("AF: ${if (state.alternativeFrequencies.isEmpty()) "–" else FytPhysicalRadio.formatFrequencies(state.alternativeFrequencies)}")
         Text(
             "RSSI: aktuell ${state.rssi}  •  Mittel ${state.afAverageRssi.takeIf { it > 0 } ?: "–"}  •  " +
                 "Schwelle ${state.afSensitivity}  •  schwach ${state.afWeakSamples}/3",
@@ -72,13 +103,7 @@ internal fun FmRadioDiagnostics(state: FytPhysicalRadio.State) {
         Button(
             onClick = {
                 scope.launch {
-                    ReliableFmStationLogoResolver.invalidateAuto(
-                        context,
-                        state.displayStation,
-                        state.frequency,
-                        state.pi,
-                        state.ecc,
-                    )
+                    ReliableFmStationLogoResolver.invalidateAuto(context, state.displayStation, state.frequency, state.pi, state.ecc)
                     ReliableFmStationLogoResolver.resolve(
                         context = context,
                         stationName = state.displayStation,
@@ -86,7 +111,8 @@ internal fun FmRadioDiagnostics(state: FytPhysicalRadio.State) {
                         pi = state.pi,
                         ecc = state.ecc,
                         force = true,
-                        allFrequencies = listOf(state.frequency) + state.alternativeFrequencies,
+                        allFrequencies = listOf(state.frequency) + state.alternativeFrequencies +
+                            state.rtrAfPredictions.map { it.frequency },
                     )
                 }
             },
