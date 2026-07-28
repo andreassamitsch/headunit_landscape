@@ -28,7 +28,6 @@ import com.metrolist.music.constants.PureBlackKey
 import com.metrolist.music.ui.screens.artist.ArtistAlbumsScreen
 import com.metrolist.music.ui.screens.artist.ArtistItemsScreen
 import com.metrolist.music.ui.screens.artist.ArtistScreen
-import com.metrolist.music.ui.screens.artist.EmbeddedArtistItemsScreen
 import com.metrolist.music.ui.screens.artist.EmbeddedArtistScreen
 import com.metrolist.music.ui.screens.artist.ArtistSongsScreen
 import com.metrolist.music.ui.screens.equalizer.EqScreen
@@ -261,11 +260,11 @@ fun NavGraphBuilder.navigationBuilder(
                 },
             ),
     ) {
-        if (embeddedInPlayer) {
-            EmbeddedArtistItemsScreen(navController)
-        } else {
-            ArtistItemsScreen(navController)
-        }
+        // The right Dudu7 pane owns its own NavHost, so it can host the original
+        // MetroList category screen directly. Do not replace it with a copied
+        // embedded list: the original screen already provides album/single grids,
+        // pagination, menus and navigation to the existing AlbumScreen.
+        ArtistItemsScreen(navController)
     }
 
     composable(

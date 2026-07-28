@@ -8,6 +8,8 @@ package com.metrolist.music.ui.screens.artist
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -134,6 +136,8 @@ fun ArtistItemsScreen(
         }
     }
 
+    // One root keeps the TopAppBar wrap-content inside nested Dudu7 AnimatedContent.
+    Box(modifier = Modifier.fillMaxSize()) {
     if (itemsPage == null) {
         ShimmerHost(
             modifier = Modifier.windowInsetsPadding(LocalPlayerAwareWindowInsets.current),
@@ -383,4 +387,5 @@ fun ArtistItemsScreen(
             }
         },
     )
+    }
 }
