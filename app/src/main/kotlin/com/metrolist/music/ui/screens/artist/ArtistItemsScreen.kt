@@ -8,6 +8,8 @@ package com.metrolist.music.ui.screens.artist
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -54,7 +56,6 @@ import com.metrolist.music.playback.queues.ListQueue
 import com.metrolist.music.playback.queues.YouTubeQueue
 import com.metrolist.music.ui.component.IconButton
 import com.metrolist.music.ui.component.LocalMenuState
-import com.metrolist.music.ui.component.LocalRightPaneScrollBridge
 import com.metrolist.music.ui.component.YouTubeGridItem
 import com.metrolist.music.ui.component.YouTubeListItem
 import com.metrolist.music.ui.component.shimmer.GridItemPlaceHolder
@@ -76,7 +77,6 @@ fun ArtistItemsScreen(
     viewModel: ArtistItemsViewModel = hiltViewModel(),
 ) {
     val menuState = LocalMenuState.current
-    val embeddedInPlayer = LocalRightPaneScrollBridge.current != null
     val haptic = LocalHapticFeedback.current
     val playerConnection = LocalPlayerConnection.current ?: return
     val isPlaying by playerConnection.isEffectivelyPlaying.collectAsStateWithLifecycle()
@@ -136,6 +136,8 @@ fun ArtistItemsScreen(
         }
     }
 
+    // One root keeps the TopAppBar wrap-content inside nested Dudu7 AnimatedContent.
+    Box(modifier = Modifier.fillMaxSize()) {
     if (itemsPage == null) {
         ShimmerHost(
             modifier = Modifier.windowInsetsPadding(LocalPlayerAwareWindowInsets.current),
@@ -357,21 +359,13 @@ fun ArtistItemsScreen(
                                         }
                                     }
                                 },
-                            ).then(
-                                // Lazy grid appearance layers can remain at alpha 0 when the
-                                // original screen is hosted inside the nested Dudu7 NavHost.
-                                // Keep the original grid and interactions, but omit only this
-                                // optional item animation in the right pane.
-                                if (embeddedInPlayer) Modifier else Modifier.animateItem(),
-                            ),
+                            ).animateItem(),
                 )
             }
 
             if (itemsPage?.continuation != null) {
                 item(key = "loading") {
-                    ShimmerHost(
-                        if (embeddedInPlayer) Modifier else Modifier.animateItem(),
-                    ) {
+                    ShimmerHost(Modifier.animateItem()) {
                         GridItemPlaceHolder(fillMaxWidth = true)
                     }
                 }
@@ -393,4 +387,5 @@ fun ArtistItemsScreen(
             }
         },
     )
+    }
 }
