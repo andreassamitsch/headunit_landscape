@@ -14,7 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.metrolist.music.radio.RadioDnsLogoResolver
-import com.metrolist.music.radio.fyt.ReliableReliableFmStationLogoResolver
+import com.metrolist.music.radio.fyt.ReliableFmStationLogoResolver
 import com.metrolist.music.radio.fyt.FytPhysicalRadio
 import kotlinx.coroutines.launch
 import java.util.Locale
