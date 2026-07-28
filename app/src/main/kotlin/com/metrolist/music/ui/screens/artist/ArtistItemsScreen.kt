@@ -54,6 +54,7 @@ import com.metrolist.music.playback.queues.ListQueue
 import com.metrolist.music.playback.queues.YouTubeQueue
 import com.metrolist.music.ui.component.IconButton
 import com.metrolist.music.ui.component.LocalMenuState
+import com.metrolist.music.ui.component.LocalRightPaneScrollBridge
 import com.metrolist.music.ui.component.YouTubeGridItem
 import com.metrolist.music.ui.component.YouTubeListItem
 import com.metrolist.music.ui.component.shimmer.GridItemPlaceHolder
@@ -75,6 +76,7 @@ fun ArtistItemsScreen(
     viewModel: ArtistItemsViewModel = hiltViewModel(),
 ) {
     val menuState = LocalMenuState.current
+    val embeddedInPlayer = LocalRightPaneScrollBridge.current != null
     val haptic = LocalHapticFeedback.current
     val playerConnection = LocalPlayerConnection.current ?: return
     val isPlaying by playerConnection.isEffectivelyPlaying.collectAsStateWithLifecycle()
@@ -355,13 +357,21 @@ fun ArtistItemsScreen(
                                         }
                                     }
                                 },
-                            ).animateItem(),
+                            ).then(
+                                // Lazy grid appearance layers can remain at alpha 0 when the
+                                // original screen is hosted inside the nested Dudu7 NavHost.
+                                // Keep the original grid and interactions, but omit only this
+                                // optional item animation in the right pane.
+                                if (embeddedInPlayer) Modifier else Modifier.animateItem(),
+                            ),
                 )
             }
 
             if (itemsPage?.continuation != null) {
                 item(key = "loading") {
-                    ShimmerHost(Modifier.animateItem()) {
+                    ShimmerHost(
+                        if (embeddedInPlayer) Modifier else Modifier.animateItem(),
+                    ) {
                         GridItemPlaceHolder(fillMaxWidth = true)
                     }
                 }
