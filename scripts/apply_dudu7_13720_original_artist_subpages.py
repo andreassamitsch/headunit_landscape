@@ -24,6 +24,21 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
+def wrap_single_root(text: str, start_marker: str, root_comment: str, label: str) -> str:
+    if root_comment in text:
+        return text
+    text = replace_once(
+        text,
+        start_marker,
+        f"    // {root_comment}\n    Box(modifier = Modifier.fillMaxSize()) {{\n{start_marker}",
+        f"{label} root start",
+    )
+    ending = "\n    )\n}\n"
+    if not text.endswith(ending):
+        raise SystemExit(f"{label}: unexpected function ending")
+    return text[: -len(ending)] + "\n    )\n    }\n}\n"
+
+
 def patch_navigation(text: str) -> str:
     text = text.replace(
         "import com.metrolist.music.ui.screens.artist.EmbeddedArtistItemsScreen\n",
@@ -50,23 +65,17 @@ def patch_navigation(text: str) -> str:
 
 
 def patch_artist_items(text: str) -> str:
-    import_marker = "import com.metrolist.music.ui.component.LocalMenuState\n"
-    import_replacement = (
-        "import com.metrolist.music.ui.component.LocalMenuState\n"
-        "import com.metrolist.music.ui.component.LocalRightPaneScrollBridge\n"
-    )
-    text = replace_once(text, import_marker, import_replacement, "right pane import")
+    text = text.replace(
+        "import androidx.compose.foundation.combinedClickable\n",
+        "import androidx.compose.foundation.combinedClickable\n"
+        "import androidx.compose.foundation.layout.Box\n"
+        "import androidx.compose.foundation.layout.fillMaxSize\n",
+        1,
+    ) if "import androidx.compose.foundation.layout.Box\n" not in text else text
+    text = text.replace("import com.metrolist.music.ui.component.LocalRightPaneScrollBridge\n", "")
+    text = text.replace("    val embeddedInPlayer = LocalRightPaneScrollBridge.current != null\n", "")
 
-    local_marker = "    val menuState = LocalMenuState.current\n"
-    local_replacement = (
-        "    val menuState = LocalMenuState.current\n"
-        "    val embeddedInPlayer = LocalRightPaneScrollBridge.current != null\n"
-    )
-    text = replace_once(text, local_marker, local_replacement, "right pane detection")
-
-    grid_animation_marker = '''                            ).animateItem(),
-'''
-    grid_animation_replacement = '''                            ).then(
+    animated = '''                            ).then(
                                 // Lazy grid appearance layers can remain at alpha 0 when the
                                 // original screen is hosted inside the nested Dudu7 NavHost.
                                 // Keep the original grid and interactions, but omit only this
@@ -74,16 +83,28 @@ def patch_artist_items(text: str) -> str:
                                 if (embeddedInPlayer) Modifier else Modifier.animateItem(),
                             ),
 '''
-    text = replace_once(text, grid_animation_marker, grid_animation_replacement, "grid item animation")
+    text = text.replace(animated, "                            ).animateItem(),\n", 1)
+    placeholder = '''                    ShimmerHost(
+                        if (embeddedInPlayer) Modifier else Modifier.animateItem(),
+                    ) {
+'''
+    text = text.replace(placeholder, "                    ShimmerHost(Modifier.animateItem()) {\n", 1)
 
-    placeholder_marker = "                    ShimmerHost(Modifier.animateItem()) {\n"
-    placeholder_replacement = (
-        "                    ShimmerHost(\n"
-        "                        if (embeddedInPlayer) Modifier else Modifier.animateItem(),\n"
-        "                    ) {\n"
+    return wrap_single_root(
+        text,
+        "    if (itemsPage == null) {\n",
+        "One root keeps the TopAppBar wrap-content inside nested Dudu7 AnimatedContent.",
+        "ArtistItemsScreen",
     )
-    text = replace_once(text, placeholder_marker, placeholder_replacement, "grid placeholder animation")
-    return text
+
+
+def patch_album(text: str) -> str:
+    return wrap_single_root(
+        text,
+        "    LazyColumn(\n",
+        "One root prevents the TopAppBar from becoming a full-pane overlay in Dudu7.",
+        "AlbumScreen",
+    )
 
 
 def patch_smoke_test(text: str) -> str:
@@ -129,49 +150,58 @@ assert_album_detail() {
 '''
     text = replace_once(text, marker, replacement, "visual pixel assertion")
 
-    albums_marker = '''sleep 14
+    replacements = [
+        (
+            '''sleep 14
 assert_text "left player remains visible on Albums" 0 "=Rick Astley"
 dump_ui "$RESULTS_DIR/albums-grid.xml"
-'''
-    albums_replacement = '''sleep 14
+''',
+            '''sleep 14
 assert_text "left player remains visible on Albums" 0 "=Rick Astley"
 assert_right_pane_visually_nonblank "$RESULTS_DIR/albums-visible.png" "Albums grid"
 dump_ui "$RESULTS_DIR/albums-grid.xml"
-'''
-    text = replace_once(text, albums_marker, albums_replacement, "Albums visual assertion")
-
-    album_detail_marker = '''sleep 16
+''',
+            "Albums visual assertion",
+        ),
+        (
+            '''sleep 16
 dump_ui "$RESULTS_DIR/album-detail.xml"
 assert_album_detail "$RESULTS_DIR/album-detail.xml" "$album_title"
-'''
-    album_detail_replacement = '''sleep 16
+''',
+            '''sleep 16
 assert_right_pane_visually_nonblank "$RESULTS_DIR/album-detail-visible.png" "Album detail"
 dump_ui "$RESULTS_DIR/album-detail.xml"
 assert_album_detail "$RESULTS_DIR/album-detail.xml" "$album_title"
-'''
-    text = replace_once(text, album_detail_marker, album_detail_replacement, "album detail visual assertion")
-
-    singles_marker = '''sleep 14
+''',
+            "album detail visual assertion",
+        ),
+        (
+            '''sleep 14
 assert_text "left player remains visible on Singles and EPs" 0 "=Rick Astley"
 dump_ui "$RESULTS_DIR/singles-eps-grid.xml"
-'''
-    singles_replacement = '''sleep 14
+''',
+            '''sleep 14
 assert_text "left player remains visible on Singles and EPs" 0 "=Rick Astley"
 assert_right_pane_visually_nonblank "$RESULTS_DIR/singles-eps-visible.png" "Singles and EPs grid"
 dump_ui "$RESULTS_DIR/singles-eps-grid.xml"
-'''
-    text = replace_once(text, singles_marker, singles_replacement, "Singles visual assertion")
-
-    single_detail_marker = '''sleep 16
+''',
+            "Singles visual assertion",
+        ),
+        (
+            '''sleep 16
 dump_ui "$RESULTS_DIR/single-ep-detail.xml"
 assert_album_detail "$RESULTS_DIR/single-ep-detail.xml" "$single_title"
-'''
-    single_detail_replacement = '''sleep 16
+''',
+            '''sleep 16
 assert_right_pane_visually_nonblank "$RESULTS_DIR/single-ep-detail-visible.png" "Single or EP detail"
 dump_ui "$RESULTS_DIR/single-ep-detail.xml"
 assert_album_detail "$RESULTS_DIR/single-ep-detail.xml" "$single_title"
-'''
-    text = replace_once(text, single_detail_marker, single_detail_replacement, "single detail visual assertion")
+''',
+            "single detail visual assertion",
+        ),
+    ]
+    for old, new, label in replacements:
+        text = replace_once(text, old, new, label)
     return text
 
 
@@ -183,11 +213,13 @@ def patch_version(text: str) -> str:
 
 update("app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt", patch_navigation)
 update("app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistItemsScreen.kt", patch_artist_items)
+update("app/src/main/kotlin/com/metrolist/music/ui/screens/AlbumScreen.kt", patch_album)
 update("scripts/dudu7_artist_original_subpages_smoke.sh", patch_smoke_test)
 update("app/build.gradle.kts", patch_version)
 
 navigation = (ROOT / "app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt").read_text(encoding="utf-8")
 artist_items = (ROOT / "app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistItemsScreen.kt").read_text(encoding="utf-8")
+album = (ROOT / "app/src/main/kotlin/com/metrolist/music/ui/screens/AlbumScreen.kt").read_text(encoding="utf-8")
 smoke = (ROOT / "scripts/dudu7_artist_original_subpages_smoke.sh").read_text(encoding="utf-8")
 build = (ROOT / "app/build.gradle.kts").read_text(encoding="utf-8")
 
@@ -196,22 +228,18 @@ for marker in ["The right Dudu7 pane owns its own NavHost", "ArtistItemsScreen(n
         raise SystemExit(f"Missing navigation marker: {marker}")
 if "EmbeddedArtistItemsScreen" in navigation:
     raise SystemExit("EmbeddedArtistItemsScreen is still wired into NavigationBuilder")
-for marker in [
-    "LocalRightPaneScrollBridge.current != null",
-    "if (embeddedInPlayer) Modifier else Modifier.animateItem()",
-    "Lazy grid appearance layers can remain at alpha 0",
+for marker, source in [
+    ("One root keeps the TopAppBar wrap-content", artist_items),
+    ("Box(modifier = Modifier.fillMaxSize())", artist_items),
+    ("One root prevents the TopAppBar", album),
+    ("Box(modifier = Modifier.fillMaxSize())", album),
 ]:
-    if marker not in artist_items:
-        raise SystemExit(f"Missing embedded grid visibility marker: {marker}")
-for marker in [
-    "assert_right_pane_visually_nonblank",
-    "Albums grid",
-    "Singles and EPs grid",
-    "Single or EP detail",
-]:
+    if marker not in source:
+        raise SystemExit(f"Missing single-root marker: {marker}")
+for marker in ["assert_right_pane_visually_nonblank", "Albums grid", "Singles and EPs grid", "Single or EP detail"]:
     if marker not in smoke:
         raise SystemExit(f"Missing emulator visual assertion: {marker}")
 if "versionCode = 1370029" not in build or 'versionName = "13.7.20"' not in build:
     raise SystemExit("13.7.20 version markers are missing")
 
-print("Applied original MetroList artist category routing, visible grids and pixel-verified emulator test for Dudu7 13.7.20")
+print("Applied original MetroList artist/album screens with constrained roots and pixel-verified Dudu7 test")
