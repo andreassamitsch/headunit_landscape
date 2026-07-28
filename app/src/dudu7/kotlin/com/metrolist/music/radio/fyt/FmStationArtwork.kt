@@ -354,24 +354,49 @@ fun FmStationArtwork(
     ecc: String? = null,
     size: Dp,
     modifier: Modifier = Modifier,
+    allFrequencies: List<Float> = emptyList(),
 ) {
     val context = LocalContext.current
-    val revision by FmStationLogoResolver.revisions.collectAsState()
+    val revision by ReliableFmStationLogoResolver.revisions.collectAsState()
+    val lookupFrequencies =
+        remember(frequency, allFrequencies) {
+            (listOf(frequency) + allFrequencies)
+                .filter { it in 65f..110f }
+                .distinctBy { (it * 100f).roundToInt() }
+        }
     val artworkKey =
-        remember(stationName, frequency, pi, ecc, revision) {
+        remember(stationName, frequency, lookupFrequencies, pi, ecc, revision) {
+            val frequencyKey = lookupFrequencies.joinToString("-") { (it * 100f).roundToInt().toString() }
             if (pi > 0) {
-                "pi-${(pi and 0xffff).toString(16)}-$revision"
+                "pi-${(pi and 0xffff).toString(16)}-${ecc.orEmpty()}-$frequencyKey-$revision"
             } else {
-                "${stationName.trim()}-${(frequency * 100f).roundToInt()}-$revision"
+                "${stationName.trim()}-$frequencyKey-$revision"
             }
         }
     var artworkUrl by
         remember(artworkKey) {
-            mutableStateOf(FmStationLogoResolver.cachedLogo(context, stationName, frequency, pi))
+            mutableStateOf(
+                ReliableFmStationLogoResolver.cachedLogo(
+                    context = context,
+                    stationName = stationName,
+                    frequency = frequency,
+                    pi = pi,
+                    ecc = ecc,
+                    allFrequencies = lookupFrequencies,
+                ),
+            )
         }
     LaunchedEffect(artworkKey) {
         if (artworkUrl.isNullOrBlank()) {
-            artworkUrl = FmStationLogoResolver.resolve(context, stationName, frequency, pi, ecc)
+            artworkUrl =
+                ReliableFmStationLogoResolver.resolve(
+                    context = context,
+                    stationName = stationName,
+                    frequency = frequency,
+                    pi = pi,
+                    ecc = ecc,
+                    allFrequencies = lookupFrequencies,
+                )
         }
     }
     val shape = RoundedCornerShape((size.value / 7f).dp)

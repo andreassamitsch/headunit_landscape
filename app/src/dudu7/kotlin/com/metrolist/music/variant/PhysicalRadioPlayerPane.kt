@@ -202,6 +202,9 @@ fun PhysicalRadioPlayerPane(
                     pi = state.pi,
                     ecc = state.ecc,
                     size = artworkSize,
+                    allFrequencies =
+                        (currentPreset?.let(FytPhysicalRadio::presetFrequencies).orEmpty() +
+                            state.alternativeFrequencies + state.frequency),
                 )
             }
             if (nowPlaying.resolving) {

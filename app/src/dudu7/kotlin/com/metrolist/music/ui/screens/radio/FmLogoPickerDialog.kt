@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.metrolist.music.radio.RadioLogoCandidate
 import com.metrolist.music.radio.fyt.FmStationArtwork
-import com.metrolist.music.radio.fyt.FmStationLogoResolver
+import com.metrolist.music.radio.fyt.ReliableFmStationLogoResolver
 import com.metrolist.music.radio.fyt.FytPhysicalRadio
 import kotlinx.coroutines.launch
 
@@ -52,19 +52,22 @@ internal fun FmLogoPickerDialog(
     var applying by remember(preset) { mutableStateOf(false) }
     var error by remember(preset) { mutableStateOf<String?>(null) }
     var searchRevision by remember(preset) { mutableIntStateOf(0) }
-    val info = FmStationLogoResolver.logoInfo(context, preset.name, preset.frequency, preset.pi)
+    val info = ReliableFmStationLogoResolver.logoInfo(
+        context, preset.name, preset.frequency, preset.pi, preset.ecc, FytPhysicalRadio.presetFrequencies(preset),
+    )
 
     LaunchedEffect(preset, searchRevision) {
         loading = true
         error = null
         candidates =
             runCatching {
-                FmStationLogoResolver.searchCandidates(
+                ReliableFmStationLogoResolver.searchCandidates(
                     context = context,
                     stationName = preset.name,
                     frequency = preset.frequency,
                     pi = preset.pi,
                     ecc = preset.ecc,
+                    allFrequencies = FytPhysicalRadio.presetFrequencies(preset),
                 )
             }.getOrElse {
                 error = it.message ?: "Logosuche fehlgeschlagen"
@@ -79,11 +82,12 @@ internal fun FmLogoPickerDialog(
         applying = true
         scope.launch {
             val stored =
-                FmStationLogoResolver.setManualLogo(
+                ReliableFmStationLogoResolver.setManualLogo(
                     context = context,
                     stationName = preset.name,
                     frequency = preset.frequency,
                     pi = preset.pi,
+                    ecc = preset.ecc,
                     sourceUrl = candidate.url,
                     sourceLabel = candidate.source.label,
                 )
@@ -108,6 +112,7 @@ internal fun FmLogoPickerDialog(
                         pi = preset.pi,
                         ecc = preset.ecc,
                         size = 72.dp,
+                        allFrequencies = FytPhysicalRadio.presetFrequencies(preset),
                     )
                     Column(Modifier.weight(1f)) {
                         Text(preset.name, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -154,7 +159,7 @@ internal fun FmLogoPickerDialog(
 
                 OutlinedButton(
                     onClick = {
-                        FmStationLogoResolver.clearManualLogo(context, preset.name, preset.frequency, preset.pi)
+                        ReliableFmStationLogoResolver.clearManualLogo(context, preset.name, preset.frequency, preset.pi, preset.ecc)
                         searchRevision += 1
                     },
                     enabled = info?.manual == true && !applying,
@@ -164,14 +169,15 @@ internal fun FmLogoPickerDialog(
                 Button(
                     onClick = {
                         scope.launch {
-                            FmStationLogoResolver.invalidateAuto(context, preset.name, preset.frequency, preset.pi)
-                            FmStationLogoResolver.resolve(
-                                context,
-                                preset.name,
-                                preset.frequency,
-                                preset.pi,
-                                preset.ecc,
+                            ReliableFmStationLogoResolver.invalidateAuto(context, preset.name, preset.frequency, preset.pi, preset.ecc)
+                            ReliableFmStationLogoResolver.resolve(
+                                context = context,
+                                stationName = preset.name,
+                                frequency = preset.frequency,
+                                pi = preset.pi,
+                                ecc = preset.ecc,
                                 force = true,
+                                allFrequencies = FytPhysicalRadio.presetFrequencies(preset),
                             )
                             searchRevision += 1
                         }
