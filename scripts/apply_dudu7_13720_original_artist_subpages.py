@@ -65,13 +65,14 @@ def patch_navigation(text: str) -> str:
 
 
 def patch_artist_items(text: str) -> str:
-    text = text.replace(
-        "import androidx.compose.foundation.combinedClickable\n",
-        "import androidx.compose.foundation.combinedClickable\n"
-        "import androidx.compose.foundation.layout.Box\n"
-        "import androidx.compose.foundation.layout.fillMaxSize\n",
-        1,
-    ) if "import androidx.compose.foundation.layout.Box\n" not in text else text
+    if "import androidx.compose.foundation.layout.Box\n" not in text:
+        text = text.replace(
+            "import androidx.compose.foundation.combinedClickable\n",
+            "import androidx.compose.foundation.combinedClickable\n"
+            "import androidx.compose.foundation.layout.Box\n"
+            "import androidx.compose.foundation.layout.fillMaxSize\n",
+            1,
+        )
     text = text.replace("import com.metrolist.music.ui.component.LocalRightPaneScrollBridge\n", "")
     text = text.replace("    val embeddedInPlayer = LocalRightPaneScrollBridge.current != null\n", "")
 
@@ -202,6 +203,51 @@ assert_album_detail "$RESULTS_DIR/single-ep-detail.xml" "$single_title"
     ]
     for old, new, label in replacements:
         text = replace_once(text, old, new, label)
+
+    scroll_function_marker = '''
+assert_no_crash() {
+'''
+    scroll_function_replacement = '''
+assert_album_detail_after_scroll() {
+    local xml="$1" expected="$2" label="$3"
+    local attempt
+    for attempt in 1 2 3 4 5 6; do
+        dump_ui "$xml"
+        if assert_album_detail "$xml" "$expected"; then
+            echo "PASS: $label exposes its song rows after $attempt view(s)"
+            return 0
+        fi
+        adb shell input swipe \
+            $((DUDU_WIDTH * 82 / 100)) $((DUDU_HEIGHT * 82 / 100)) \
+            $((DUDU_WIDTH * 82 / 100)) $((DUDU_HEIGHT * 28 / 100)) 700
+        sleep 3
+    done
+    echo "FAIL: $label never exposed clickable song rows" >&2
+    return 1
+}
+
+assert_no_crash() {
+'''
+    text = replace_once(text, scroll_function_marker, scroll_function_replacement, "album detail scroll helper")
+
+    text = replace_once(
+        text,
+        '''dump_ui "$RESULTS_DIR/album-detail.xml"
+assert_album_detail "$RESULTS_DIR/album-detail.xml" "$album_title"
+''',
+        '''assert_album_detail_after_scroll "$RESULTS_DIR/album-detail.xml" "$album_title" "Album detail"
+''',
+        "album detail scrolling assertion",
+    )
+    text = replace_once(
+        text,
+        '''dump_ui "$RESULTS_DIR/single-ep-detail.xml"
+assert_album_detail "$RESULTS_DIR/single-ep-detail.xml" "$single_title"
+''',
+        '''assert_album_detail_after_scroll "$RESULTS_DIR/single-ep-detail.xml" "$single_title" "Single or EP detail"
+''',
+        "single detail scrolling assertion",
+    )
     return text
 
 
@@ -236,10 +282,16 @@ for marker, source in [
 ]:
     if marker not in source:
         raise SystemExit(f"Missing single-root marker: {marker}")
-for marker in ["assert_right_pane_visually_nonblank", "Albums grid", "Singles and EPs grid", "Single or EP detail"]:
+for marker in [
+    "assert_right_pane_visually_nonblank",
+    "assert_album_detail_after_scroll",
+    "Albums grid",
+    "Singles and EPs grid",
+    "Single or EP detail",
+]:
     if marker not in smoke:
-        raise SystemExit(f"Missing emulator visual assertion: {marker}")
+        raise SystemExit(f"Missing emulator assertion: {marker}")
 if "versionCode = 1370029" not in build or 'versionName = "13.7.20"' not in build:
     raise SystemExit("13.7.20 version markers are missing")
 
-print("Applied original MetroList artist/album screens with constrained roots and pixel-verified Dudu7 test")
+print("Applied original MetroList artist/album screens with constrained roots and full emulator navigation proof")
