@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: dudu7-update-${{ github.event.pull_request.number || github.ref }}
@@ -25,6 +25,97 @@ jobs:
           submodules: recursive
           ref: ${{ github.head_ref || github.ref }}
 
+      - name: Apply and persist artist album navigation
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          artist = Path('app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt')
+          text = artist.read_text()
+
+          item_marker = '''                                    ) { item ->
+                                        YouTubeGridItem(
+'''
+          item_replacement = '''                                    ) { item ->
+                                        val albumTapKey = "artist_album_${index}_${item.id}"
+                                        DisposableEffect(albumTapKey) {
+                                            onDispose {
+                                                rightPaneTapTargets.remove(albumTapKey)
+                                            }
+                                        }
+                                        YouTubeGridItem(
+'''
+          if 'val albumTapKey = "artist_album_${index}_${item.id}"' not in text:
+              if text.count(item_marker) != 1:
+                  raise SystemExit(f'Unexpected artist item marker count: {text.count(item_marker)}')
+              text = text.replace(item_marker, item_replacement, 1)
+
+          modifier_marker = '''                                            modifier =
+                                                Modifier
+                                                    .combinedClickable(
+'''
+          modifier_replacement = '''                                            modifier =
+                                                Modifier
+                                                    .onGloballyPositioned { coordinates ->
+                                                        if (embeddedInPlayer && item is AlbumItem) {
+                                                            val albumId = item.id
+                                                            rightPaneTapTargets[albumTapKey] =
+                                                                coordinates.boundsInRoot() to {
+                                                                    timber.log.Timber.tag("Dudu7ArtistAlbumTap").i(
+                                                                        "Opening artist album item id=%s",
+                                                                        albumId,
+                                                                    )
+                                                                    navController.navigate("album/$albumId")
+                                                                }
+                                                        } else {
+                                                            rightPaneTapTargets.remove(albumTapKey)
+                                                        }
+                                                    }
+                                                    .combinedClickable(
+'''
+          if 'Dudu7ArtistAlbumTap' not in text:
+              start = text.index('val albumTapKey = "artist_album_${index}_${item.id}"')
+              pos = text.find(modifier_marker, start)
+              if pos < 0:
+                  raise SystemExit('Artist grid modifier marker not found after album tap key')
+              text = text[:pos] + modifier_replacement + text[pos + len(modifier_marker):]
+
+          artist.write_text(text)
+
+          build = Path('app/build.gradle.kts')
+          build_text = build.read_text()
+          replacements = {
+              'versionCode = 1370026': 'versionCode = 1370027',
+              'versionName = "13.7.17"': 'versionName = "13.7.18"',
+          }
+          for old, new in replacements.items():
+              if old in build_text:
+                  build_text = build_text.replace(old, new, 1)
+              elif new not in build_text:
+                  raise SystemExit(f'Missing version insertion point: {old}')
+          build.write_text(build_text)
+          PY
+
+          git diff --check
+          grep -q 'val albumTapKey = "artist_album_${index}_${item.id}"' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'Dudu7ArtistAlbumTap' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'navController.navigate("album/$albumId")' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'versionCode = 1370027' app/build.gradle.kts
+          grep -q 'versionName = "13.7.18"' app/build.gradle.kts
+
+          git checkout c220a05270ffcd513ee640d7913f08ef4358335e -- .github/workflows/build-dudu7-update-apk.yml
+          rm -f .github/dudu7-13718-build-trigger.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/build.gradle.kts app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt .github/workflows/build-dudu7-update-apk.yml .github/dudu7-13718-build-trigger.txt
+          if ! git diff --cached --quiet; then
+            git commit -m 'fix(dudu7): open artist albums and singles in right pane [skip ci]'
+            git push origin HEAD:${GITHUB_HEAD_REF}
+          fi
+
       - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
@@ -42,6 +133,8 @@ jobs:
           git diff --check
           grep -q 'appNameOverride ?: "Metrolist dudu7"' app/build.gradle.kts
           grep -q 'resValue("string", "app_name", "Metrolist dudu7")' app/build.gradle.kts
+          grep -q 'Dudu7ArtistAlbumTap' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
+          grep -q 'navController.navigate("album/$albumId")' app/src/main/kotlin/com/metrolist/music/ui/screens/artist/ArtistScreen.kt
           if grep -q 'UPDATER_AVAILABLE", "true"' app/build.gradle.kts; then
             echo 'Original Metrolist updater was re-enabled' >&2
             exit 1
