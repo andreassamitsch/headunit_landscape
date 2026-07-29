@@ -33,6 +33,7 @@ class RtrFmRepository private constructor(context: Context) {
     private val appContext = context.applicationContext
     private val cacheDirectory = File(appContext.filesDir, "rtr_fm").apply { mkdirs() }
     private val catalogFile = File(cacheDirectory, "senderkataster-programs.json")
+    private val officialCatalogFile = File(cacheDirectory, "medien-frequenzbuch.json")
     private val coverageDirectory = File(cacheDirectory, "coverage").apply { mkdirs() }
     private val loadMutex = Mutex()
     private val coverageMutex = Mutex()
@@ -45,7 +46,7 @@ class RtrFmRepository private constructor(context: Context) {
     suspend fun refreshIfNeeded(force: Boolean = false): RtrCatalogSnapshot? =
         loadMutex.withLock {
             snapshot?.let { current ->
-                if (!force && isFresh(catalogFile, CATALOG_MAX_AGE_MS)) return@withLock current
+                if (!force && catalogIsFresh()) return@withLock current
             }
             _state.value = _state.value.copy(
                 loading = true,
@@ -62,19 +63,29 @@ class RtrFmRepository private constructor(context: Context) {
                 snapshot = cached
                 publishState(cached, "RTR-Cache bereit")
             }
-            if (!force && cached != null && isFresh(catalogFile, CATALOG_MAX_AGE_MS)) {
+            if (!force && cached != null && catalogIsFresh()) {
                 _state.value = _state.value.copy(loading = false, status = "RTR-Cache aktuell")
                 return@withLock cached
             }
 
             val downloaded = runCatching {
                 val payload = downloadText(CATALOG_URL)
-                val parsed = RtrFmCatalogParser.parse(payload, System.currentTimeMillis())
+                val officialPayload = runCatching { downloadText(OFFICIAL_CATALOG_URL) }
+                    .onFailure { Timber.tag(TAG).w(it, "Could not refresh official RTR frequency book") }
+                    .getOrNull()
+                    ?: officialCatalogFile.takeIf(File::isFile)?.readText()
+                val parsed = RtrFmCatalogParser.parse(
+                    payload = payload,
+                    parsedAt = System.currentTimeMillis(),
+                    officialPayload = officialPayload,
+                )
                 require(parsed.stations.size >= MIN_EXPECTED_STATIONS) {
                     "RTR-Antwort enthält nur ${parsed.stations.size} UKW-Sender"
                 }
                 atomicWrite(catalogFile, payload)
+                if (!officialPayload.isNullOrBlank()) atomicWrite(officialCatalogFile, officialPayload)
                 catalogFile.setLastModified(parsed.parsedAt)
+                if (officialCatalogFile.isFile) officialCatalogFile.setLastModified(parsed.parsedAt)
                 parsed
             }.onFailure { Timber.tag(TAG).w(it, "Could not refresh RTR catalogue") }.getOrNull()
 
@@ -124,7 +135,14 @@ class RtrFmRepository private constructor(context: Context) {
     fun cachedSnapshot(): RtrCatalogSnapshot? = snapshot
 
     private fun parseCatalog(payload: String): RtrCatalogSnapshot =
-        RtrFmCatalogParser.parse(payload, catalogFile.lastModified().takeIf { it > 0L } ?: System.currentTimeMillis())
+        RtrFmCatalogParser.parse(
+            payload = payload,
+            parsedAt = catalogFile.lastModified().takeIf { it > 0L } ?: System.currentTimeMillis(),
+            officialPayload = officialCatalogFile.takeIf(File::isFile)?.readText(),
+        )
+
+    private fun catalogIsFresh(): Boolean =
+        isFresh(catalogFile, CATALOG_MAX_AGE_MS) && isFresh(officialCatalogFile, CATALOG_MAX_AGE_MS)
 
     private suspend fun sampleCoverage(current: RtrCatalogSnapshot, coverageCode: String, point: FmGeoPoint): Int =
         withContext(Dispatchers.IO) {
@@ -242,6 +260,7 @@ class RtrFmRepository private constructor(context: Context) {
     companion object {
         private const val TAG = "RtrFmRepository"
         private const val CATALOG_URL = "https://senderkataster.rtr.at/programs/"
+        private const val OFFICIAL_CATALOG_URL = "https://data.rtr.at/api/v1/tables/MedienFrequenzbuch.json"
         private const val CATALOG_MAX_AGE_MS = 7L * 24L * 60L * 60L * 1000L
         private const val COVERAGE_MAX_AGE_MS = 30L * 24L * 60L * 60L * 1000L
         private const val MAX_COVERAGE_BYTES = 48L * 1024L * 1024L
