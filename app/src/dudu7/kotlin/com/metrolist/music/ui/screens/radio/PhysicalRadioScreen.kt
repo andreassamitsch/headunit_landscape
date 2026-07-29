@@ -186,15 +186,12 @@ fun PhysicalRadioScreen() {
                             key = { _, preset -> FytPhysicalRadio.stablePresetKey(preset) },
                         ) { _, preset ->
                             ReorderableItem(reorderState, key = FytPhysicalRadio.stablePresetKey(preset)) {
-                                val isActive =
-                                    state.isActive &&
-                                        FytPhysicalRadio.presetMatches(preset, state.frequency, state.pi)
+                                val isActive = state.isActive && state.currentPreset?.id == preset.id
                                 FmFavouriteRow(
                                     preset = preset,
                                     pi = if (isActive && state.pi > 0) state.pi else preset.pi,
                                     activeFrequency = state.frequency,
                                     activeEcc = state.ecc,
-                                    activeAlternativeFrequencies = state.alternativeFrequencies,
                                     isActive = isActive,
                                     onPlay = {
                                         if (!isActive) {
@@ -273,8 +270,8 @@ fun PhysicalRadioScreen() {
         FmPresetEditorDialog(
             preset = preset,
             onDismiss = { editingPreset = null },
-            onSave = { name, frequencies ->
-                if (radio.updatePreset(preset, name, frequencies)) {
+            onSave = { name, frequency ->
+                if (radio.updatePreset(preset, name, frequency)) {
                     editingPreset = null
                 }
             },
@@ -294,35 +291,21 @@ fun PhysicalRadioScreen() {
 private fun FmPresetEditorDialog(
     preset: FytPhysicalRadio.Preset,
     onDismiss: () -> Unit,
-    onSave: (String, List<Float>) -> Unit,
+    onSave: (String, Float) -> Unit,
     onChooseLogo: () -> Unit,
 ) {
     var name by remember(preset) { mutableStateOf(preset.name) }
-    var frequencies by
-        remember(preset) {
-            mutableStateOf(
-                FytPhysicalRadio
-                    .presetFrequencies(preset)
-                    .joinToString("; ") { FytPhysicalRadio.formatFrequency(it) },
-            )
-        }
+    var frequency by remember(preset) { mutableStateOf(FytPhysicalRadio.formatFrequency(preset.frequency)) }
     var error by remember(preset) { mutableStateOf<String?>(null) }
+    val isRtrFavourite = preset.stationId.isNotBlank()
 
     fun submit() {
-        val tokens =
-            frequencies
-                // Semicolon/newline separate entries. A comma remains part of
-                // the German decimal value, e.g. 99,4; 103,2.
-                .split(';', '\n')
-                .map(String::trim)
-                .filter(String::isNotBlank)
-        val parsed = tokens.mapNotNull { value -> value.replace(',', '.').toFloatOrNull() }
+        val parsed = frequency.replace(',', '.').toFloatOrNull()
         when {
             name.isBlank() -> error = "Sendername fehlt"
-            parsed.size != tokens.size -> error = "Mindestens eine Frequenz ist ungültig"
-            parsed.isEmpty() -> error = "Mindestens eine Frequenz angeben"
-            parsed.any { it !in 87.5f..108.0f } -> error = "Frequenzen müssen zwischen 87,5 und 108,0 MHz liegen"
-            else -> onSave(name.trim(), parsed)
+            parsed == null -> error = "Frequenz ist ungültig"
+            parsed !in 87.5f..108.0f -> error = "Frequenz muss zwischen 87,5 und 108,0 MHz liegen"
+            else -> onSave(name.trim(), if (isRtrFavourite) preset.frequency else parsed)
         }
     }
 
@@ -338,21 +321,32 @@ private fun FmPresetEditorDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
-                    value = frequencies,
-                    onValueChange = { frequencies = it },
-                    label = { Text("Frequenzen, durch Semikolon getrennt") },
-                    supportingText = { Text("Beispiel: 99,4; 103,2") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                if (isRtrFavourite) {
+                    OutlinedTextField(
+                        value = "${FytPhysicalRadio.formatFrequency(preset.frequency)} MHz",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Zuletzt verwendete Frequenz") },
+                        supportingText = { Text("Alternative Frequenzen werden automatisch über RTR gewählt und nicht im Favoriten gespeichert.") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = frequency,
+                        onValueChange = { frequency = it },
+                        label = { Text("Feste Frequenz") },
+                        supportingText = { Text("Dieser manuelle Favorit verwendet genau eine Frequenz.") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 FmStationArtwork(
                     stationName = preset.name,
                     frequency = preset.frequency,
                     pi = preset.pi,
                     ecc = preset.ecc,
                     size = 72.dp,
-                    allFrequencies = FytPhysicalRadio.presetFrequencies(preset),
+                    allFrequencies = listOf(preset.frequency),
                 )
                 OutlinedButton(onClick = onChooseLogo, modifier = Modifier.fillMaxWidth()) {
                     Text("SENDERLOGO AUSWÄHLEN")
@@ -389,7 +383,6 @@ private fun FmFavouriteRow(
     pi: Int,
     activeFrequency: Float,
     activeEcc: String,
-    activeAlternativeFrequencies: List<Float>,
     isActive: Boolean,
     onPlay: () -> Unit,
     onNextAf: () -> Unit,
@@ -422,9 +415,7 @@ private fun FmFavouriteRow(
             pi = pi,
             ecc = if (isActive) activeEcc.ifBlank { preset.ecc } else preset.ecc,
             size = 56.dp,
-            allFrequencies =
-                FytPhysicalRadio.presetFrequencies(preset) +
-                    if (isActive) activeAlternativeFrequencies else emptyList(),
+            allFrequencies = listOf(if (isActive) activeFrequency else preset.frequency),
         )
         Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
             Text(
@@ -435,7 +426,11 @@ private fun FmFavouriteRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = FytPhysicalRadio.formatFrequencies(FytPhysicalRadio.presetFrequencies(preset)),
+                text = if (preset.stationId.isNotBlank()) {
+                    "${FytPhysicalRadio.formatFrequency(if (isActive) activeFrequency else preset.frequency)} MHz • AF automatisch über RTR"
+                } else {
+                    "${FytPhysicalRadio.formatFrequency(preset.frequency)} MHz • Fester Frequenzfavorit"
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,

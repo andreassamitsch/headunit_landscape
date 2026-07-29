@@ -4,10 +4,11 @@ import android.content.Context
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-/** Keeps FM-favourite order stable while AF changes the currently used frequency. */
+/** Keeps FM-favourite order stable while AF changes only the last used frequency. */
 object FmPresetOrderStore {
     private const val PREFS = "dudu7_physical_radio"
-    private const val KEY_ORDER = "preset_order_v2"
+    private const val KEY_ORDER = "preset_order_v3"
+    private const val LEGACY_KEY_ORDER_V2 = "preset_order_v2"
     private const val LEGACY_KEY_ORDER = "preset_order"
 
     fun ordered(
@@ -16,9 +17,18 @@ object FmPresetOrderStore {
     ): List<FytPhysicalRadio.Preset> {
         if (presets.isEmpty()) return emptyList()
         val preferences = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val storedKeys =
+        val storedIds =
             preferences
                 .getString(KEY_ORDER, null)
+                .orEmpty()
+                .lineSequence()
+                .map(String::trim)
+                .filter(String::isNotBlank)
+                .distinct()
+                .toList()
+        val legacyKeys =
+            preferences
+                .getString(LEGACY_KEY_ORDER_V2, null)
                 .orEmpty()
                 .lineSequence()
                 .map(String::trim)
@@ -34,25 +44,22 @@ object FmPresetOrderStore {
                 .distinct()
 
         val ordered = mutableListOf<FytPhysicalRadio.Preset>()
-        storedKeys.forEach { key ->
+        storedIds.forEach { id ->
+            presets.firstOrNull { it.id == id && ordered.none { existing -> existing.id == it.id } }
+                ?.let(ordered::add)
+        }
+        legacyKeys.forEach { key ->
             presets.firstOrNull {
-                key in FytPhysicalRadio.presetOrderKeys(it) && ordered.none { existing -> samePreset(existing, it) }
+                key in FytPhysicalRadio.presetOrderKeys(it) && ordered.none { existing -> existing.id == it.id }
             }?.let(ordered::add)
         }
         legacyFrequencies.forEach { key ->
             presets.firstOrNull {
-                frequencyKey(it.frequency) == key && ordered.none { existing -> samePreset(existing, it) }
+                frequencyKey(it.frequency) == key && ordered.none { existing -> existing.id == it.id }
             }?.let(ordered::add)
         }
-
-        // RDS identity can arrive after a frequency was already stored. During that
-        // transition the source list may briefly contain two records for the same PI.
-        // Add presets incrementally so duplicate station identities never reach the
-        // Compose LazyColumn, where equal stable keys would otherwise crash the app.
         presets.forEach { preset ->
-            if (ordered.none { existing -> samePreset(existing, preset) }) {
-                ordered += preset
-            }
+            if (ordered.none { it.id == preset.id }) ordered += preset
         }
         return ordered
     }
@@ -61,14 +68,11 @@ object FmPresetOrderStore {
         context: Context,
         presets: List<FytPhysicalRadio.Preset>,
     ) {
-        val stableOrder =
-            presets
-                .map { FytPhysicalRadio.stablePresetKey(it) }
-                .distinct()
         context.applicationContext
             .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
-            .putString(KEY_ORDER, stableOrder.joinToString("\n"))
+            .putString(KEY_ORDER, presets.map(FytPhysicalRadio::stablePresetKey).distinct().joinToString("\n"))
+            .remove(LEGACY_KEY_ORDER_V2)
             .remove(LEGACY_KEY_ORDER)
             .apply()
     }
@@ -78,17 +82,8 @@ object FmPresetOrderStore {
         preset: FytPhysicalRadio.Preset,
         remainingPresets: List<FytPhysicalRadio.Preset>,
     ) {
-        persist(context, remainingPresets.filterNot { samePreset(it, preset) })
+        persist(context, remainingPresets.filterNot { it.id == preset.id })
     }
-
-    private fun samePreset(
-        first: FytPhysicalRadio.Preset,
-        second: FytPhysicalRadio.Preset,
-    ): Boolean =
-        FytPhysicalRadio.stablePresetKey(first) == FytPhysicalRadio.stablePresetKey(second) ||
-            FytPhysicalRadio.presetFrequencies(first).any { frequency ->
-                FytPhysicalRadio.presetContainsFrequency(second, frequency)
-            }
 
     private fun frequencyKey(value: Float): Int = (value * 10f).roundToInt()
 
@@ -109,10 +104,8 @@ fun FytPhysicalRadio.tuneAdjacentFavourite(
         return
     }
 
-    val currentIndex =
-        favourites.indexOfFirst {
-            FytPhysicalRadio.presetMatches(it, snapshot.frequency, snapshot.pi)
-        }
+    val activeId = snapshot.currentPreset?.id
+    val currentIndex = favourites.indexOfFirst { it.id == activeId }
     val targetIndex =
         when {
             currentIndex < 0 && next -> 0
