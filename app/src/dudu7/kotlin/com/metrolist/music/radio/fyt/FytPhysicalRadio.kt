@@ -1191,6 +1191,18 @@ object FytPhysicalRadio {
         _state.update { it.copy(presets = updated) }
     }
 
+    fun clearPresets() {
+        pendingPresetIdentity = null
+        persistPresets(emptyList())
+        _state.update {
+            it.copy(
+                presets = emptyList(),
+                alternativeFrequencies = emptyList(),
+                rtrAfPredictions = emptyList(),
+            )
+        }
+    }
+
     fun removePreset(frequency: Float) {
         val matching = _state.value.presets.firstOrNull { presetContainsFrequency(it, frequency) }
         if (matching != null) {
