@@ -463,9 +463,20 @@ private fun FmAutoScanPanel(
     radio: FytPhysicalRadio,
     onSaved: () -> Unit,
 ) {
+    val context = LocalContext.current
     val playerConnection = LocalPlayerConnection.current
     val state by radio.state.collectAsStateWithLifecycle()
     val selected = remember { mutableStateMapOf<Int, Boolean>() }
+    var showScanStartOptions by remember { mutableStateOf(false) }
+
+    fun startScan(clearFavourites: Boolean) {
+        playerConnection?.pause()
+        if (clearFavourites) {
+            radio.clearPresets()
+            FmPresetOrderStore.persist(context, emptyList())
+        }
+        radio.startAutoScan()
+    }
 
     LaunchedEffect(state.scanResults) {
         state.scanResults.forEach { result ->
@@ -525,8 +536,11 @@ private fun FmAutoScanPanel(
                 ) {
                     Button(
                         onClick = {
-                            playerConnection?.pause()
-                            radio.startAutoScan()
+                            if (state.presets.isEmpty()) {
+                                startScan(clearFavourites = false)
+                            } else {
+                                showScanStartOptions = true
+                            }
                         },
                         enabled = state.libraryLoaded,
                         modifier = Modifier.weight(1f),
@@ -624,6 +638,48 @@ private fun FmAutoScanPanel(
                 }
             }
         }
+    }
+
+    if (showScanStartOptions) {
+        AlertDialog(
+            onDismissRequest = { showScanStartOptions = false },
+            title = { Text("FM-Suchlauf starten") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Es sind ${state.presets.size} FM-Favoriten gespeichert. " +
+                            "Du kannst sie behalten oder vor dem Suchlauf vollständig löschen.",
+                    )
+                    Button(
+                        onClick = {
+                            showScanStartOptions = false
+                            startScan(clearFavourites = false)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("FAVORITEN BEHALTEN UND SUCHEN")
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            showScanStartOptions = false
+                            startScan(clearFavourites = true)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            "ALLE FM-FAVORITEN LÖSCHEN UND SUCHEN",
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showScanStartOptions = false }) {
+                    Text("ABBRECHEN")
+                }
+            },
+        )
     }
 }
 
