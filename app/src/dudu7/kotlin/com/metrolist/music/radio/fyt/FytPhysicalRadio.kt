@@ -38,7 +38,8 @@ object FytPhysicalRadio {
     private const val TAG = "FytPhysicalRadio"
     private const val PREFS = "dudu7_physical_radio"
     private const val KEY_FREQUENCY = "frequency"
-    private const val KEY_PRESETS = "presets"
+    private const val KEY_PRESETS = "presets_v3"
+    private const val LEGACY_KEY_PRESETS = "presets"
     private const val KEY_AF = "af_enabled"
     private const val KEY_TA = "ta_enabled"
     private const val KEY_REG = "reg_enabled"
@@ -63,8 +64,10 @@ object FytPhysicalRadio {
         val name: String,
         val pi: Int = 0,
         val ecc: String = "",
+        // Kept only for binary/source compatibility. V3 favourites never persist AF lists.
         val alternativeFrequencies: List<Float> = emptyList(),
         val stationId: String = "",
+        val id: String = "",
     )
 
     data class ScanResult(
@@ -220,6 +223,9 @@ object FytPhysicalRadio {
             rtrRepository = RtrFmRepository.get(applicationContext)
             val prefs = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val frequency = normalizeFrequency(prefs.getFloat(KEY_FREQUENCY, 99.7f))
+            val presetPayload = prefs.getString(KEY_PRESETS, null)
+            val legacyPresetPayload = if (presetPayload == null) prefs.getString(LEGACY_KEY_PRESETS, null) else null
+            val loadedPresets = readPresets(presetPayload ?: legacyPresetPayload)
             native = FmNative.getInstance()
             FmNative.initAudio(applicationContext)
             twUtil = TwUtilBridge()
@@ -229,7 +235,7 @@ object FytPhysicalRadio {
                     initialized = true,
                     libraryLoaded = FmNative.isLibraryLoaded(),
                     frequency = frequency,
-                    presets = readPresets(prefs.getString(KEY_PRESETS, null)),
+                    presets = loadedPresets,
                     afEnabled = prefs.getBoolean(KEY_AF, true),
                     afSensitivity =
                         prefs.getInt(KEY_AF_SENSITIVITY, DEFAULT_AF_SENSITIVITY)
@@ -248,6 +254,7 @@ object FytPhysicalRadio {
                     platform = systemProperty("ro.product.board").ifBlank { systemProperty("ro.board.platform") },
                     error = if (FmNative.isLibraryLoaded()) null else "FYT-Firmwarebibliothek libfmjni.so konnte nicht geladen werden",
                 )
+            if (presetPayload == null && legacyPresetPayload != null) persistPresets(loadedPresets)
         }
         startRtrServices(applicationContext)
     }
@@ -754,18 +761,35 @@ object FytPhysicalRadio {
 
     fun saveScanResults(results: Collection<ScanResult>) {
         if (results.isEmpty()) return
-        val additions =
-            results.map {
-                Preset(
-                    frequency = it.frequency,
-                    name = it.name,
-                    pi = it.pi,
-                    ecc = it.ecc,
-                    alternativeFrequencies = it.alternativeFrequencies,
-                    stationId = it.stationId,
+        var updated = _state.value.presets
+        results.sortedByDescending(ScanResult::rssi).forEach { result ->
+            val refs = updated.map(::presetRef)
+            val existingIndex = FmFavouriteModel.existingIndexForUpsert(refs, result.frequency, result.stationId)
+            if (existingIndex >= 0) {
+                val existing = updated[existingIndex]
+                updated = updated.toMutableList().apply {
+                    this[existingIndex] = existing.copy(
+                        frequency = normalizeFrequency(result.frequency),
+                        name = if (existing.stationId.isNotBlank()) existing.name else result.name,
+                        pi = result.pi.takeIf { result.rdsConfirmed } ?: existing.pi,
+                        ecc = result.ecc.takeIf { result.rdsConfirmed }.orEmpty().ifBlank { existing.ecc },
+                        alternativeFrequencies = emptyList(),
+                        stationId = result.stationId.ifBlank { existing.stationId },
+                    )
+                }
+            } else {
+                updated = updated + Preset(
+                    frequency = normalizeFrequency(result.frequency),
+                    name = result.name,
+                    pi = result.pi.takeIf { result.rdsConfirmed } ?: 0,
+                    ecc = result.ecc.takeIf { result.rdsConfirmed }.orEmpty(),
+                    alternativeFrequencies = emptyList(),
+                    stationId = result.stationId,
+                    id = FmFavouriteModel.newId(),
                 )
             }
-        val updated = mergePresets(_state.value.presets + additions).sortedBy { it.frequency }
+        }
+        updated = normalizePresets(updated)
         persistPresets(updated)
         _state.update { it.copy(presets = updated) }
     }
@@ -862,16 +886,11 @@ object FytPhysicalRadio {
                 }
 
                 val preset = before.currentPreset
-                val expectedPi = before.pi.takeIf { it > 0 } ?: preset?.pi.orZero()
-                val storedFrequencies = preset?.let(::presetFrequencies).orEmpty()
+                val expectedPi = before.pi.takeIf { before.rdsConfirmed && it > 0 } ?: preset?.pi.orZero()
                 val currentRtrMatch = before.rtrStableId.isNotBlank() &&
                     kotlin.math.abs(before.rtrMatchedFrequency - before.frequency) < 0.05f &&
-                    before.rtrMatchConfidence >= 60
-                val presetTrusted = preset != null && (
-                    (currentRtrMatch && preset.stationId.isNotBlank() && preset.stationId == before.rtrStableId) ||
-                        (before.rdsConfirmed && expectedPi > 0 && preset.pi > 0 && samePi(expectedPi, preset.pi))
-                    )
-                val trustedStoredFrequencies = if (presetTrusted) storedFrequencies else emptyList()
+                    before.rtrMatchConfidence >= 60 &&
+                    preset?.stationId == before.rtrStableId
                 val liveAfFrequencies = if (before.rdsConfirmed) before.alternativeFrequencies else emptyList()
                 val nativeFrequencies = if (before.rdsConfirmed) {
                     runCatching { fm.alternativeFrequencies.toList() }.getOrDefault(emptyList())
@@ -881,18 +900,15 @@ object FytPhysicalRadio {
                 val rtrPredictions = before.rtrAfPredictions.takeIf { currentRtrMatch }.orEmpty()
                 val rtrFrequencies = rtrPredictions.map(RtrAfPrediction::frequency)
                 val knownFrequencies = normalizeFrequencyList(
-                    trustedStoredFrequencies + liveAfFrequencies + nativeFrequencies +
-                        rtrFrequencies + before.frequency,
+                    liveAfFrequencies + nativeFrequencies + rtrFrequencies + before.frequency,
                 )
-                val databaseTrusted = before.rtrMatchConfidence >= 75
+                val databaseTrusted = currentRtrMatch && before.rtrMatchConfidence >= 75
                 val trustedFrequencies = normalizeFrequencyList(
-                    trustedStoredFrequencies + rtrPredictions.filter { databaseTrusted && it.coverageStrength > 0 }
+                    rtrPredictions.filter { databaseTrusted && it.coverageStrength > 0 }
                         .map(RtrAfPrediction::frequency),
                 )
                 val candidates =
-                    (trustedStoredFrequencies.map {
-                        FmAfCandidate(it, true, source = "bestätigter Favorit")
-                    } + rtrPredictions.map {
+                    (rtrPredictions.map {
                         FmAfCandidate(
                             frequency = it.frequency,
                             trustedPresetFrequency = databaseTrusted && it.coverageStrength > 0,
@@ -906,7 +922,7 @@ object FytPhysicalRadio {
                         .distinctBy { frequencyKey(it.frequency) }
                         .sortedWith(compareByDescending<FmAfCandidate> { it.trustedPresetFrequency }
                             .thenByDescending { it.predictedCoverage })
-                        .take(16)
+                        .take(8)
                 val currentRssi = before.rssi.takeIf { it > 0 } ?: runCatching { fm.rssi }.getOrDefault(0)
 
                 _state.update {
@@ -1113,6 +1129,7 @@ object FytPhysicalRadio {
                 afLastNativeResult = nativeResult,
             )
         }
+        updatePresetLastFrequency(before.currentPreset?.id, target)
         requestRtrResolution(force = true)
         updateCurrentPresetIdentity()
         triggerRdsRead()
@@ -1138,7 +1155,9 @@ object FytPhysicalRadio {
         }
         val candidates =
             normalizeFrequencyList(
-                presetFrequencies(preset) + if (current.rdsConfirmed) current.alternativeFrequencies else emptyList(),
+                listOf(current.frequency) +
+                    current.rtrAfPredictions.takeIf { rtrIdentityTrusted }.orEmpty().map(RtrAfPrediction::frequency) +
+                    if (current.rdsConfirmed) current.alternativeFrequencies else emptyList(),
             )
         if (candidates.size <= 1) {
             requestAlternativeFrequency()
@@ -1220,6 +1239,8 @@ object FytPhysicalRadio {
                     afWeakSamples = 0,
                 )
             }
+            updatePresetLastFrequency(preset.id, target)
+            requestRtrResolution(force = true)
             updateCurrentPresetIdentity()
             triggerRdsRead()
             Timber.tag(TAG).i(
@@ -1237,21 +1258,34 @@ object FytPhysicalRadio {
         val currentRtrMatch = snapshot.rtrStableId.isNotBlank() &&
             kotlin.math.abs(snapshot.rtrMatchedFrequency - snapshot.frequency) < 0.05f &&
             snapshot.rtrMatchConfidence >= 60
-        val preset =
-            Preset(
-                frequency = snapshot.frequency,
+        val stationId = snapshot.rtrStableId.takeIf { currentRtrMatch }.orEmpty()
+        val refs = snapshot.presets.map(::presetRef)
+        val existingIndex = FmFavouriteModel.existingIndexForUpsert(refs, snapshot.frequency, stationId)
+        val updated = snapshot.presets.toMutableList()
+        if (existingIndex >= 0) {
+            val existing = updated[existingIndex]
+            updated[existingIndex] = existing.copy(
+                frequency = normalizeFrequency(snapshot.frequency),
+                name = if (existing.stationId.isNotBlank()) existing.name else snapshot.displayStation,
+                pi = snapshot.pi.takeIf { snapshot.rdsConfirmed } ?: existing.pi,
+                ecc = snapshot.ecc.takeIf { snapshot.rdsConfirmed }.orEmpty().ifBlank { existing.ecc },
+                alternativeFrequencies = emptyList(),
+                stationId = stationId.ifBlank { existing.stationId },
+            )
+        } else {
+            updated += Preset(
+                frequency = normalizeFrequency(snapshot.frequency),
                 name = snapshot.displayStation,
                 pi = snapshot.pi.takeIf { snapshot.rdsConfirmed } ?: 0,
                 ecc = snapshot.ecc.takeIf { snapshot.rdsConfirmed }.orEmpty(),
-                alternativeFrequencies = normalizeFrequencyList(
-                    (if (snapshot.rdsConfirmed) snapshot.alternativeFrequencies else emptyList()) +
-                        if (currentRtrMatch) snapshot.rtrAfPredictions.map(RtrAfPrediction::frequency) else emptyList(),
-                ),
-                stationId = snapshot.rtrStableId.takeIf { currentRtrMatch }.orEmpty(),
+                alternativeFrequencies = emptyList(),
+                stationId = stationId,
+                id = FmFavouriteModel.newId(),
             )
-        val updated = mergePresets(snapshot.presets + preset).sortedBy { it.frequency }
-        persistPresets(updated)
-        _state.update { it.copy(presets = updated) }
+        }
+        val normalized = normalizePresets(updated)
+        persistPresets(normalized)
+        _state.update { it.copy(presets = normalized) }
     }
 
     fun tunePreset(preset: Preset) {
@@ -1262,25 +1296,25 @@ object FytPhysicalRadio {
     fun updatePreset(
         original: Preset,
         name: String,
-        frequencies: List<Float>,
+        frequency: Float,
     ): Boolean {
-        val normalized = normalizeFrequencyList(frequencies)
-        if (normalized.isEmpty()) return false
-        val replacement =
-            original.copy(
-                frequency = normalized.first(),
+        if (!frequency.isFinite() || frequency !in FM_MIN..FM_MAX) return false
+        val index = _state.value.presets.indexOfFirst { it.id == original.id }
+        if (index < 0) return false
+        val updated = _state.value.presets.toMutableList().apply {
+            this[index] = original.copy(
+                frequency = normalizeFrequency(frequency),
                 name = name.trim().ifBlank { original.name },
-                alternativeFrequencies = normalized.drop(1),
+                alternativeFrequencies = emptyList(),
             )
-        val remaining = _state.value.presets.filterNot { samePresetRecord(it, original) }
-        val updated = mergePresets(remaining + replacement).sortedBy { it.frequency }
+        }
         persistPresets(updated)
         _state.update { it.copy(presets = updated) }
         return true
     }
 
     fun removePreset(preset: Preset) {
-        val updated = _state.value.presets.filterNot { samePresetRecord(it, preset) }
+        val updated = _state.value.presets.filterNot { it.id == preset.id }
         persistPresets(updated)
         _state.update { it.copy(presets = updated) }
     }
@@ -1364,7 +1398,7 @@ object FytPhysicalRadio {
                     val now = System.currentTimeMillis()
                     if (
                         snapshot.afEnabled &&
-                        (snapshot.pi > 0 || snapshot.currentPreset?.let { presetFrequencies(it).size > 1 } == true) &&
+                        (snapshot.pi > 0 || snapshot.currentPreset?.stationId?.isNotBlank() == true) &&
                         snapshot.afAverageRssi > 0 &&
                         snapshot.afAverageRssi < snapshot.afSensitivity &&
                         snapshot.afWeakSamples >= AF_WEAK_SAMPLE_COUNT &&
@@ -1586,105 +1620,132 @@ object FytPhysicalRadio {
 
     private fun updateCurrentPresetIdentity() {
         val snapshot = _state.value
-        val exactIndex = snapshot.presets.indexOfFirst { presetContainsFrequency(it, snapshot.frequency) }
         val currentRtrMatch = snapshot.rtrStableId.isNotBlank() &&
             kotlin.math.abs(snapshot.rtrMatchedFrequency - snapshot.frequency) < 0.05f &&
             snapshot.rtrMatchConfidence >= 60
-        val index = if (exactIndex >= 0) {
-            exactIndex
-        } else {
-            findCurrentPresetIndex(
-                presets = snapshot.presets,
-                frequency = snapshot.frequency,
-                pi = snapshot.pi,
-                rdsConfirmed = snapshot.rdsConfirmed,
-                stationId = snapshot.rtrStableId.takeIf { currentRtrMatch }.orEmpty(),
-            )
-        }
+        val index = findCurrentPresetIndex(
+            presets = snapshot.presets,
+            frequency = snapshot.frequency,
+            pi = snapshot.pi,
+            rdsConfirmed = snapshot.rdsConfirmed,
+            stationId = snapshot.rtrStableId.takeIf { currentRtrMatch }.orEmpty(),
+        )
         if (index < 0) return
         val current = snapshot.presets[index]
         if (currentRtrMatch && current.stationId.isNotBlank() && current.stationId != snapshot.rtrStableId) return
-
         val freshRds = snapshot.rdsConfirmed && abs(snapshot.rdsFreshFrequency - snapshot.frequency) < 0.05f
-        val rdsCompatible = freshRds && (
-            current.pi <= 0 || snapshot.pi <= 0 || samePi(current.pi, snapshot.pi)
-            )
+        val rdsCompatible = freshRds && (current.pi <= 0 || snapshot.pi <= 0 || samePi(current.pi, snapshot.pi))
         val rtrCompatible = currentRtrMatch && (current.stationId.isBlank() || current.stationId == snapshot.rtrStableId)
-        val selectedByIdentityOnly = exactIndex < 0
-        if (selectedByIdentityOnly && !rtrCompatible && !(rdsCompatible && current.pi > 0 && snapshot.pi > 0)) return
-
-        val allFrequencies = normalizeFrequencyList(
-            presetFrequencies(current) +
-                (if (rdsCompatible) snapshot.alternativeFrequencies else emptyList()) +
-                (if (rtrCompatible) snapshot.rtrAfPredictions.map(RtrAfPrediction::frequency) else emptyList()) +
-                (if (exactIndex >= 0) listOf(snapshot.frequency) else emptyList()),
-        )
-        val primary = current.frequency.takeIf { candidate ->
-            allFrequencies.any { abs(it - candidate) < 0.05f }
-        } ?: allFrequencies.first()
-        val name = when {
-            rtrCompatible && current.stationId == snapshot.rtrStableId && current.name.isNotBlank() -> current.name
-            rtrCompatible -> snapshot.rtrCanonicalName
-            rdsCompatible -> snapshot.displayStation
-            else -> current.name
-        }
         val updatedPreset = current.copy(
-            frequency = primary,
-            name = name,
+            frequency = normalizeFrequency(snapshot.frequency),
+            name = when {
+                rtrCompatible && current.stationId == snapshot.rtrStableId && current.name.isNotBlank() -> current.name
+                rtrCompatible -> snapshot.rtrCanonicalName
+                rdsCompatible -> snapshot.displayStation
+                else -> current.name
+            },
             pi = if (rdsCompatible && snapshot.pi > 0) snapshot.pi else current.pi,
             ecc = if (rdsCompatible && snapshot.ecc.isNotBlank()) snapshot.ecc else current.ecc,
-            alternativeFrequencies = allFrequencies.filterNot { abs(it - primary) < 0.05f },
+            alternativeFrequencies = emptyList(),
             stationId = if (rtrCompatible) snapshot.rtrStableId else current.stationId,
         )
-        val changedList = snapshot.presets.toMutableList().apply { this[index] = updatedPreset }
-        val updated = mergePresets(changedList).sortedBy { it.frequency }
-        if (updated != snapshot.presets) {
-            persistPresets(updated)
-            _state.update { it.copy(presets = updated) }
+        if (updatedPreset == current) return
+        val updated = snapshot.presets.toMutableList().apply { this[index] = updatedPreset }
+        persistPresets(updated)
+        _state.update { it.copy(presets = updated) }
+    }
+
+    private fun updatePresetLastFrequency(presetId: String?, frequency: Float) {
+        if (presetId.isNullOrBlank()) return
+        val snapshot = _state.value
+        val index = snapshot.presets.indexOfFirst { it.id == presetId }
+        if (index < 0) return
+        val updated = snapshot.presets.toMutableList().apply {
+            this[index] = this[index].copy(
+                frequency = normalizeFrequency(frequency),
+                alternativeFrequencies = emptyList(),
+            )
         }
+        persistPresets(updated)
+        _state.update { it.copy(presets = updated) }
     }
 
     private fun persistPresets(presets: List<Preset>) {
-        val encoded =
-            mergePresets(presets).joinToString("\n") { preset ->
-                val alternatives =
-                    preset.alternativeFrequencies.joinToString(",") { formatFrequency(it) }
-                "${preset.frequency}\t${preset.name.replace('\n', ' ').replace('\t', ' ')}\t${preset.pi}\t${preset.ecc}\t$alternatives\t${preset.stationId.replace('\n', ' ').replace('\t', ' ')}"
-            }
+        val normalized = normalizePresets(presets)
+        val encoded = normalized.joinToString("
+") { preset ->
+            listOf(
+                "v3",
+                preset.id,
+                preset.frequency.toString(),
+                preset.name.replace('
+', ' ').replace('	', ' '),
+                preset.pi.toString(),
+                preset.ecc.replace('
+', ' ').replace('	', ' '),
+                preset.stationId.replace('
+', ' ').replace('	', ' '),
+            ).joinToString("	")
+        }
         appContext
             ?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             ?.edit()
             ?.putString(KEY_PRESETS, encoded)
+            ?.remove(LEGACY_KEY_PRESETS)
             ?.apply()
     }
 
-    private fun readPresets(value: String?): List<Preset> =
-        mergePresets(
-            value
-                .orEmpty()
-                .lineSequence()
-                .mapNotNull { line ->
-                    val parts = line.split('\t', limit = 6)
-                    val frequency = parts.firstOrNull()?.toFloatOrNull() ?: return@mapNotNull null
-                    val alternatives =
-                        parts
-                            .getOrNull(4)
-                            .orEmpty()
-                            .split(',')
-                            .mapNotNull(String::toFloatOrNull)
-                    Preset(
-                        frequency = normalizeFrequency(frequency),
-                        name = parts.getOrNull(1).orEmpty().ifBlank { "FM ${formatFrequency(frequency)}" },
-                        pi = parts.getOrNull(2)?.toIntOrNull() ?: 0,
-                        ecc = parts.getOrNull(3).orEmpty(),
-                        alternativeFrequencies = alternatives,
-                        stationId = parts.getOrNull(5).orEmpty(),
-                    )
-                }.toList(),
-        ).sortedBy { it.frequency }
+    private fun readPresets(value: String?): List<Preset> {
+        val parsed = value.orEmpty().lineSequence().mapIndexedNotNull { index, line ->
+            if (line.isBlank()) return@mapIndexedNotNull null
+            val parts = line.split('	')
+            if (parts.firstOrNull() == "v3") {
+                val frequency = parts.getOrNull(2)?.toFloatOrNull() ?: return@mapIndexedNotNull null
+                Preset(
+                    frequency = normalizeFrequency(frequency),
+                    name = parts.getOrNull(3).orEmpty().ifBlank { "FM ${formatFrequency(frequency)}" },
+                    pi = parts.getOrNull(4)?.toIntOrNull() ?: 0,
+                    ecc = parts.getOrNull(5).orEmpty(),
+                    alternativeFrequencies = emptyList(),
+                    stationId = parts.getOrNull(6).orEmpty(),
+                    id = parts.getOrNull(1).orEmpty().ifBlank {
+                        FmFavouriteModel.legacyId(index, frequency, parts.getOrNull(3).orEmpty(), parts.getOrNull(6).orEmpty())
+                    },
+                )
+            } else {
+                val legacy = line.split('	', limit = 6)
+                val frequency = legacy.firstOrNull()?.toFloatOrNull() ?: return@mapIndexedNotNull null
+                val name = legacy.getOrNull(1).orEmpty().ifBlank { "FM ${formatFrequency(frequency)}" }
+                val stationId = legacy.getOrNull(5).orEmpty()
+                Preset(
+                    frequency = normalizeFrequency(frequency),
+                    name = name,
+                    pi = legacy.getOrNull(2)?.toIntOrNull() ?: 0,
+                    ecc = legacy.getOrNull(3).orEmpty(),
+                    alternativeFrequencies = emptyList(),
+                    stationId = stationId,
+                    id = FmFavouriteModel.legacyId(index, frequency, name, stationId),
+                )
+            }
+        }.toList()
+        return normalizePresets(parsed)
+    }
 
-    fun presetFrequencies(preset: Preset): List<Float> =
-        normalizeFrequencyList(listOf(preset.frequency) + preset.alternativeFrequencies)
+    private fun normalizePresets(presets: Collection<Preset>): List<Preset> =
+        presets.mapIndexed { index, preset ->
+            preset.copy(
+                id = preset.id.ifBlank {
+                    FmFavouriteModel.legacyId(index, preset.frequency, preset.name, preset.stationId)
+                },
+                frequency = normalizeFrequency(preset.frequency),
+                alternativeFrequencies = emptyList(),
+            )
+        }.distinctBy(Preset::id)
+
+    private fun presetRef(preset: Preset): FmFavouriteRef =
+        FmFavouriteRef(preset.id, preset.stationId, preset.frequency)
+
+    fun presetFrequencies(preset: Preset): List<Float> = listOf(normalizeFrequency(preset.frequency))
 
     fun scanFrequencies(result: ScanResult): List<Float> =
         normalizeFrequencyList(listOf(result.frequency) + result.alternativeFrequencies)
@@ -1692,7 +1753,7 @@ object FytPhysicalRadio {
     fun presetContainsFrequency(
         preset: Preset,
         frequency: Float,
-    ): Boolean = presetFrequencies(preset).any { abs(it - frequency) < 0.05f }
+    ): Boolean = abs(preset.frequency - frequency) < 0.05f
 
     fun presetMatches(
         preset: Preset,
@@ -1700,28 +1761,13 @@ object FytPhysicalRadio {
         pi: Int,
     ): Boolean = presetContainsFrequency(preset, frequency)
 
-    private fun presetEvidence(preset: Preset): FmStationEvidence =
-        FmStationEvidence(
-            frequencies = presetFrequencies(preset),
-            name = preset.name,
-            pi = preset.pi,
-            stationId = preset.stationId,
-            confirmed = preset.pi > 0 || preset.stationId.isNotBlank(),
-        )
-
     private fun findCurrentPresetIndex(
         presets: List<Preset>,
         frequency: Float,
         pi: Int,
         rdsConfirmed: Boolean,
         stationId: String,
-    ): Int = FmStationAssociation.selectCurrentIndex(
-        presets = presets.map(::presetEvidence),
-        frequency = frequency,
-        pi = pi,
-        rdsConfirmed = rdsConfirmed,
-        stationId = stationId,
-    )
+    ): Int = FmFavouriteModel.selectCurrentIndex(presets.map(::presetRef), frequency, stationId)
 
     private fun findCurrentPreset(
         presets: List<Preset>,
@@ -1733,24 +1779,15 @@ object FytPhysicalRadio {
         .takeIf { it >= 0 }
         ?.let(presets::get)
 
-    fun stablePresetKey(preset: Preset): String {
-        preset.stationId.takeIf(String::isNotBlank)?.let { return it }
-        val identity = FmStationIdentity.resolve(
-            rawPs = preset.name,
-            storedName = preset.name,
-            frequencies = presetFrequencies(preset),
-            pi = preset.pi,
-            ecc = preset.ecc,
-        )
-        return if (identity.recognized) identity.stableId else "${identity.stableId}:freq${frequencyKey(preset.frequency)}"
-    }
+    fun stablePresetKey(preset: Preset): String = preset.id
 
     fun presetOrderKeys(preset: Preset): Set<String> = buildSet {
+        add(preset.id)
         preset.stationId.takeIf(String::isNotBlank)?.let(::add)
         addAll(FmStationIdentity.orderKeys(
             rawPs = preset.name,
             storedName = preset.name,
-            frequencies = presetFrequencies(preset),
+            frequencies = listOf(preset.frequency),
             pi = preset.pi,
             ecc = preset.ecc,
         ))
@@ -1762,37 +1799,20 @@ object FytPhysicalRadio {
     private fun groupScanResults(results: Collection<ScanResult>): List<ScanResult> {
         val groups = mutableListOf<MutableList<ScanResult>>()
         results.forEach { result ->
-            val evidence = FmStationEvidence(
-                frequencies = scanFrequencies(result),
-                name = result.name,
-                pi = result.pi,
-                stationId = result.stationId,
-                confirmed = result.rdsConfirmed || result.stationId.isNotBlank(),
-            )
             val group = groups.firstOrNull { existing ->
-                val first = existing.first()
-                FmStationAssociation.sameStation(
-                    FmStationEvidence(
-                        frequencies = scanFrequencies(first),
-                        name = first.name,
-                        pi = first.pi,
-                        stationId = first.stationId,
-                        confirmed = first.rdsConfirmed || first.stationId.isNotBlank(),
-                    ),
-                    evidence,
-                )
+                FmFavouriteModel.shouldGroupScan(existing.first().stationId, result.stationId)
             }
             if (group == null) groups += mutableListOf(result) else group += result
         }
         return groups.map { group ->
-            val strongest = group.maxByOrNull { it.rssi } ?: group.first()
-            val frequencies = normalizeFrequencyList(group.flatMap(::scanFrequencies))
+            val strongest = group.maxByOrNull(ScanResult::rssi) ?: group.first()
+            val frequencies = normalizeFrequencyList(group.map(ScanResult::frequency))
             strongest.copy(
                 name = group.firstOrNull { it.stationId.isNotBlank() }?.name ?: strongest.name,
                 pi = group.firstOrNull { it.rdsConfirmed && it.pi > 0 }?.pi ?: strongest.pi,
                 ecc = group.firstOrNull { it.rdsConfirmed && it.ecc.isNotBlank() }?.ecc ?: strongest.ecc,
                 stationId = group.firstOrNull { it.stationId.isNotBlank() }?.stationId.orEmpty(),
-                rdsConfirmed = group.any { it.rdsConfirmed },
+                rdsConfirmed = group.any(ScanResult::rdsConfirmed),
                 alternativeFrequencies = frequencies.filterNot { abs(it - strongest.frequency) < 0.05f },
                 stereo = when {
                     group.any { it.stereo == true } -> true
@@ -1803,52 +1823,7 @@ object FytPhysicalRadio {
         }
     }
 
-    private fun mergePresets(presets: Collection<Preset>): List<Preset> {
-        val groups = mutableListOf<MutableList<Preset>>()
-        presets.forEach { preset ->
-            val normalized = preset.copy(
-                frequency = normalizeFrequency(preset.frequency),
-                alternativeFrequencies = normalizeFrequencyList(preset.alternativeFrequencies)
-                    .filterNot { abs(it - preset.frequency) < 0.05f },
-            )
-            val group = groups.firstOrNull { existing -> samePresetStation(existing.first(), normalized) }
-            if (group == null) groups += mutableListOf(normalized) else group += normalized
-        }
-        return groups.map { group ->
-            val first = group.first()
-            val frequencies = normalizeFrequencyList(group.flatMap(::presetFrequencies))
-            val primary = first.frequency.takeIf { value ->
-                frequencies.any { abs(it - value) < 0.05f }
-            } ?: frequencies.first()
-            val explicitStationId = group.map { it.stationId }.firstOrNull { it.isNotBlank() }.orEmpty()
-            val selectedPi = group.firstOrNull { it.pi > 0 }?.pi ?: first.pi
-            val selectedEcc = group.firstOrNull { it.ecc.isNotBlank() }?.ecc ?: first.ecc
-            first.copy(
-                frequency = primary,
-                name = FmStationIdentity.resolve(
-                    rawPs = group.firstOrNull()?.name.orEmpty(),
-                    storedName = group.map { it.name.trim() }.firstOrNull { usefulStationIdentity(it).isNotBlank() },
-                    frequencies = frequencies,
-                    pi = selectedPi,
-                    ecc = selectedEcc,
-                ).canonicalName,
-                pi = selectedPi,
-                ecc = selectedEcc,
-                stationId = explicitStationId,
-                alternativeFrequencies = frequencies.filterNot { abs(it - primary) < 0.05f },
-            )
-        }
-    }
-
-    private fun samePresetStation(first: Preset, second: Preset): Boolean =
-        FmStationAssociation.sameStation(presetEvidence(first), presetEvidence(second))
-
-    private fun samePresetRecord(first: Preset, second: Preset): Boolean {
-        if (first == second) return true
-        if (first.stationId.isNotBlank() && second.stationId.isNotBlank()) return first.stationId == second.stationId
-        val samePrimary = abs(first.frequency - second.frequency) < 0.05f
-        return samePrimary && FmStationAssociation.compatibleNames(presetEvidence(first), presetEvidence(second))
-    }
+    private fun samePresetRecord(first: Preset, second: Preset): Boolean = first.id == second.id
 
     private fun usefulStationIdentity(value: String): String {
         val normalized =
