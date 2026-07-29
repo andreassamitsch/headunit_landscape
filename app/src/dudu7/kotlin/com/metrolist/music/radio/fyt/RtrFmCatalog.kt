@@ -111,8 +111,13 @@ object RtrFmCatalogParser {
                 if (frequency !in 87.5f..108.0f) return@mapNotNull null
                 val latitude = row.string("rtr_funkst_nord").decimalOrNull() ?: return@mapNotNull null
                 val longitude = row.string("rtr_funkst_ost").decimalOrNull() ?: return@mapNotNull null
-                val program = row.string("rtr_programm").trim()
-                if (program.isBlank()) return@mapNotNull null
+                val rawProgram = row.string("rtr_programm").trim()
+                if (rawProgram.isBlank()) return@mapNotNull null
+                val program = RtrPublicProgramName.resolve(
+                    rawProgram = rawProgram,
+                    broadcaster = row.string("rtr_veranstalter_name"),
+                    coverageName = row.string("rtr_gebiet_name"),
+                )
                 val code = row.string("rtr_gebiet_code").trim()
                 val jsonPath = row.string("rtr_json").trim()
                 RtrFmStation(
