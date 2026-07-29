@@ -1,0 +1,75 @@
+name: Agent Dudu7 13.7.26 final build
+
+on:
+  pull_request:
+    branches: [agent/fm-radio-ui-logos-tabs]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.head_ref == 'agent/dudu7-13726-rtr-name-canbus-fm'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Remove one-time workflow from final source
+        run: |
+          rm .github/workflows/agent-dudu7-13726-final-build.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Remove one-time 13.7.26 build workflow"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Validate source model
+        run: |
+          test -f metroproto/listentogether.proto
+          grep -q 'OFFICIAL_CATALOG_URL' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/RtrFmRepository.kt
+          grep -q 'officialPayload' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/RtrFmCatalog.kt
+          grep -q 'programm_liste' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/RtrOfficialProgramIndex.kt
+          grep -q 'Dudu7MediaButtonReceiver' app/src/dudu7/AndroidManifest.xml
+
+      - name: Full Dudu7 unit tests
+        run: ./gradlew :app:testGmsDudu7DebugUnitTest --stacktrace
+
+      - name: Build signed update APK
+        run: ./gradlew :app:assembleGmsDudu7Debug --stacktrace
+
+      - name: Package and verify APK
+        run: |
+          APK=$(find app/build/outputs/apk/gms/dudu7/debug -name '*.apk' -type f | head -1)
+          test -n "$APK"
+          mkdir -p artifact
+          cp "$APK" artifact/Metrolist-dudu7-13.7.26.apk
+          sha256sum artifact/Metrolist-dudu7-13.7.26.apk > artifact/Metrolist-dudu7-13.7.26.apk.sha256
+          BUILD_TOOLS=${ANDROID_HOME}/build-tools/$(ls ${ANDROID_HOME}/build-tools | sort -V | tail -1)
+          "$BUILD_TOOLS/aapt" dump badging artifact/Metrolist-dudu7-13.7.26.apk > artifact/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --print-certs artifact/Metrolist-dudu7-13.7.26.apk > artifact/apk-signature.txt
+          unzip -l artifact/Metrolist-dudu7-13.7.26.apk > artifact/apk-contents.txt
+          grep -q "name='com.metrolist.music.dudu7.debug'" artifact/apk-badging.txt
+          grep -q "versionCode='1370035'" artifact/apk-badging.txt
+          grep -q "versionName='13.7.26-dudu7'" artifact/apk-badging.txt
+          grep -q "application-label:'Metrolist dudu7'" artifact/apk-badging.txt
+          grep -q 'lib/arm64-v8a/' artifact/apk-contents.txt
+          grep -q 'lib/armeabi-v7a/' artifact/apk-contents.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.26
+          path: artifact/
+          retention-days: 7
