@@ -1672,20 +1672,16 @@ object FytPhysicalRadio {
 
     private fun persistPresets(presets: List<Preset>) {
         val normalized = normalizePresets(presets)
-        val encoded = normalized.joinToString("
-") { preset ->
+        val encoded = normalized.joinToString("\n") { preset ->
             listOf(
                 "v3",
                 preset.id,
                 preset.frequency.toString(),
-                preset.name.replace('
-', ' ').replace('	', ' '),
+                preset.name.replace('\n', ' ').replace('\t', ' '),
                 preset.pi.toString(),
-                preset.ecc.replace('
-', ' ').replace('	', ' '),
-                preset.stationId.replace('
-', ' ').replace('	', ' '),
-            ).joinToString("	")
+                preset.ecc.replace('\n', ' ').replace('\t', ' '),
+                preset.stationId.replace('\n', ' ').replace('\t', ' '),
+            ).joinToString("\t")
         }
         appContext
             ?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
