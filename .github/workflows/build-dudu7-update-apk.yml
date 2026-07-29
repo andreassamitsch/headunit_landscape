@@ -29,6 +29,7 @@ jobs:
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
           set -euxo pipefail
+          sed -i 's/Metrolist-dudu7\/13.7.22/Metrolist-dudu7\/13.7.24/' scripts/apply_dudu7_13725_fm_favourite_model_v3.py
           python3 scripts/apply_dudu7_13725_fm_favourite_model_v3.py
           git diff --check
           grep -q 'versionCode = 1370034' app/build.gradle.kts
