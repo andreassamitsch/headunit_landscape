@@ -217,7 +217,7 @@ class RtrFmRepository private constructor(context: Context) {
             connectTimeout = 15_000
             readTimeout = 35_000
             instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "Metrolist-dudu7/13.7.22")
+            setRequestProperty("User-Agent", "Metrolist-dudu7/13.7.24")
             setRequestProperty("Accept", "application/json,image/png,*/*")
             val code = responseCode
             if (code !in 200..299) {

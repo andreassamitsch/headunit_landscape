@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: dudu7-update-${{ github.event.pull_request.number || github.ref }}
@@ -19,73 +19,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           submodules: recursive
           ref: ${{ github.head_ref || github.ref }}
-      - name: Apply and persist FM identity hardening
-        if: github.event_name == 'pull_request'
-        shell: bash
-        env:
-          PYTHONDONTWRITEBYTECODE: '1'
-        run: |
-          set -euxo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('scripts/apply_dudu7_13724_fm_identity_hardening.py')
-          text = path.read_text(encoding='utf-8')
-          old = '''replace_exact(
-              RADIO,
-              ''' + "'''                pendingPs = \"\"\n                pendingPsCount = 0\n                resetAfSampling()'''" + ''',
-              ''' + "'''                resetPendingRds()\n                resetAfSampling()'''" + ''',
-              expected=2,
-          )'''
-          new = '''replace_exact(
-              RADIO,
-              ''' + "'''                pendingPs = \"\"\n                pendingPsCount = 0\n                resetAfSampling()'''" + ''',
-              ''' + "'''                resetPendingRds()\n                resetAfSampling()'''" + ''',
-          )
-          replace_exact(
-              RADIO,
-              ''' + "'''            pendingPs = \"\"\n            pendingPsCount = 0\n            resetAfSampling()'''" + ''',
-              ''' + "'''            resetPendingRds()\n            resetAfSampling()'''" + ''',
-          )'''
-          if old not in text:
-              raise SystemExit('pending RDS patch block not found')
-          text = text.replace(old, new, 1)
-          old = '''replace_exact(
-              RADIO,
-              ''' + "'''                        pi = presetIdentity?.pi ?: 0,\n                        ecc = presetIdentity?.ecc.orEmpty(),\n                        alternativeFrequencies = presetIdentity?.alternativeFrequencies.orEmpty(),'''" + ''',
-              ''' + "'''                        pi = 0,\n                        ecc = \"\",\n                        alternativeFrequencies = emptyList(),\n                        rdsConfirmed = false,\n                        rdsFreshFrequency = 0f,'''" + ''',
-              expected=2,
-          )'''
-          new = '''replace_exact(
-              RADIO,
-              ''' + "'''                        pi = presetIdentity?.pi ?: 0,\n                        ecc = presetIdentity?.ecc.orEmpty(),\n                        alternativeFrequencies = presetIdentity?.alternativeFrequencies.orEmpty(),'''" + ''',
-              ''' + "'''                        pi = 0,\n                        ecc = \"\",\n                        alternativeFrequencies = emptyList(),\n                        rdsConfirmed = false,\n                        rdsFreshFrequency = 0f,'''" + ''',
-          )
-          replace_exact(
-              RADIO,
-              ''' + "'''                    pi = presetIdentity?.pi ?: 0,\n                    ecc = presetIdentity?.ecc.orEmpty(),\n                    alternativeFrequencies = presetIdentity?.alternativeFrequencies.orEmpty(),'''" + ''',
-              ''' + "'''                    pi = 0,\n                    ecc = \"\",\n                    alternativeFrequencies = emptyList(),\n                    rdsConfirmed = false,\n                    rdsFreshFrequency = 0f,'''" + ''',
-          )'''
-          if old not in text:
-              raise SystemExit('preset PI patch block not found')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
-          PY
-          python3 scripts/apply_dudu7_13724_fm_identity_hardening.py
-          git diff --check
-          grep -q 'versionCode = 1370033' app/build.gradle.kts
-          grep -q 'versionName = "13.7.24"' app/build.gradle.kts
-          grep -q 'rdsConfirmed: Boolean' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
-          grep -q 'FmRdsFreshness.consolidate' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
-          grep -q 'FmStationAssociation.sameStation' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
-          rm scripts/apply_dudu7_13724_fm_identity_hardening.py
-          git show origin/agent/fm-radio-ui-logos-tabs:.github/workflows/build-dudu7-update-apk.yml > .github/workflows/build-dudu7-update-apk.yml
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          git commit -m 'fix(dudu7): harden FM station identity and RDS freshness [skip ci]'
-          git push origin HEAD:${GITHUB_HEAD_REF}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -99,10 +34,7 @@ jobs:
         run: |
           set -euxo pipefail
           git diff --check
-          grep -q 'versionCode = 1370033' app/build.gradle.kts
-          grep -q 'versionName = "13.7.24"' app/build.gradle.kts
           grep -q 'appNameOverride ?: "Metrolist dudu7"' app/build.gradle.kts
-          grep -q 'FmStationAssociation.sameStation' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
           if grep -q 'UPDATER_AVAILABLE", "true"' app/build.gradle.kts; then
             echo 'Original Metrolist updater was re-enabled' >&2
             exit 1
@@ -123,13 +55,13 @@ jobs:
           ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace | tee artifacts/build.log
           APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
           test -n "$APK"
-          OUT="artifacts/Metrolist-dudu7-13.7.24.apk"
+          VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts | head -1)
+          OUT="artifacts/Metrolist-dudu7-${VERSION}.apk"
           cp "$APK" "$OUT"
           BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
           "$BUILD_TOOLS/aapt" dump badging "$OUT" > artifacts/apk-badging.txt
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$OUT" > artifacts/apk-signature.txt
-          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370033'" artifacts/apk-badging.txt
-          grep -q "versionName='13.7.24-dudu7'" artifacts/apk-badging.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug'" artifacts/apk-badging.txt
           grep -q "application-label:'Metrolist dudu7'" artifacts/apk-badging.txt
           grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
           unzip -l "$OUT" | tee artifacts/apk-contents.txt
@@ -140,9 +72,7 @@ jobs:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: Metrolist-dudu7-13.7.24
+          name: Metrolist-dudu7-update
           path: artifacts/
-          if-no-files-found: warn
           retention-days: 14
