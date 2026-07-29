@@ -29,6 +29,49 @@ jobs:
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
           set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply_dudu7_13724_fm_identity_hardening.py')
+          text = path.read_text(encoding='utf-8')
+          old = '''replace_exact(
+              RADIO,
+              ''' + "'''                pendingPs = \"\"\n                pendingPsCount = 0\n                resetAfSampling()'''" + ''',
+              ''' + "'''                resetPendingRds()\n                resetAfSampling()'''" + ''',
+              expected=2,
+          )'''
+          new = '''replace_exact(
+              RADIO,
+              ''' + "'''                pendingPs = \"\"\n                pendingPsCount = 0\n                resetAfSampling()'''" + ''',
+              ''' + "'''                resetPendingRds()\n                resetAfSampling()'''" + ''',
+          )
+          replace_exact(
+              RADIO,
+              ''' + "'''            pendingPs = \"\"\n            pendingPsCount = 0\n            resetAfSampling()'''" + ''',
+              ''' + "'''            resetPendingRds()\n            resetAfSampling()'''" + ''',
+          )'''
+          if old not in text:
+              raise SystemExit('pending RDS patch block not found')
+          text = text.replace(old, new, 1)
+          old = '''replace_exact(
+              RADIO,
+              ''' + "'''                        pi = presetIdentity?.pi ?: 0,\n                        ecc = presetIdentity?.ecc.orEmpty(),\n                        alternativeFrequencies = presetIdentity?.alternativeFrequencies.orEmpty(),'''" + ''',
+              ''' + "'''                        pi = 0,\n                        ecc = \"\",\n                        alternativeFrequencies = emptyList(),\n                        rdsConfirmed = false,\n                        rdsFreshFrequency = 0f,'''" + ''',
+              expected=2,
+          )'''
+          new = '''replace_exact(
+              RADIO,
+              ''' + "'''                        pi = presetIdentity?.pi ?: 0,\n                        ecc = presetIdentity?.ecc.orEmpty(),\n                        alternativeFrequencies = presetIdentity?.alternativeFrequencies.orEmpty(),'''" + ''',
+              ''' + "'''                        pi = 0,\n                        ecc = \"\",\n                        alternativeFrequencies = emptyList(),\n                        rdsConfirmed = false,\n                        rdsFreshFrequency = 0f,'''" + ''',
+          )
+          replace_exact(
+              RADIO,
+              ''' + "'''                    pi = presetIdentity?.pi ?: 0,\n                    ecc = presetIdentity?.ecc.orEmpty(),\n                    alternativeFrequencies = presetIdentity?.alternativeFrequencies.orEmpty(),'''" + ''',
+              ''' + "'''                    pi = 0,\n                    ecc = \"\",\n                    alternativeFrequencies = emptyList(),\n                    rdsConfirmed = false,\n                    rdsFreshFrequency = 0f,'''" + ''',
+          )'''
+          if old not in text:
+              raise SystemExit('preset PI patch block not found')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
           python3 scripts/apply_dudu7_13724_fm_identity_hardening.py
           git diff --check
           grep -q 'versionCode = 1370033' app/build.gradle.kts
