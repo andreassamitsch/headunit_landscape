@@ -1,0 +1,38 @@
+name: Apply clean Dudu7 13.7.23 source
+
+on:
+  push:
+    branches: [agent/dudu7-13723-clean-source]
+    paths:
+      - scripts/apply_dudu7_13723_clean.py
+      - .github/workflows/apply-dudu7-13723-clean.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: agent/dudu7-13723-clean-source
+      - name: Apply clean source patch
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 scripts/apply_dudu7_13723_clean.py
+          git diff --check
+          grep -q 'versionCode = 1370032' app/build.gradle.kts
+          grep -q 'versionName = "13.7.23"' app/build.gradle.kts
+          grep -q 'fun clearPresets()' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+          grep -q 'ALLE FM-FAVORITEN LÖSCHEN UND SUCHEN' app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt
+          rm scripts/apply_dudu7_13723_clean.py
+          rm .github/workflows/apply-dudu7-13723-clean.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat(dudu7): offer clearing FM favourites before scan [skip ci]'
+          git push origin HEAD:agent/dudu7-13723-clean-source
