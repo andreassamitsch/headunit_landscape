@@ -1615,9 +1615,9 @@ object FytPhysicalRadio {
 
         val allFrequencies = normalizeFrequencyList(
             presetFrequencies(current) +
-                if (rdsCompatible) snapshot.alternativeFrequencies else emptyList() +
-                if (rtrCompatible) snapshot.rtrAfPredictions.map(RtrAfPrediction::frequency) else emptyList() +
-                if (exactIndex >= 0) listOf(snapshot.frequency) else emptyList(),
+                (if (rdsCompatible) snapshot.alternativeFrequencies else emptyList()) +
+                (if (rtrCompatible) snapshot.rtrAfPredictions.map(RtrAfPrediction::frequency) else emptyList()) +
+                (if (exactIndex >= 0) listOf(snapshot.frequency) else emptyList()),
         )
         val primary = current.frequency.takeIf { candidate ->
             allFrequencies.any { abs(it - candidate) < 0.05f }
