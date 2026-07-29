@@ -1,0 +1,75 @@
+name: Dudu7 13.7.26 CAN FM and RTR name
+
+on:
+  push:
+    branches:
+      - agent/dudu7-13726-rtr-name-canbus-fm
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/dudu7-13726-rtr-name-canbus-fm
+          submodules: recursive
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: android-actions/setup-android@v3
+      - name: Apply focused source changes and clean helper files
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 scripts/apply_dudu7_13726_canbus_rtr_name.py
+          rm scripts/apply_dudu7_13726_canbus_rtr_name.py
+          rm .github/workflows/dudu7-13726-canbus-rtr.yml
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix(dudu7): route FM CAN keys and use public RTR names [skip ci]'
+          git push origin HEAD:agent/dudu7-13726-rtr-name-canbus-fm
+      - name: Unit tests
+        shell: bash
+        run: |
+          chmod +x gradlew
+          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+      - name: Build and verify APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace | tee artifacts/build.log
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          test -n "$APK"
+          OUT='artifacts/Metrolist-dudu7-13.7.26.apk'
+          cp "$APK" "$OUT"
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$BUILD_TOOLS/aapt" dump badging "$OUT" > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$OUT" > artifacts/apk-signature.txt
+          unzip -l "$OUT" > artifacts/apk-contents.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370035'" artifacts/apk-badging.txt
+          grep -q "versionName='13.7.26-dudu7'" artifacts/apk-badging.txt
+          grep -q "application-label:'Metrolist dudu7'" artifacts/apk-badging.txt
+          grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
+          grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
+          grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.26
+          path: artifacts/
+          retention-days: 14
