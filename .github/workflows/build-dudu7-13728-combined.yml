@@ -40,8 +40,6 @@ jobs:
             curl -fsSL "https://raw.githubusercontent.com/andreassamitsch/headunit_landscape/${SOURCE_SHA}/${path}" -o "$path"
           }
 
-          # Keep the latest base's MediaSession/CAN bridge, manifest and tab implementation.
-          # Overlay the validated deeper RTR, RadioDNS and authenticated-playback changes.
           copy_from_validated app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/ReliableFmStationLogoResolver.kt
           copy_from_validated app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/RtrFmCatalog.kt
           copy_from_validated app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/RtrFmRepository.kt
@@ -125,10 +123,10 @@ jobs:
           set -euxo pipefail
           rm -f .github/workflows/build-dudu7-13728-combined.yml
           rm -rf scripts/__pycache__
-          rm -rf dist
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
+          git reset -- dist || true
           git commit -m 'fix(dudu7): combine latest base with RTR, RadioDNS and authenticated playback [skip ci]'
           git push origin HEAD:agent/dudu7-13728-combined-final
 
