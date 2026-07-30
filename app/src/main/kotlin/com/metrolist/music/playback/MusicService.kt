@@ -3088,14 +3088,6 @@ class MusicService :
             return
         }
 
-        if (error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED &&
-            currentStreamClient.value == "WEB_REMIX"
-        ) {
-            Timber.tag(TAG).d("WEB_REMIX IO_UNSPECIFIED detected; forcing another stream client")
-            handleAuthenticatedStreamFailure(mediaId)
-            return
-        }
-
         if (dataStore.get(AutoSkipNextOnErrorKey, false)) {
             Timber.tag(TAG).d("Auto-skipping to next track due to unrecoverable error")
             skipOnError()
@@ -3283,37 +3275,6 @@ class MusicService :
 
                 Timber.tag(TAG).d("Retrying playback for $mediaId after page reload error")
             }
-    }
-
-    /**
-     * Handles an authenticated WEB_REMIX stream that failed on the actual ExoPlayer GET with
-     * IO_UNSPECIFIED. Unlike the cipher self-heal path this keeps WEB_REMIX disabled for this
-     * media id so the retry is guaranteed to use a different client.
-     */
-    private fun handleAuthenticatedStreamFailure(mediaId: String?) {
-        if (mediaId == null) {
-            handleFinalFailure()
-            return
-        }
-
-        incrementRetryCount(mediaId)
-        songUrlCache.remove(mediaId)
-        YTPlayerUtils.markWebRemixFailed(mediaId)
-        runCatching { playerCache.removeResource(mediaId) }
-            .onFailure { Timber.tag(TAG).w(it, "Could not clear player cache after authenticated stream failure") }
-
-        retryJob?.cancel()
-        retryJob = scope.launch {
-            delay(RETRY_DELAY_MS)
-            val currentIndex = player.currentMediaItemIndex
-            if (currentIndex == C.INDEX_UNSET) {
-                handleFinalFailure()
-                return@launch
-            }
-            player.seekTo(currentIndex, player.currentPosition)
-            player.prepare()
-            Timber.tag(TAG).d("Retrying $mediaId with WEB_REMIX excluded")
-        }
     }
 
     /**
