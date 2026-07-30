@@ -36,11 +36,14 @@ jobs:
         run: |
           set -euxo pipefail
           python3 scripts/apply_dudu7_13727_complete_fix.py
+          python3 scripts/apply_dudu7_13727_compile_hotfix.py
           curl -fsSL https://raw.githubusercontent.com/MetrolistGroup/Metrolist/4eb5eaa8a395aa856c3610a74c7be0ccd06a728a/app/src/main/assets/player_configs.json \
             -o app/src/main/assets/player_configs.json
           curl -fsSL https://raw.githubusercontent.com/MetrolistGroup/Metrolist/4eb5eaa8a395aa856c3610a74c7be0ccd06a728a/app/src/main/assets/player_dates.json \
             -o app/src/main/assets/player_dates.json
-          python3 -m py_compile scripts/apply_dudu7_13727_complete_fix.py
+          python3 -m py_compile \
+            scripts/apply_dudu7_13727_complete_fix.py \
+            scripts/apply_dudu7_13727_compile_hotfix.py
           git diff --check
 
       - name: Validate requested scope
@@ -61,6 +64,7 @@ jobs:
           grep -q 'val isUgcOrPodcast' app/src/main/kotlin/com/metrolist/music/utils/YTPlayerUtils.kt
           grep -q 'ERROR_CODE_IO_BAD_HTTP_STATUS)' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
           ! grep -q 'ERROR_CODE_IO_UNSPECIFIED ||' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          grep -q 'revision = 0L' app/src/main/kotlin/com/metrolist/music/listentogether/MessageCodec.kt
 
       - name: Focused and full Dudu7 unit tests
         shell: bash
@@ -92,6 +96,7 @@ jobs:
         run: |
           set -euxo pipefail
           rm -f scripts/apply_dudu7_13727_complete_fix.py
+          rm -f scripts/apply_dudu7_13727_compile_hotfix.py
           rm -f .github/workflows/build-dudu7-13727-complete.yml
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
