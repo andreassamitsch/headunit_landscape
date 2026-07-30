@@ -10,7 +10,6 @@ import android.net.Uri
 import androidx.media3.common.PlaybackException
 import com.metrolist.innertube.NewPipeExtractor
 import com.metrolist.innertube.YouTube
-import com.metrolist.innertube.utils.parseCookieString
 import com.metrolist.innertube.models.YouTubeClient
 import com.metrolist.innertube.models.YouTubeClient.Companion.WEB_REMIX
 import com.metrolist.innertube.models.response.PlayerResponse
@@ -129,9 +128,7 @@ object YTPlayerUtils {
         Timber.tag(TAG).d("Content type detection (preliminary):")
         Timber.tag(TAG).d("  isUploadedTrack (from playlistId): $isUploadedTrack")
 
-        val isLoggedIn = YouTube.cookie
-            ?.let { cookie -> cookie.isNotBlank() && "SAPISID" in parseCookieString(cookie) }
-            ?: false
+        val isLoggedIn = YouTube.cookie != null
         Timber.tag(TAG).d("Authentication status: ${if (isLoggedIn) "LOGGED_IN" else "ANONYMOUS"}")
 
         // Get signature timestamp (same as before for normal content)
@@ -226,11 +223,6 @@ object YTPlayerUtils {
             }
             if (disabledClientName in disabledStreamClients) {
                 Timber.tag(logTag).d("Skipping client ${client.clientName} - disabled in stream sources")
-                continue
-            }
-
-            if (client == MAIN_CLIENT && webRemixFailedIds.contains(videoId)) {
-                Timber.tag(logTag).d("Skipping WEB_REMIX because its real playback GET failed for $videoId")
                 continue
             }
 
@@ -420,10 +412,10 @@ object YTPlayerUtils {
                 // GET that ExoPlayer makes. Skip HEAD validation for the main client and let ExoPlayer
                 // try directly, UNLESS this videoId already 403'd on GET (markWebRemixFailed) — then
                 // fall through to the fallback clients. Saves a validateStatus round-trip per resolve.
-                val isUgcOrPodcast =
-                    musicVideoType == "MUSIC_VIDEO_TYPE_UGC" ||
-                        musicVideoType?.contains("PODCAST") == true ||
-                        musicVideoType == null
+                
+                val isUgcOrPodcast = musicVideoType == "MUSIC_VIDEO_TYPE_UGC" ||
+                                     musicVideoType?.contains("PODCAST") == true ||
+                                     musicVideoType == null
 
                 if (currentClient.clientName == "WEB_REMIX" &&
                     !webRemixFailedIds.contains(videoId) &&
