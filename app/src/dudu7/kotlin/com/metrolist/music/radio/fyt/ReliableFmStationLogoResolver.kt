@@ -48,6 +48,9 @@ object ReliableFmStationLogoResolver {
     private const val MANUAL_UPDATED_PREFIX = "manual_updated_"
     private const val RETRY_COOLDOWN_MS = 10L * 60L * 1000L
     private const val AUTO_REFRESH_MS = 30L * 24L * 60L * 60L * 1000L
+    private const val RADIODNS_RETRY_MS = 6L * 60L * 60L * 1000L
+    private const val RADIODNS_CHECKED_PREFIX = "radiodns_checked_"
+    private const val RADIODNS_RESULT_PREFIX = "radiodns_result_"
 
     data class LogoInfo(
         val localUri: String,
@@ -127,27 +130,42 @@ object ReliableFmStationLogoResolver {
             }
 
             val cached = prefs.getString(AUTO_PREFIX + key, null)?.takeIf(String::isNotBlank)
+            val cachedSource = prefs.getString(SOURCE_PREFIX + key, "").orEmpty()
             val updatedAt = prefs.getLong(UPDATED_PREFIX + key, 0L)
             val now = System.currentTimeMillis()
             val cacheFresh = cached != null && (updatedAt <= 0L || now - updatedAt < AUTO_REFRESH_MS)
-            val cachedSource = prefs.getString(SOURCE_PREFIX + key, "").orEmpty()
-            val cachedIsRadioDns = cachedSource == RadioLogoSource.RADIO_DNS.label
-            if (!force && cacheFresh && (pi <= 0 || cachedIsRadioDns)) return@withContext cached
+            val radioDnsDue = force || now - prefs.getLong(RADIODNS_CHECKED_PREFIX + key, 0L) >= RADIODNS_RETRY_MS
+            if (!force && cacheFresh && (pi <= 0 || cachedSource == RadioLogoSource.RADIO_DNS.label || !radioDnsDue)) {
+                return@withContext cached
+            }
+
+            if (pi > 0 && radioDnsDue) {
+                for (candidateFrequency in frequencies) {
+                    val candidates = RadioDnsLogoResolver.resolveFm(appContext, candidateFrequency, pi, ecc)
+                    for (candidate in candidates) {
+                        val stored = cacheAndPersistAutomatic(appContext, key, candidate)
+                        if (stored != null) {
+                            prefs.edit()
+                                .putLong(RADIODNS_CHECKED_PREFIX + key, now)
+                                .putString(RADIODNS_RESULT_PREFIX + key, RadioDnsLogoResolver.lastTrace.value.summary)
+                                .apply()
+                            return@withContext stored
+                        }
+                    }
+                }
+                prefs.edit()
+                    .putLong(RADIODNS_CHECKED_PREFIX + key, now)
+                    .putString(RADIODNS_RESULT_PREFIX + key, RadioDnsLogoResolver.lastTrace.value.summary)
+                    .apply()
+                if (!force && cacheFresh) return@withContext cached
+            }
+            if (!force && cacheFresh) return@withContext cached
 
             val resolvedStation = FmStationIdentity.resolve(stationName, null, frequencies, pi, ecc)
             val identity = AustrianFmStationCatalog.identify(resolvedStation.canonicalName, frequencies)
             if (pi <= 0 && identity == null && !isSafeAutomaticName(resolvedStation.canonicalName)) return@withContext cached
             val lastFailure = failedAt[key] ?: 0L
             if (!force && now - lastFailure < RETRY_COOLDOWN_MS) return@withContext cached
-
-            if (pi > 0) {
-                for (candidateFrequency in frequencies) {
-                    val candidates = RadioDnsLogoResolver.resolveFm(appContext, candidateFrequency, pi, ecc)
-                    for (candidate in candidates) {
-                        cacheAndPersistAutomatic(appContext, key, candidate)?.let { return@withContext it }
-                    }
-                }
-            }
 
             identity?.candidate()?.let { candidate ->
                 cacheAndPersistAutomatic(appContext, key, candidate)?.let { return@withContext it }
@@ -290,6 +308,8 @@ object ReliableFmStationLogoResolver {
             .remove(SOURCE_PREFIX + key)
             .remove(SOURCE_URL_PREFIX + key)
             .remove(UPDATED_PREFIX + key)
+            .remove(RADIODNS_CHECKED_PREFIX + key)
+            .remove(RADIODNS_RESULT_PREFIX + key)
             .apply()
         bumpRevision()
     }

@@ -34,11 +34,16 @@ class RtrFmRepository private constructor(context: Context) {
     private val cacheDirectory = File(appContext.filesDir, "rtr_fm").apply { mkdirs() }
     private val catalogFile = File(cacheDirectory, "senderkataster-programs.json")
     private val officialCatalogFile = File(cacheDirectory, "medien-frequenzbuch.json")
+    private val schemaFile = File(cacheDirectory, "schema.version")
     private val coverageDirectory = File(cacheDirectory, "coverage").apply { mkdirs() }
     private val loadMutex = Mutex()
     private val coverageMutex = Mutex()
     private val _state = MutableStateFlow(RtrRepositoryState())
     val state: StateFlow<RtrRepositoryState> = _state.asStateFlow()
+
+    init {
+        ensureCacheSchema()
+    }
 
     @Volatile
     private var snapshot: RtrCatalogSnapshot? = null
@@ -133,6 +138,16 @@ class RtrFmRepository private constructor(context: Context) {
     }
 
     fun cachedSnapshot(): RtrCatalogSnapshot? = snapshot
+
+    private fun ensureCacheSchema() {
+        val existing = schemaFile.takeIf(File::isFile)?.readText()?.trim()?.toIntOrNull()
+        if (existing == CACHE_SCHEMA_VERSION) return
+        catalogFile.delete()
+        officialCatalogFile.delete()
+        coverageDirectory.listFiles()?.forEach(File::delete)
+        schemaFile.writeText(CACHE_SCHEMA_VERSION.toString())
+        Timber.tag(TAG).i("RTR cache schema reset %s -> %d", existing?.toString() ?: "none", CACHE_SCHEMA_VERSION)
+    }
 
     private fun parseCatalog(payload: String): RtrCatalogSnapshot =
         RtrFmCatalogParser.parse(
@@ -235,7 +250,7 @@ class RtrFmRepository private constructor(context: Context) {
             connectTimeout = 15_000
             readTimeout = 35_000
             instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "Metrolist-dudu7/13.7.26")
+            setRequestProperty("User-Agent", "Metrolist-dudu7/13.7.28")
             setRequestProperty("Accept", "application/json,image/png,*/*")
             val code = responseCode
             if (code !in 200..299) {
@@ -266,6 +281,7 @@ class RtrFmRepository private constructor(context: Context) {
         private const val MAX_COVERAGE_BYTES = 48L * 1024L * 1024L
         private const val MAX_COVERAGE_FILES = 12
         private const val MIN_EXPECTED_STATIONS = 500
+        private const val CACHE_SCHEMA_VERSION = 4
 
         @Volatile private var instance: RtrFmRepository? = null
 
