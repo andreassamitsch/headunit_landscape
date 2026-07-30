@@ -126,3 +126,5 @@ jobs:
           path: artifact/*
           if-no-files-found: error
           retention-days: 14
+
+# Synchronization trigger for the one-time validation run.
