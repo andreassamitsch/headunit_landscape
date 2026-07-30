@@ -48,7 +48,7 @@ jobs:
           grep -q 'onMediaButtonEvent' app/src/main/kotlin/com/metrolist/music/playback/MediaLibrarySessionCallback.kt
           grep -q 'onPlayerCommandRequest' app/src/main/kotlin/com/metrolist/music/playback/MediaLibrarySessionCallback.kt
           grep -q 'PhysicalFmMediaKeyBridge' app/src/main/kotlin/com/metrolist/music/playback/PhysicalFmMediaKeyBridge.kt
-          grep -q 'publicProgrammeName' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/RtrFmCatalog.kt
+          grep -q 'Radio Steiermark' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/RtrPublicProgramName.kt
 
       - name: Commit applied source changes
         if: github.event_name == 'pull_request'
