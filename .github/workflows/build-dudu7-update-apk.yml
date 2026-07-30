@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: dudu7-update-${{ github.event.pull_request.number || github.ref }}
@@ -29,6 +29,68 @@ jobs:
         with:
           cache-cleanup: on-success
       - uses: android-actions/setup-android@v3
+
+      - name: Apply 13.7.27 final fixes
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 scripts/apply_dudu7_13727_final_fixes.py
+          python3 -m py_compile scripts/apply_dudu7_13727_final_fixes.py
+          git diff --check
+          grep -q 'versionCode = 1370036' app/build.gradle.kts
+          grep -q 'versionName = "13.7.27"' app/build.gradle.kts
+          grep -q '"9d46652d"' app/src/main/assets/player_configs.json
+          grep -q 'startDestination = initialTab.route' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+          grep -q 'val lastTrace: StateFlow<Trace>' app/src/main/kotlin/com/metrolist/music/radio/RadioDnsLogoResolver.kt
+          grep -q 'cachedIsRadioDns' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/ReliableFmStationLogoResolver.kt
+          grep -q 'RadioDNS-Status' app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/FmRadioDiagnostics.kt
+          grep -q 'onMediaButtonEvent' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          grep -q 'publicProgrammeName' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/RtrFmCatalog.kt
+
+      - name: Commit applied source changes
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if ! git diff --quiet; then
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git add app scripts/apply_dudu7_13727_final_fixes.py
+            git commit -m 'fix(dudu7): finalize playback tabs and RadioDNS [skip ci]'
+            git push origin HEAD:${GITHUB_HEAD_REF}
+          fi
+
+      - name: RadioDNS live protocol probe
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          import json, urllib.parse, urllib.request, xml.etree.ElementTree as ET
+          lookup='10620.c460.ce1.fm.radiodns.org'
+          def dns(name, qtype):
+              url='https://dns.google/resolve?name='+urllib.parse.quote(name)+'&type='+str(qtype)
+              req=urllib.request.Request(url,headers={'Accept':'application/dns-json','User-Agent':'MetrolistHU-CI/13.7.27'})
+              with urllib.request.urlopen(req,timeout=15) as r: data=json.load(r)
+              assert data.get('Status') == 0, data
+              return [a['data'] for a in data.get('Answer',[]) if a.get('type') == qtype]
+          cname=dns(lookup,5)[0].rstrip('.')
+          srv=dns('_radioepg._tcp.'+cname,33)[0].split()
+          port=int(srv[2]); host=srv[3].rstrip('.')
+          url=('https' if port==443 else 'http')+'://'+host+((':'+str(port)) if port not in (80,443) else '')+'/radiodns/spi/3.1/SI.xml'
+          req=urllib.request.Request(url,headers={'Accept':'application/xml,text/xml,*/*;q=0.2','User-Agent':'MetrolistHU-CI/13.7.27'})
+          with urllib.request.urlopen(req,timeout=20) as r: payload=r.read(3_000_000)
+          root=ET.fromstring(payload)
+          bearer='fm:ce1.c460.10620'
+          matches=[]
+          for service in [e for e in root.iter() if e.tag.split('}')[-1]=='service']:
+              ids=[e.attrib.get('id','').lower() for e in service.iter() if e.tag.split('}')[-1]=='bearer']
+              if bearer in ids:
+                  matches=[e.attrib.get('url','') for e in service.iter() if e.tag.split('}')[-1]=='multimedia']
+                  break
+          assert matches, f'No logos found for {bearer} in {url}'
+          print('RadioDNS live probe OK', lookup, cname, url, len(matches))
+          PY
+
       - name: Validate source
         shell: bash
         run: |
@@ -39,6 +101,8 @@ jobs:
             echo 'Original Metrolist updater was re-enabled' >&2
             exit 1
           fi
+          python3 scripts/verify_dudu7_architecture.py
+
       - name: Unit tests
         shell: bash
         run: |
@@ -47,6 +111,7 @@ jobs:
         env:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+
       - name: Build and verify ARM APK
         shell: bash
         run: |
@@ -61,7 +126,7 @@ jobs:
           BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
           "$BUILD_TOOLS/aapt" dump badging "$OUT" > artifacts/apk-badging.txt
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$OUT" > artifacts/apk-signature.txt
-          grep -q "package: name='com.metrolist.music.dudu7.debug'" artifacts/apk-badging.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370036'" artifacts/apk-badging.txt
           grep -q "application-label:'Metrolist dudu7'" artifacts/apk-badging.txt
           grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
           unzip -l "$OUT" | tee artifacts/apk-contents.txt
@@ -71,6 +136,7 @@ jobs:
         env:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+
       - uses: actions/upload-artifact@v4
         with:
           name: Metrolist-dudu7-update
