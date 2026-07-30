@@ -43,7 +43,7 @@ class RtrOfficialProgramIndexTest {
             "Radio Steiermark",
             index.resolve(
                 frequency = 95.4f,
-                coverageCode = "ORF_STMK_OE2",
+                stationCode = "ORF_STMK_OE2",
                 pi = 0xA202,
                 stationName = "Arnfels",
                 stationLocation = "Kreuzberg",
@@ -60,7 +60,7 @@ class RtrOfficialProgramIndexTest {
         assertNull(
             index.resolve(
                 frequency = 95.4f,
-                coverageCode = "",
+                stationCode = "",
                 pi = 0,
                 stationName = "",
                 stationLocation = "",
