@@ -40,7 +40,14 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Apply source fixes
-        run: python3 scripts/apply_v13729_auth_playback_fix.py
+        shell: bash
+        run: |
+          if grep -q 'versionCode = 1370038' app/build.gradle.kts && \
+             test -f app/src/main/kotlin/com/metrolist/music/utils/AdvancedLoginToken.kt; then
+            echo '13.7.29 source changes already committed; skipping patcher'
+          else
+            python3 scripts/apply_v13729_auth_playback_fix.py
+          fi
 
       - name: Verify intended fixes
         run: |
@@ -138,4 +145,4 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-# Trigger validation after PR creation.
+# Re-run after fixing the token parser compilation.
