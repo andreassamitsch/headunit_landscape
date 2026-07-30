@@ -3070,10 +3070,9 @@ class MusicService :
             }
         }
 
-        // For IO_UNSPECIFIED and IO_BAD_HTTP_STATUS, try recovery first
-        if (error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED ||
-            error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
-        ) {
+        // For IO_BAD_HTTP_STATUS, try recovery first. IO_UNSPECIFIED may require
+        // client fallback instead of repeatedly reloading the same authenticated URL.
+        if (error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS) {
             Timber.tag(TAG).d("IO error detected (${error.errorCode}), attempting recovery")
             handleGenericIOError(mediaId)
             return
@@ -4281,11 +4280,6 @@ class MusicService :
             return
         }
         super.onTaskRemoved(rootIntent)
-        // User removed the task while paused: drop foreground promotion so the process can idle.
-        // Queue/state remain persisted; opening the app restores playback as usual.
-        if (::player.isInitialized && !player.isPlaying) {
-            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
-        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo) = mediaSession

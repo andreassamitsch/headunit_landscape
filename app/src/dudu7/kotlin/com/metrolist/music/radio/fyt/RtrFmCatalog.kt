@@ -22,6 +22,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.math.tan
+import timber.log.Timber
 
 data class FmGeoPoint(
     val latitude: Double,
@@ -108,14 +109,15 @@ object RtrFmCatalogParser {
                     if (code.isBlank() || bounds == null) null else code to bounds
                 }.toMap()
 
+        var officialLinks = 0
         val stations =
             programs.mapNotNull { element ->
                 val row = element.jsonObject
                 if (!row.string("rtr_programm_typ").equals("UKW", ignoreCase = true)) return@mapNotNull null
                 val frequency = row.string("rtr_funkst_frequenz").decimalOrNull()?.toFloat() ?: return@mapNotNull null
                 if (frequency !in 87.5f..108.0f) return@mapNotNull null
-                val latitude = row.string("rtr_funkst_nord").decimalOrNull() ?: return@mapNotNull null
-                val longitude = row.string("rtr_funkst_ost").decimalOrNull() ?: return@mapNotNull null
+                val latitude = RtrOfficialProgramIndex.parseCoordinate(row.string("rtr_funkst_nord")) ?: return@mapNotNull null
+                val longitude = RtrOfficialProgramIndex.parseCoordinate(row.string("rtr_funkst_ost")) ?: return@mapNotNull null
                 val rawProgram = row.string("rtr_programm").trim()
                 if (rawProgram.isBlank()) return@mapNotNull null
                 val broadcaster = row.string("rtr_veranstalter_name")
@@ -123,17 +125,20 @@ object RtrFmCatalogParser {
                 val stationLocation = row.string("rtr_funkst_standort")
                 val coverageName = row.string("rtr_gebiet_name")
                 val code = row.string("rtr_gebiet_code").trim()
+                val stationCode = row.string("rtr_funkst_code").trim()
                 val pi = parseExactPi(row.string("rtr_funkst_rds"))
-                val program = officialNames.resolve(
+                val officialProgram = officialNames.resolve(
                     frequency = frequency,
-                    coverageCode = code,
+                    stationCode = stationCode,
                     pi = pi,
                     stationName = stationName,
                     stationLocation = stationLocation,
                     broadcaster = broadcaster,
                     latitude = latitude,
                     longitude = longitude,
-                ) ?: RtrPublicProgramName.resolve(
+                )
+                if (officialProgram != null) officialLinks += 1
+                val program = officialProgram ?: RtrPublicProgramName.resolve(
                     rawProgram = rawProgram,
                     broadcaster = broadcaster,
                     coverageName = coverageName,
@@ -158,6 +163,12 @@ object RtrFmCatalogParser {
                 )
             }
 
+        Timber.tag("RtrFmCatalog").i(
+            "MedienFrequenzbuch loaded records=%d linked=%d senderkataster=%d",
+            officialNames.recordCount,
+            officialLinks,
+            stations.size,
+        )
         return RtrCatalogSnapshot(
             stations = stations,
             parsedAt = parsedAt,

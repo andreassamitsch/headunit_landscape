@@ -157,11 +157,21 @@ fun VehicleLandscapeLayout(
         WindowInsets(left = 0.dp, top = verticalPaddingDp, right = 0.dp, bottom = verticalPaddingDp)
     val safePlayerWeight = 0.5f
 
+    val context = LocalContext.current
+    val mainTabRoutes = remember { VehicleRightPaneTab.entries.map { it.route }.toSet() }
+    val initialPaneRoute =
+        remember(context, mainTabRoutes) {
+            VehicleLastTabStore.read(context, mainTabRoutes, VEHICLE_QUEUE_ROUTE)
+        }
+    val initialTab =
+        remember(initialPaneRoute) {
+            VehicleRightPaneTab.entries.firstOrNull { it.route == initialPaneRoute }
+                ?: VehicleRightPaneTab.QUEUE
+        }
     val paneNavController = rememberNavController()
     val paneBackStackEntry by paneNavController.currentBackStackEntryAsState()
     val currentPaneRoute = paneBackStackEntry?.destination?.route
-    var selectedTab by rememberSaveable { mutableStateOf(VehicleRightPaneTab.QUEUE) }
-    val context = LocalContext.current
+    var selectedTab by rememberSaveable { mutableStateOf(initialTab) }
     val activity = context.findActivity()
     val haptic = LocalHapticFeedback.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -203,6 +213,10 @@ fun VehicleLandscapeLayout(
             VehicleTabOrderStore.persist(context, orderedTabs.map { it.name })
         }
         wasTabDragging = isTabDragging
+    }
+
+    LaunchedEffect(selectedTab) {
+        VehicleLastTabStore.persist(context, selectedTab.route, mainTabRoutes)
     }
 
     LaunchedEffect(selectedTab, orderedTabs.toList()) {
@@ -509,7 +523,7 @@ fun VehicleLandscapeLayout(
                         if (activity != null) {
                             NavHost(
                                 navController = paneNavController,
-                                startDestination = VEHICLE_QUEUE_ROUTE,
+                                startDestination = initialPaneRoute,
                                 modifier = Modifier.fillMaxSize(),
                             ) {
                                 composable(VEHICLE_QUEUE_ROUTE) {

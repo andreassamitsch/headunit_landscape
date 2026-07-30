@@ -369,7 +369,7 @@ class MessageCodec(
             lastUpdate = proto.lastUpdate,
             volume = proto.volume,
             queue = proto.queueList.map { protoToTrackInfo(it) },
-            revision = proto.revision,
+            revision = 0L, // RoomState protobuf v1 has no revision field
         )
     }
 }

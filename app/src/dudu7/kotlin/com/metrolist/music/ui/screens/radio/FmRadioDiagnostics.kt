@@ -27,6 +27,7 @@ internal fun FmRadioDiagnostics(state: FytPhysicalRadio.State) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val revision by ReliableFmStationLogoResolver.revisions.collectAsState()
+    val radioDnsTrace by RadioDnsLogoResolver.lastTrace.collectAsState()
     val info = ReliableFmStationLogoResolver.logoInfo(
         context,
         state.displayStation,
@@ -59,6 +60,25 @@ internal fun FmRadioDiagnostics(state: FytPhysicalRadio.State) {
         )
         Text("RadioDNS: $lookup", style = MaterialTheme.typography.bodySmall)
         Text("Bearer: $bearer", style = MaterialTheme.typography.bodySmall)
+        Text(
+            "RadioDNS-Status: ${radioDnsTrace.stage}${radioDnsTrace.detail.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()}",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        if (radioDnsTrace.eccSource.isNotBlank()) {
+            Text(
+                "RadioDNS-ECC: ${radioDnsTrace.ecc.uppercase(Locale.ROOT)} aus ${radioDnsTrace.eccSource}",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (radioDnsTrace.cnameChain.isNotEmpty()) {
+            Text("CNAME: ${radioDnsTrace.cnameChain.joinToString(" → ")}", style = MaterialTheme.typography.bodySmall, maxLines = 3)
+        }
+        if (radioDnsTrace.srvTargets.isNotEmpty()) {
+            Text("SRV: ${radioDnsTrace.srvTargets.joinToString()}", style = MaterialTheme.typography.bodySmall, maxLines = 2)
+        }
+        if (radioDnsTrace.siUrl.isNotBlank()) {
+            Text("SI: ${radioDnsTrace.siUrl}", style = MaterialTheme.typography.bodySmall, maxLines = 3)
+        }
         Text("GPS/RTR: ${if (state.geoEnabled) state.geoLocationStatus else "deaktiviert"}", style = MaterialTheme.typography.bodySmall)
         Text("Position: $location", style = MaterialTheme.typography.bodySmall)
         Text(
@@ -100,6 +120,20 @@ internal fun FmRadioDiagnostics(state: FytPhysicalRadio.State) {
         if (!info?.sourceUrl.isNullOrBlank()) {
             Text("Logo-URL: ${info?.sourceUrl}", style = MaterialTheme.typography.bodySmall, maxLines = 3)
         }
+        Button(
+            onClick = {
+                scope.launch {
+                    val frequencies =
+                        (listOf(state.frequency) + state.alternativeFrequencies + state.rtrAfPredictions.map { it.frequency })
+                            .distinctBy { (it * 100f).roundToInt() }
+                    for (candidateFrequency in frequencies) {
+                        if (RadioDnsLogoResolver.resolveFm(context, candidateFrequency, state.pi, state.ecc).isNotEmpty()) break
+                    }
+                }
+            },
+            enabled = state.pi > 0,
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("RADIODNS DIREKT TESTEN") }
         Button(
             onClick = {
                 scope.launch {
