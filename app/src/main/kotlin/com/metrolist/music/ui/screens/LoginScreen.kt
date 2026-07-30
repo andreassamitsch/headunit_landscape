@@ -31,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.navigation.NavController
 import com.metrolist.innertube.YouTube
+import com.metrolist.innertube.utils.parseCookieString
 import com.metrolist.music.LocalPlayerAwareWindowInsets
 import com.metrolist.music.R
 import com.metrolist.music.constants.AccountChannelHandleKey
@@ -65,9 +66,12 @@ fun LoginScreen(navController: NavController) {
 
         isCompletingLogin = true
         coroutineScope.launch {
-            val currentCookie = CookieManager.getInstance().getCookie("https://music.youtube.com").orEmpty()
-            if (currentCookie.isBlank()) {
-                Timber.d("Login: No YouTube Music cookie found on close, leaving login screen")
+            val currentCookie = CookieManager.getInstance()
+                .getCookie("https://music.youtube.com")
+                .orEmpty()
+                .trim()
+            if ("SAPISID" !in parseCookieString(currentCookie)) {
+                Timber.d("Login: No usable YouTube Music SAPISID cookie found, leaving login screen")
                 isCompletingLogin = false
                 onClose()
                 return@launch
@@ -120,9 +124,17 @@ fun LoginScreen(navController: NavController) {
 
                     withContext(Dispatchers.Main) {
                         val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-                        intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                        context.startActivity(intent)
-                        Runtime.getRuntime().exit(0)
+                        if (intent != null) {
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                            runCatching { context.startActivity(intent) }
+                                .onFailure {
+                                    Timber.e(it, "Login: safe relaunch failed; closing login screen")
+                                    onClose()
+                                }
+                        } else {
+                            Timber.w("Login: no launch intent; closing login screen without process exit")
+                            onClose()
+                        }
                     }
                 }.onFailure {
                     Timber.e(it, "Login: Authentication validation failed after manual close")
@@ -153,8 +165,9 @@ fun LoginScreen(navController: NavController) {
                             // music.youtube.com with a valid cookie, complete the login.
                             if (url?.contains("music.youtube.com") == true &&
                                 !isCompletingLogin &&
-                                CookieManager.getInstance().getCookie("https://music.youtube.com").orEmpty()
-                                    .isNotBlank()
+                                "SAPISID" in parseCookieString(
+                                    CookieManager.getInstance().getCookie("https://music.youtube.com").orEmpty(),
+                                )
                             ) {
                                 Timber.d("Login: Detected authenticated session on music.youtube.com, completing login...")
                                 completeLogin(navController::navigateUp)

@@ -39,6 +39,7 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import com.metrolist.music.utils.reportException
+import com.metrolist.music.utils.parseAdvancedLoginToken
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -200,48 +201,22 @@ fun AccountSettings(
             TextFieldDialog(
                 initialTextFieldValue = TextFieldValue(text),
                 onDone = { data ->
-                    var cookie = ""
-                    var visitorDataValue = ""
-                    var dataSyncIdValue = ""
-                    var accountNameValue = ""
-                    var accountEmailValue = ""
-                    var accountChannelHandleValue = ""
-
-                    data.split("\n").forEach {
-                        when {
-                            it.startsWith("***INNERTUBE COOKIE*** =") -> cookie = it.substringAfter("=")
-                            it.startsWith("***VISITOR DATA*** =") -> visitorDataValue = it.substringAfter("=")
-                            it.startsWith("***DATASYNC ID*** =") -> dataSyncIdValue = it.substringAfter("=")
-                            it.startsWith("***ACCOUNT NAME*** =") -> accountNameValue = it.substringAfter("=")
-                            it.startsWith("***ACCOUNT EMAIL*** =") -> accountEmailValue = it.substringAfter("=")
-                            it.startsWith("***ACCOUNT CHANNEL HANDLE*** =") -> accountChannelHandleValue = it.substringAfter("=")
-                        }
-                    }
-                    // Write all credentials atomically to DataStore and wait for completion
-                    // before restarting, preventing the race condition where the process
-                    // would be killed before async DataStore coroutines finished writing.
+                    val token = parseAdvancedLoginToken(data)
                     accountSettingsViewModel.saveTokenAndRestart(
                         context = context,
-                        cookie = cookie,
-                        visitorData = visitorDataValue,
-                        dataSyncId = dataSyncIdValue,
-                        accountName = accountNameValue,
-                        accountEmail = accountEmailValue,
-                        accountChannelHandle = accountChannelHandleValue,
+                        cookie = token.cookie,
+                        visitorData = token.visitorData,
+                        dataSyncId = token.dataSyncId,
+                        accountName = token.accountName,
+                        accountEmail = token.accountEmail,
+                        accountChannelHandle = token.accountChannelHandle,
                     )
                 },
                 onDismiss = { showTokenEditor = false },
                 singleLine = false,
                 maxLines = 20,
                 isInputValid = { fullText ->
-                    // Extract the cookie value from the formatted template line,
-                    // then validate it separately — avoids the bug where parseCookieString
-                    // received the entire multi-line template and failed to find "SAPISID"
-                    // as a key because the "***INNERTUBE COOKIE*** =" prefix shadowed it.
-                    val cookieLine = fullText.lines()
-                        .find { it.startsWith("***INNERTUBE COOKIE*** =") }
-                    val cookieValue = cookieLine?.substringAfter("***INNERTUBE COOKIE*** =")?.trim() ?: ""
-                    cookieValue.isNotEmpty() && "SAPISID" in parseCookieString(cookieValue)
+                    parseAdvancedLoginToken(fullText).hasValidCookie
                 },
                 extraContent = {
                     Spacer(Modifier.height(8.dp))
@@ -291,11 +266,16 @@ fun AccountSettings(
                         }
                     },
                     onClick = {
-                        onClose()
-                        if (isLoggedIn) {
-                            navController.navigate("account")
-                        } else {
-                            navController.navigate("login")
+                        val destination = if (isLoggedIn) "account" else "login"
+                        // In the Dudu7 overlay, closing first disposes the navigation host and
+                        // navigating afterwards can crash. Navigate while the controller is alive.
+                        runCatching {
+                            navController.navigate(destination) { launchSingleTop = true }
+                        }.onSuccess {
+                            onClose()
+                        }.onFailure { error ->
+                            Timber.e(error, "Failed to open account destination: $destination")
+                            reportException(error)
                         }
                     }
                 )

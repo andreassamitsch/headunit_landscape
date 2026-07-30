@@ -50,8 +50,12 @@ class InnerTube {
     var dataSyncId: String? = null
     var cookie: String? = null
         set(value) {
-            field = value
-            cookieMap = if (value == null) emptyMap() else parseCookieString(value)
+            val normalized = value?.trim()?.takeIf { it.isNotEmpty() }
+            val parsed = normalized?.let(::parseCookieString).orEmpty()
+            // An empty or partial token must never activate the authenticated request path.
+            // InnerTube authentication requires SAPISID to create SAPISIDHASH.
+            field = normalized?.takeIf { "SAPISID" in parsed }
+            cookieMap = if (field == null) emptyMap() else parsed
         }
     private var cookieMap = emptyMap<String, String>()
 
