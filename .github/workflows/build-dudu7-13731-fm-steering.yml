@@ -4,6 +4,9 @@ on:
   pull_request:
     branches:
       - agent/fm-radio-ui-logos-tabs
+  push:
+    branches:
+      - agent/dudu7-13731-fm-steering-favourites
   workflow_dispatch:
 
 permissions:
@@ -65,7 +68,7 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add app scripts .github/workflows
           git commit -m 'fix(dudu7): restore deterministic FM favourite steering navigation [skip ci]'
-          git push origin HEAD:${GITHUB_HEAD_REF}
+          git push origin HEAD:${GITHUB_HEAD_REF:-agent/dudu7-13731-fm-steering-favourites}
 
       - name: Focused FM favourite regression tests
         shell: bash
