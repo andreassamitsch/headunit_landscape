@@ -1,0 +1,140 @@
+name: Build Metrolist dudu7 13.7.28 combined final
+
+on:
+  push:
+    branches:
+      - agent/dudu7-13728-combined-final
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/dudu7-13728-combined-final
+          fetch-depth: 0
+          persist-credentials: true
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Combine latest Dudu7 base with deeper fixes
+        shell: bash
+        run: |
+          set -euxo pipefail
+          SOURCE_SHA=425a561647334cff4e9dbd26784266d7158c2014
+          copy_from_validated() {
+            local path="$1"
+            mkdir -p "$(dirname "$path")"
+            curl -fsSL "https://raw.githubusercontent.com/andreassamitsch/headunit_landscape/${SOURCE_SHA}/${path}" -o "$path"
+          }
+
+          # Keep the latest base's MediaSession/CAN bridge, manifest and tab implementation.
+          # Overlay the validated deeper RTR, RadioDNS and authenticated-playback changes.
+          copy_from_validated app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/ReliableFmStationLogoResolver.kt
+          copy_from_validated app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/RtrFmCatalog.kt
+          copy_from_validated app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/RtrFmRepository.kt
+          copy_from_validated app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/RtrOfficialProgramIndex.kt
+          copy_from_validated app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/FmRadioDiagnostics.kt
+          copy_from_validated app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          copy_from_validated app/src/main/kotlin/com/metrolist/music/radio/RadioDnsLogoResolver.kt
+          copy_from_validated app/src/main/kotlin/com/metrolist/music/utils/YTPlayerUtils.kt
+          copy_from_validated app/src/test/kotlin/com/metrolist/music/radio/RadioDnsLogoResolverTest.kt
+          copy_from_validated app/src/test/kotlin/com/metrolist/music/radio/fyt/RtrOfficialCoordinateTest.kt
+          copy_from_validated app/src/test/kotlin/com/metrolist/music/radio/fyt/RtrOfficialProgramIndexTest.kt
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/build.gradle.kts')
+          s = p.read_text()
+          s = s.replace('versionCode = 1370036', 'versionCode = 1370037', 1)
+          s = s.replace('versionName = "13.7.27"', 'versionName = "13.7.28"', 1)
+          p.write_text(s)
+          for name in [
+              'app/src/main/kotlin/com/metrolist/music/radio/RadioDnsLogoResolver.kt',
+              'app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/RtrFmRepository.kt',
+          ]:
+              q = Path(name)
+              text = q.read_text().replace('13.7.27', '13.7.28').replace('13.7.8 (RadioDNS receiver)', '13.7.28 RadioDNS receiver')
+              q.write_text(text)
+          PY
+          git diff --check
+
+      - name: Validate combined scope
+        shell: bash
+        run: |
+          set -euxo pipefail
+          grep -q 'versionCode = 1370037' app/build.gradle.kts
+          grep -q 'versionName = "13.7.28"' app/build.gradle.kts
+          grep -q 'PhysicalFmMediaKeyBridge.handleMediaButton' app/src/main/kotlin/com/metrolist/music/playback/MediaLibrarySessionCallback.kt
+          grep -q 'COMMAND_SEEK_TO_NEXT_MEDIA_ITEM' app/src/main/kotlin/com/metrolist/music/playback/MediaLibrarySessionCallback.kt
+          grep -q 'DUPLICATE_WINDOW_MS' app/src/main/kotlin/com/metrolist/music/playback/PhysicalFmMediaKeyBridge.kt
+          grep -q 'startDestination = initialTab.route' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+          grep -q 'VEHICLE_LAST_TAB_ROUTE' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+          grep -q 'MedienFrequenzbuch loaded' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/RtrFmCatalog.kt
+          grep -q 'CACHE_SCHEMA_VERSION = 4' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/RtrFmRepository.kt
+          grep -q 'cloudflare-dns.com' app/src/main/kotlin/com/metrolist/music/radio/RadioDnsLogoResolver.kt
+          grep -q 'RADIODNS DIREKT TESTEN' app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/FmRadioDiagnostics.kt
+          grep -q 'RADIODNS_RETRY_MS' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/ReliableFmStationLogoResolver.kt
+          grep -q 'val isUgcOrPodcast' app/src/main/kotlin/com/metrolist/music/utils/YTPlayerUtils.kt
+          grep -q 'ERROR_CODE_IO_BAD_HTTP_STATUS)' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          ! grep -q 'ERROR_CODE_IO_UNSPECIFIED ||' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          grep -q '9d46652d' app/src/main/assets/player_configs.json
+          grep -q '9d46652d' app/src/main/assets/player_dates.json
+
+      - name: Full Dudu7 unit tests
+        shell: bash
+        run: |
+          set -euxo pipefail
+          chmod +x gradlew
+          ./gradlew :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+
+      - name: Build and verify update-compatible ARM APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ./gradlew :app:assembleGmsDudu7Debug --no-daemon --stacktrace
+          mkdir -p dist
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          test -n "$APK"
+          cp "$APK" dist/Metrolist-dudu7-13.7.28.apk
+          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$build_tools/aapt" dump badging dist/Metrolist-dudu7-13.7.28.apk > dist/apk-badging.txt
+          "$build_tools/apksigner" verify --verbose --print-certs dist/Metrolist-dudu7-13.7.28.apk > dist/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370037'" dist/apk-badging.txt
+          grep -q "application-label:'Metrolist dudu7'" dist/apk-badging.txt
+          grep -q '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' dist/apk-signature.txt
+          unzip -l dist/Metrolist-dudu7-13.7.28.apk | grep 'lib/arm64-v8a/'
+          unzip -l dist/Metrolist-dudu7-13.7.28.apk | grep 'lib/armeabi-v7a/'
+          sha256sum dist/Metrolist-dudu7-13.7.28.apk > dist/Metrolist-dudu7-13.7.28.apk.sha256
+
+      - name: Publish validated combined source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rm -f .github/workflows/build-dudu7-13728-combined.yml
+          rm -rf scripts/__pycache__
+          rm -rf dist
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m 'fix(dudu7): combine latest base with RTR, RadioDNS and authenticated playback [skip ci]'
+          git push origin HEAD:agent/dudu7-13728-combined-final
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.28
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
