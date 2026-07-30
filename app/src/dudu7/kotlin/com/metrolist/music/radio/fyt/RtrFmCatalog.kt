@@ -91,8 +91,13 @@ data class RtrAfPrediction(
 object RtrFmCatalogParser {
     private val json = Json { ignoreUnknownKeys = true }
 
-    fun parse(payload: String, parsedAt: Long = System.currentTimeMillis()): RtrCatalogSnapshot {
+    fun parse(
+        payload: String,
+        parsedAt: Long = System.currentTimeMillis(),
+        officialPayload: String? = null,
+    ): RtrCatalogSnapshot {
         val outer = json.parseToJsonElement(payload).jsonObject
+        val officialNames = RtrOfficialProgramIndex.parseOrEmpty(officialPayload)
         val programs = embeddedArray(outer["programs"])
         val boundsByCode =
             embeddedArray(outer["bounds"])
@@ -111,24 +116,43 @@ object RtrFmCatalogParser {
                 if (frequency !in 87.5f..108.0f) return@mapNotNull null
                 val latitude = row.string("rtr_funkst_nord").decimalOrNull() ?: return@mapNotNull null
                 val longitude = row.string("rtr_funkst_ost").decimalOrNull() ?: return@mapNotNull null
-                val program = row.string("rtr_programm").trim()
-                if (program.isBlank()) return@mapNotNull null
+                val rawProgram = row.string("rtr_programm").trim()
+                if (rawProgram.isBlank()) return@mapNotNull null
+                val broadcaster = row.string("rtr_veranstalter_name")
+                val stationName = row.string("rtr_funkst_name")
+                val stationLocation = row.string("rtr_funkst_standort")
+                val coverageName = row.string("rtr_gebiet_name")
                 val code = row.string("rtr_gebiet_code").trim()
+                val pi = parseExactPi(row.string("rtr_funkst_rds"))
+                val program = officialNames.resolve(
+                    frequency = frequency,
+                    coverageCode = code,
+                    pi = pi,
+                    stationName = stationName,
+                    stationLocation = stationLocation,
+                    broadcaster = broadcaster,
+                    latitude = latitude,
+                    longitude = longitude,
+                ) ?: RtrPublicProgramName.resolve(
+                    rawProgram = rawProgram,
+                    broadcaster = broadcaster,
+                    coverageName = coverageName,
+                )
                 val jsonPath = row.string("rtr_json").trim()
                 RtrFmStation(
                     id = row.string("id").ifBlank { "${RtrFmText.key(program)}_${(frequency * 10).roundToInt()}_${latitude}_${longitude}" },
                     program = program,
-                    broadcaster = row.string("rtr_veranstalter_name"),
-                    stationName = row.string("rtr_funkst_name"),
-                    stationLocation = row.string("rtr_funkst_standort"),
+                    broadcaster = broadcaster,
+                    stationName = stationName,
+                    stationLocation = stationLocation,
                     stateCode = row.string("rtr_funkst_bundesland"),
                     latitude = latitude,
                     longitude = longitude,
                     frequency = frequency,
                     powerKw = row.string("rtr_funkst_leistung_kw").decimalOrNull() ?: 0.0,
-                    pi = parseExactPi(row.string("rtr_funkst_rds")),
+                    pi = pi,
                     coverageCode = code,
-                    coverageName = row.string("rtr_gebiet_name"),
+                    coverageName = coverageName,
                     coverageImageUrl = coverageImageUrl(jsonPath),
                     coverageBounds = boundsByCode[code],
                 )

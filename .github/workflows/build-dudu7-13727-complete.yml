@@ -1,0 +1,114 @@
+name: Build Metrolist dudu7 13.7.27 complete fix
+
+on:
+  pull_request:
+    branches:
+      - agent/fm-radio-ui-logos-tabs
+  push:
+    branches:
+      - agent/dudu7-13726-rtr-name-canbus-fm
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/dudu7-13726-rtr-name-canbus-fm
+          fetch-depth: 0
+          persist-credentials: true
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Apply complete fixes and current original player data
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 scripts/apply_dudu7_13727_complete_fix.py
+          python3 scripts/apply_dudu7_13727_compile_hotfix.py
+          curl -fsSL https://raw.githubusercontent.com/MetrolistGroup/Metrolist/4eb5eaa8a395aa856c3610a74c7be0ccd06a728a/app/src/main/assets/player_configs.json \
+            -o app/src/main/assets/player_configs.json
+          curl -fsSL https://raw.githubusercontent.com/MetrolistGroup/Metrolist/4eb5eaa8a395aa856c3610a74c7be0ccd06a728a/app/src/main/assets/player_dates.json \
+            -o app/src/main/assets/player_dates.json
+          python3 -m py_compile \
+            scripts/apply_dudu7_13727_complete_fix.py \
+            scripts/apply_dudu7_13727_compile_hotfix.py
+          git diff --check
+
+      - name: Validate requested scope
+        shell: bash
+        run: |
+          set -euxo pipefail
+          grep -q 'versionCode = 1370036' app/build.gradle.kts
+          grep -q 'versionName = "13.7.27"' app/build.gradle.kts
+          grep -q 'startDestination = initialPaneRoute' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+          grep -q 'VehicleLastTabStore.persist' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+          grep -q 'RADIODNS DIREKT TESTEN' app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/FmRadioDiagnostics.kt
+          grep -q 'RADIODNS_RETRY_MS' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/ReliableFmStationLogoResolver.kt
+          grep -q 'cloudflare-dns.com' app/src/main/kotlin/com/metrolist/music/radio/RadioDnsLogoResolver.kt
+          grep -q 'MedienFrequenzbuch loaded' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/RtrFmCatalog.kt
+          grep -q 'CACHE_SCHEMA_VERSION = 4' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/RtrFmRepository.kt
+          grep -q '9d46652d' app/src/main/assets/player_configs.json
+          grep -q '9d46652d' app/src/main/assets/player_dates.json
+          grep -q 'val isUgcOrPodcast' app/src/main/kotlin/com/metrolist/music/utils/YTPlayerUtils.kt
+          grep -q 'ERROR_CODE_IO_BAD_HTTP_STATUS)' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          ! grep -q 'ERROR_CODE_IO_UNSPECIFIED ||' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          grep -q 'revision = 0L' app/src/main/kotlin/com/metrolist/music/listentogether/MessageCodec.kt
+          test -f metroproto/listentogether.proto
+
+      - name: Focused and full Dudu7 unit tests
+        shell: bash
+        run: |
+          set -euxo pipefail
+          chmod +x gradlew
+          ./gradlew :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+
+      - name: Build and verify update-compatible ARM APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ./gradlew :app:assembleGmsDudu7Debug --no-daemon --stacktrace
+          mkdir -p dist
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          test -n "$APK"
+          cp "$APK" dist/Metrolist-dudu7-13.7.27.apk
+          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$build_tools/aapt" dump badging dist/Metrolist-dudu7-13.7.27.apk > dist/apk-badging.txt
+          "$build_tools/apksigner" verify --verbose --print-certs dist/Metrolist-dudu7-13.7.27.apk > dist/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370036'" dist/apk-badging.txt
+          grep -q "application-label:'Metrolist dudu7'" dist/apk-badging.txt
+          unzip -l dist/Metrolist-dudu7-13.7.27.apk | grep 'lib/arm64-v8a/'
+          unzip -l dist/Metrolist-dudu7-13.7.27.apk | grep 'lib/armeabi-v7a/'
+          sha256sum dist/Metrolist-dudu7-13.7.27.apk > dist/Metrolist-dudu7-13.7.27.apk.sha256
+
+      - name: Publish validated source without retriggering CI
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rm -f scripts/apply_dudu7_13727_complete_fix.py
+          rm -f scripts/apply_dudu7_13727_compile_hotfix.py
+          rm -f .github/workflows/build-dudu7-13727-complete.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m 'fix(dudu7): complete FM, RadioDNS, tab restore and authenticated playback [skip ci]'
+          git push origin HEAD:agent/dudu7-13726-rtr-name-canbus-fm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.27
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
