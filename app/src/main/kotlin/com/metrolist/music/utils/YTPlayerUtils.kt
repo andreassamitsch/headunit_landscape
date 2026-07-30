@@ -10,6 +10,7 @@ import android.net.Uri
 import androidx.media3.common.PlaybackException
 import com.metrolist.innertube.NewPipeExtractor
 import com.metrolist.innertube.YouTube
+import com.metrolist.innertube.utils.parseCookieString
 import com.metrolist.innertube.models.YouTubeClient
 import com.metrolist.innertube.models.YouTubeClient.Companion.WEB_REMIX
 import com.metrolist.innertube.models.response.PlayerResponse
@@ -128,7 +129,9 @@ object YTPlayerUtils {
         Timber.tag(TAG).d("Content type detection (preliminary):")
         Timber.tag(TAG).d("  isUploadedTrack (from playlistId): $isUploadedTrack")
 
-        val isLoggedIn = YouTube.cookie != null
+        val isLoggedIn = YouTube.cookie
+            ?.let { cookie -> cookie.isNotBlank() && "SAPISID" in parseCookieString(cookie) }
+            ?: false
         Timber.tag(TAG).d("Authentication status: ${if (isLoggedIn) "LOGGED_IN" else "ANONYMOUS"}")
 
         // Get signature timestamp (same as before for normal content)
@@ -223,6 +226,11 @@ object YTPlayerUtils {
             }
             if (disabledClientName in disabledStreamClients) {
                 Timber.tag(logTag).d("Skipping client ${client.clientName} - disabled in stream sources")
+                continue
+            }
+
+            if (client == MAIN_CLIENT && webRemixFailedIds.contains(videoId)) {
+                Timber.tag(logTag).d("Skipping WEB_REMIX because its real playback GET failed for $videoId")
                 continue
             }
 
