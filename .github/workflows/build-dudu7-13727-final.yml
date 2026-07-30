@@ -1,0 +1,134 @@
+name: Build Metrolist dudu7 13.7.27 final
+
+on:
+  push:
+    branches:
+      - agent/dudu7-13727-final-fixes
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/dudu7-13727-final-fixes
+          submodules: recursive
+          fetch-depth: 1
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Apply final source changes
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 scripts/apply_dudu7_13727_final_fixes.py
+          python3 -m py_compile scripts/apply_dudu7_13727_final_fixes.py
+          git diff --check
+
+          grep -q 'versionCode = 1370036' app/build.gradle.kts
+          grep -q 'versionName = "13.7.27"' app/build.gradle.kts
+          grep -q '"9d46652d"' app/src/main/assets/player_configs.json
+          grep -q 'VEHICLE_LAST_TAB_ROUTE' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+          grep -q 'startDestination = initialTab.route' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+          grep -q 'val lastTrace: StateFlow<Trace>' app/src/main/kotlin/com/metrolist/music/radio/RadioDnsLogoResolver.kt
+          grep -q 'resolveCnameChain' app/src/main/kotlin/com/metrolist/music/radio/RadioDnsLogoResolver.kt
+          grep -q 'cachedIsRadioDns' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/ReliableFmStationLogoResolver.kt
+          grep -q 'RadioDNS-Status' app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/FmRadioDiagnostics.kt
+          grep -q 'onMediaButtonEvent' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          grep -q 'publicProgrammeName' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/RtrFmCatalog.kt
+
+      - name: Commit applied source changes
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if ! git diff --quiet; then
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git add app scripts/apply_dudu7_13727_final_fixes.py
+            git commit -m 'fix(dudu7): restore last tab, refresh player configs and harden RadioDNS [skip ci]'
+            git push origin HEAD:agent/dudu7-13727-final-fixes
+          fi
+
+      - name: RadioDNS live protocol probe
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          import json, urllib.parse, urllib.request, xml.etree.ElementTree as ET
+          lookup = '10620.c460.ce1.fm.radiodns.org'
+          def dns(name, qtype):
+              url='https://dns.google/resolve?name='+urllib.parse.quote(name)+'&type='+str(qtype)
+              req=urllib.request.Request(url,headers={'Accept':'application/dns-json','User-Agent':'MetrolistHU-CI/13.7.27'})
+              with urllib.request.urlopen(req,timeout=15) as r: data=json.load(r)
+              assert data.get('Status') == 0, data
+              return [a['data'] for a in data.get('Answer',[]) if a.get('type') == qtype]
+          cname=dns(lookup,5)[0].rstrip('.')
+          srv=dns('_radioepg._tcp.'+cname,33)[0].split()
+          port=int(srv[2]); host=srv[3].rstrip('.')
+          url=('https' if port==443 else 'http')+'://'+host+((':'+str(port)) if port not in (80,443) else '')+'/radiodns/spi/3.1/SI.xml'
+          req=urllib.request.Request(url,headers={'Accept':'application/xml,text/xml,*/*;q=0.2','User-Agent':'MetrolistHU-CI/13.7.27'})
+          with urllib.request.urlopen(req,timeout=20) as r: payload=r.read(3_000_000)
+          root=ET.fromstring(payload)
+          bearer='fm:ce1.c460.10620'
+          services=[s for s in root.iter() if s.tag.split('}')[-1]=='service']
+          matches=[]
+          for service in services:
+              ids=[e.attrib.get('id','').lower() for e in service.iter() if e.tag.split('}')[-1]=='bearer']
+              if bearer in ids:
+                  matches=[e.attrib.get('url','') for e in service.iter() if e.tag.split('}')[-1]=='multimedia']
+                  break
+          assert matches, f'No logos found for {bearer} in {url}'
+          print('RadioDNS live probe OK', lookup, cname, url, len(matches))
+          PY
+
+      - name: Architecture checks
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 scripts/verify_dudu7_architecture.py
+
+      - name: Focused and full Dudu7 unit tests
+        shell: bash
+        run: |
+          set -euxo pipefail
+          chmod +x gradlew
+          ./gradlew :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+
+      - name: Build and verify update-compatible ARM APK
+        shell: bash
+        env:
+          METROLIST_APP_NAME: Metrolist dudu7
+        run: |
+          set -euxo pipefail
+          ./gradlew :app:assembleGmsDudu7Debug --no-daemon --stacktrace
+          mkdir -p dist
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          test -n "$APK"
+          cp "$APK" 'dist/Metrolist-dudu7-13.7.27.apk'
+          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$build_tools/aapt" dump badging 'dist/Metrolist-dudu7-13.7.27.apk' > dist/apk-badging.txt
+          "$build_tools/apksigner" verify --verbose --print-certs 'dist/Metrolist-dudu7-13.7.27.apk' > dist/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370036'" dist/apk-badging.txt
+          grep -q "application-label:'Metrolist dudu7'" dist/apk-badging.txt
+          unzip -l 'dist/Metrolist-dudu7-13.7.27.apk' | grep 'lib/arm64-v8a/'
+          unzip -l 'dist/Metrolist-dudu7-13.7.27.apk' | grep 'lib/armeabi-v7a/'
+          sha256sum 'dist/Metrolist-dudu7-13.7.27.apk' > 'dist/Metrolist-dudu7-13.7.27.apk.sha256'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.27
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
