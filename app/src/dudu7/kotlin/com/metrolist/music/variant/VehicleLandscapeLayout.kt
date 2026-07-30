@@ -91,6 +91,8 @@ import kotlin.math.max
 private const val VEHICLE_QUEUE_ROUTE = "vehicle_queue"
 private const val VEHICLE_WEBRADIO_ROUTE = "vehicle_webradio"
 private const val VEHICLE_PHYSICAL_RADIO_ROUTE = "vehicle_physical_radio"
+private const val VEHICLE_PANE_PREFS = "dudu7_vehicle_pane"
+private const val VEHICLE_LAST_TAB_ROUTE = "last_main_tab_route"
 
 private enum class VehicleRightPaneTab(
     val title: String,
@@ -157,11 +159,18 @@ fun VehicleLandscapeLayout(
         WindowInsets(left = 0.dp, top = verticalPaddingDp, right = 0.dp, bottom = verticalPaddingDp)
     val safePlayerWeight = 0.5f
 
+    val context = LocalContext.current
+    val initialTab =
+        remember(context) {
+            val storedRoute =
+                context.getSharedPreferences(VEHICLE_PANE_PREFS, Context.MODE_PRIVATE)
+                    .getString(VEHICLE_LAST_TAB_ROUTE, null)
+            VehicleRightPaneTab.entries.firstOrNull { it.route == storedRoute } ?: VehicleRightPaneTab.QUEUE
+        }
     val paneNavController = rememberNavController()
     val paneBackStackEntry by paneNavController.currentBackStackEntryAsState()
     val currentPaneRoute = paneBackStackEntry?.destination?.route
-    var selectedTab by rememberSaveable { mutableStateOf(VehicleRightPaneTab.QUEUE) }
-    val context = LocalContext.current
+    var selectedTab by rememberSaveable { mutableStateOf(initialTab) }
     val activity = context.findActivity()
     val haptic = LocalHapticFeedback.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -206,6 +215,10 @@ fun VehicleLandscapeLayout(
     }
 
     LaunchedEffect(selectedTab, orderedTabs.toList()) {
+        context.getSharedPreferences(VEHICLE_PANE_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(VEHICLE_LAST_TAB_ROUTE, selectedTab.route)
+            .apply()
         val index = orderedTabs.indexOf(selectedTab)
         if (index >= 0) {
             tabListState.animateScrollToItem(index)
@@ -509,7 +522,7 @@ fun VehicleLandscapeLayout(
                         if (activity != null) {
                             NavHost(
                                 navController = paneNavController,
-                                startDestination = VEHICLE_QUEUE_ROUTE,
+                                startDestination = initialTab.route,
                                 modifier = Modifier.fillMaxSize(),
                             ) {
                                 composable(VEHICLE_QUEUE_ROUTE) {

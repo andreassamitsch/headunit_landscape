@@ -15,19 +15,8 @@ import com.metrolist.music.radio.fyt.tuneAdjacentFavourite
  */
 class Dudu7MediaButtonReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val event = intent.mediaKeyEvent()
-        val next = event?.let {
-            Dudu7FmMediaButtonRouting.directionFor(
-                action = it.action,
-                keyCode = it.keyCode,
-                repeatCount = it.repeatCount,
-            )
-        }
-        if (next != null && FytPhysicalRadio.state.value.isActive) {
-            FytPhysicalRadio.tuneAdjacentFavourite(context.applicationContext, next)
-            return
-        }
-
+        Dudu7FmMediaButtonRouting.install(context.applicationContext)
+        if (PhysicalFmMediaKeyBridge.handleMediaButton(intent)) return
         MediaButtonReceiver().onReceive(context, intent)
     }
 
@@ -41,6 +30,23 @@ class Dudu7MediaButtonReceiver : BroadcastReceiver() {
 }
 
 internal object Dudu7FmMediaButtonRouting {
+    @Volatile
+    private var installed = false
+
+    fun install(context: Context) {
+        if (installed) return
+        synchronized(this) {
+            if (installed) return
+            val appContext = context.applicationContext
+            PhysicalFmMediaKeyBridge.install { next ->
+                if (!FytPhysicalRadio.state.value.isActive) return@install false
+                FytPhysicalRadio.tuneAdjacentFavourite(appContext, next)
+                true
+            }
+            installed = true
+        }
+    }
+
     /** Returns true for next, false for previous and null when Media3 should handle the key. */
     fun directionFor(
         action: Int,

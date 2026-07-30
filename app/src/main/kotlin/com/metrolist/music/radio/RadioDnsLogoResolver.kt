@@ -4,6 +4,9 @@ import android.content.Context
 import android.util.Xml
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
 import org.xmlpull.v1.XmlPullParser
 import java.io.ByteArrayInputStream
@@ -23,6 +26,21 @@ object RadioDnsLogoResolver {
     private const val USER_AGENT = "MetrolistHU/13.7.8 (RadioDNS receiver)"
     private const val DNS_ENDPOINT = "https://dns.google/resolve"
     private const val MAX_SI_BYTES = 3_000_000
+    private const val MAX_CNAME_DEPTH = 8
+
+    data class Trace(
+        val status: String = "Noch nicht geprüft",
+        val lookup: String = "",
+        val cname: String = "",
+        val srv: String = "",
+        val siUrl: String = "",
+        val bearer: String = "",
+        val logoCount: Int = 0,
+        val error: String = "",
+    )
+
+    private val _lastTrace = MutableStateFlow(Trace())
+    val lastTrace: StateFlow<Trace> = _lastTrace.asStateFlow()
 
     suspend fun resolveFm(
         context: Context,
@@ -37,31 +55,70 @@ object RadioDnsLogoResolver {
             val gcc = "${piHex.first()}$resolvedEcc"
             val frequencyCode = (frequency * 100f).roundToInt().toString().padStart(5, '0')
             val lookup = "$frequencyCode.$piHex.$gcc.fm.radiodns.org"
-            Timber.tag(TAG).d("lookup=%s PI=%s ECC=%s GCC=%s", lookup, piHex, resolvedEcc, gcc)
-            val authoritative = dnsAnswers(lookup, 5).firstOrNull()?.trimEnd('.')
-            if (authoritative.isNullOrBlank()) {
-                Timber.tag(TAG).d("No CNAME for %s", lookup)
-                return@withContext emptyList()
-            }
-            val srv = dnsAnswers("_radioepg._tcp.$authoritative", 33).mapNotNull(::parseSrv).minByOrNull { it.priority }
-            if (srv == null) {
-                Timber.tag(TAG).d("No RadioEPG SRV for %s", authoritative)
-                return@withContext emptyList()
-            }
             val bearer = "fm:$gcc.$piHex.$frequencyCode"
-            Timber.tag(TAG).d("CNAME=%s SRV=%s:%d bearer=%s", authoritative, srv.target, srv.port, bearer)
-            serviceInformationUrls(srv).forEach { siUrl ->
-                val xml = download(siUrl)
-                if (xml == null) {
-                    Timber.tag(TAG).d("SPI unavailable %s", siUrl)
-                    return@forEach
-                }
-                val logos = parseServiceInformation(xml, siUrl, bearer)
-                if (logos.isNotEmpty()) {
-                    Timber.tag(TAG).i("Resolved %d logo(s) for %s via %s", logos.size, bearer, siUrl)
-                    return@withContext logos.sortedByDescending { it.ranking }
+            _lastTrace.value = Trace(status = "DNS wird geprüft", lookup = lookup, bearer = bearer)
+            Timber.tag(TAG).d("lookup=%s PI=%s ECC=%s GCC=%s", lookup, piHex, resolvedEcc, gcc)
+            val authoritative = resolveCnameChain(lookup)
+            if (authoritative.isNullOrBlank()) {
+                val error = "Kein CNAME für $lookup"
+                _lastTrace.value = Trace(status = "Fehlgeschlagen", lookup = lookup, bearer = bearer, error = error)
+                Timber.tag(TAG).d(error)
+                return@withContext emptyList()
+            }
+            val srvRecords =
+                dnsAnswers("_radioepg._tcp.$authoritative", 33)
+                    .mapNotNull(::parseSrv)
+                    .sortedWith(compareBy<SrvRecord> { it.priority }.thenByDescending { it.weight })
+            if (srvRecords.isEmpty()) {
+                val error = "Kein RadioEPG-SRV für $authoritative"
+                _lastTrace.value = Trace(status = "Fehlgeschlagen", lookup = lookup, cname = authoritative, bearer = bearer, error = error)
+                Timber.tag(TAG).d(error)
+                return@withContext emptyList()
+            }
+            for (srv in srvRecords) {
+                val srvText = "${srv.target}:${srv.port} (Prio ${srv.priority}, Gewicht ${srv.weight})"
+                Timber.tag(TAG).d("CNAME=%s SRV=%s bearer=%s", authoritative, srvText, bearer)
+                for (siUrl in serviceInformationUrls(srv)) {
+                    _lastTrace.value = Trace(
+                        status = "SI wird geladen",
+                        lookup = lookup,
+                        cname = authoritative,
+                        srv = srvText,
+                        siUrl = siUrl,
+                        bearer = bearer,
+                    )
+                    val xml = download(siUrl)
+                    if (xml == null) {
+                        Timber.tag(TAG).d("SPI unavailable %s", siUrl)
+                        continue
+                    }
+                    val logos = runCatching { parseServiceInformation(xml, siUrl, bearer) }
+                        .onFailure { Timber.tag(TAG).w(it, "Invalid SPI XML %s", siUrl) }
+                        .getOrDefault(emptyList())
+                    if (logos.isNotEmpty()) {
+                        _lastTrace.value = Trace(
+                            status = "Erfolgreich",
+                            lookup = lookup,
+                            cname = authoritative,
+                            srv = srvText,
+                            siUrl = siUrl,
+                            bearer = bearer,
+                            logoCount = logos.size,
+                        )
+                        Timber.tag(TAG).i("Resolved %d logo(s) for %s via %s", logos.size, bearer, siUrl)
+                        return@withContext logos.sortedByDescending { it.ranking }
+                    }
                 }
             }
+            val error = "SI geladen, aber kein passender Bearer/Logoeintrag"
+            _lastTrace.value = Trace(
+                status = "Fehlgeschlagen",
+                lookup = lookup,
+                cname = authoritative,
+                srv = srvRecords.joinToString { "${it.target}:${it.port}" },
+                bearer = bearer,
+                error = error,
+            )
             Timber.tag(TAG).d("No matching multimedia entry for %s", bearer)
             emptyList()
         }
@@ -77,13 +134,25 @@ object RadioDnsLogoResolver {
         }
     }
 
-    private data class SrvRecord(val priority: Int, val port: Int, val target: String)
+    private data class SrvRecord(val priority: Int, val weight: Int, val port: Int, val target: String)
+
+    private fun resolveCnameChain(initial: String): String? {
+        var current = initial.trimEnd('.')
+        val visited = linkedSetOf<String>()
+        repeat(MAX_CNAME_DEPTH) {
+            if (!visited.add(current.lowercase(Locale.ROOT))) return null
+            val next = dnsAnswers(current, 5).firstOrNull()?.trimEnd('.') ?: return if (current == initial) null else current
+            current = next
+        }
+        return current
+    }
 
     private fun parseSrv(value: String): SrvRecord? {
         val parts = value.trim().split(Regex("\\s+"))
         if (parts.size < 4) return null
         return SrvRecord(
             priority = parts[0].toIntOrNull() ?: return null,
+            weight = parts[1].toIntOrNull() ?: 0,
             port = parts[2].toIntOrNull() ?: return null,
             target = parts[3].trimEnd('.'),
         )
@@ -122,7 +191,7 @@ object RadioDnsLogoResolver {
     }
 
     private fun download(url: String): ByteArray? {
-        val connection = open(url, "application/xml,text/xml") ?: return null
+        val connection = open(url, "application/xml,text/xml,application/octet-stream;q=0.8,*/*;q=0.2") ?: return null
         return try {
             if (connection.responseCode !in 200..299) return null
             val output = java.io.ByteArrayOutputStream()
