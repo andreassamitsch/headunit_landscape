@@ -43,11 +43,10 @@ object FmPresetOrderStore {
         }
         presets.forEach { preset -> if (ordered.none { it.id == preset.id }) ordered += preset }
 
-        val normalizedIds = ordered.map(FytPhysicalRadio.Preset::id).filter(String::isNotBlank).distinct()
+        val normalizedIds = ordered.map { it.id }.filter(String::isNotBlank).distinct()
         if (normalizedIds != storedIds || legacyKeys.isNotEmpty() || legacyFrequencies.isNotEmpty()) {
             preferences.edit()
-                .putString(KEY_ORDER, normalizedIds.joinToString("
-"))
+                .putString(KEY_ORDER, normalizedIds.joinToString("\n"))
                 .remove(LEGACY_KEY_ORDER_V2)
                 .remove(LEGACY_KEY_ORDER)
                 .apply()
@@ -57,8 +56,13 @@ object FmPresetOrderStore {
 
     fun persist(context: Context, presets: List<FytPhysicalRadio.Preset>) {
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(KEY_ORDER, presets.map(FytPhysicalRadio::stablePresetKey).filter(String::isNotBlank).distinct().joinToString("
-"))
+            .putString(
+                KEY_ORDER,
+                presets.map(FytPhysicalRadio::stablePresetKey)
+                    .filter(String::isNotBlank)
+                    .distinct()
+                    .joinToString("\n"),
+            )
             .remove(LEGACY_KEY_ORDER_V2)
             .remove(LEGACY_KEY_ORDER)
             .apply()
@@ -118,7 +122,7 @@ fun FytPhysicalRadio.tuneAdjacentFavourite(context: Context, next: Boolean) {
         return
     }
 
-    val validIds = favourites.map(FytPhysicalRadio.Preset::id).filter(String::isNotBlank).toSet()
+    val validIds = favourites.map { it.id }.filter(String::isNotBlank).toSet()
     val detectedId = snapshot.currentPreset?.id
     val activeId = FmFavouriteNavigationMemory.resolve(detectedId, validIds, snapshot.isBusy)
     val stationId = snapshot.rtrStableId.takeIf {
