@@ -122,11 +122,11 @@ internal class Dudu7FmSessionPlayer(
         val targetIndex = when (seekCommand) {
             Player.COMMAND_SEEK_TO_NEXT,
             Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
-            -> wrapIndex(currentIndex + 1, favourites.size)
+            -> Dudu7FmSessionNavigation.adjacentIndex(favourites.size, currentIndex, next = true)
 
             Player.COMMAND_SEEK_TO_PREVIOUS,
             Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
-            -> wrapIndex(currentIndex - 1, favourites.size)
+            -> Dudu7FmSessionNavigation.adjacentIndex(favourites.size, currentIndex, next = false)
 
             Player.COMMAND_SEEK_TO_MEDIA_ITEM,
             Player.COMMAND_SEEK_TO_DEFAULT_POSITION,
@@ -166,11 +166,12 @@ internal class Dudu7FmSessionPlayer(
         val validIds = favourites.mapNotNull { it.id.takeIf(String::isNotBlank) }.toSet()
         val detectedId = state.currentPreset?.id?.takeIf { it in validIds }
 
-        if (detectedId != null) {
-            activeFavouriteId = detectedId
-        } else if (activeFavouriteId !in validIds) {
-            activeFavouriteId = resolveCurrentFavouriteId(state)
-        }
+        activeFavouriteId = Dudu7FmSessionNavigation.retainActiveId(
+            validIds = validIds,
+            rememberedId = activeFavouriteId,
+            detectedId = detectedId,
+            fallbackId = resolveCurrentFavouriteId(state),
+        )
 
         currentIndex = favourites.indexOfFirst { it.id == activeFavouriteId }
         if (currentIndex < 0 && favourites.isNotEmpty()) {
@@ -293,10 +294,6 @@ internal class Dudu7FmSessionPlayer(
 
     private fun completed(): ListenableFuture<Any> = Futures.immediateFuture(Unit as Any)
 
-    private fun wrapIndex(value: Int, size: Int): Int {
-        if (size <= 0) return C.INDEX_UNSET
-        return ((value % size) + size) % size
-    }
 
     private fun formatFrequency(value: Float): String = "%.1f".format(java.util.Locale.US, value)
 

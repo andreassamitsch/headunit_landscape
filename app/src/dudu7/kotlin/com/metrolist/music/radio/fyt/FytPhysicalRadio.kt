@@ -10,6 +10,7 @@ import android.os.Looper
 import com.android.fmradio.FmNative
 import com.android.fmradio.FmService
 import com.metrolist.music.playback.Dudu7FmMediaButtonRouting
+import com.metrolist.music.playback.Dudu7FmSessionRouting
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -258,6 +259,7 @@ object FytPhysicalRadio {
             if (presetPayload == null && legacyPresetPayload != null) persistPresets(loadedPresets)
         }
         Dudu7FmMediaButtonRouting.install(applicationContext)
+        Dudu7FmSessionRouting.install(applicationContext)
         startRtrServices(applicationContext)
     }
 

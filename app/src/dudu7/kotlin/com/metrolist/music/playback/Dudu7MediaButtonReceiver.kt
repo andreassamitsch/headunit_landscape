@@ -16,7 +16,8 @@ import com.metrolist.music.radio.fyt.tuneAdjacentFavourite
 class Dudu7MediaButtonReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         Dudu7FmMediaButtonRouting.install(context.applicationContext)
-        if (PhysicalFmMediaKeyBridge.handleMediaButton(intent)) return
+        Dudu7FmSessionRouting.install(context.applicationContext)
+        if (!PhysicalFmSessionBridge.isActive() && PhysicalFmMediaKeyBridge.handleMediaButton(intent)) return
         MediaButtonReceiver().onReceive(context, intent)
     }
 
