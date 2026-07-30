@@ -50,4 +50,18 @@ update(
     fix_room_state_revision,
 )
 
+
+def update_rtr_test_parameter(text: str) -> str:
+    old = "coverageCode ="
+    count = text.count(old)
+    if count != 2:
+        raise SystemExit(f"RtrOfficialProgramIndexTest.kt: expected two old parameter names, found {count}")
+    return text.replace(old, "stationCode =")
+
+
+update(
+    "app/src/test/kotlin/com/metrolist/music/radio/fyt/RtrOfficialProgramIndexTest.kt",
+    update_rtr_test_parameter,
+)
+
 print("Applied 13.7.27 compiler hotfix")
