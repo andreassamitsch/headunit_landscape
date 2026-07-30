@@ -33,7 +33,7 @@ jobs:
 
       - name: Build update-compatible APK
         env:
-          METROLIST_APPLICATION_ID: com.metrolist.music.dudu7
+          METROLIST_APPLICATION_ID: com.metrolist.music
           METROLIST_APP_NAME: Metrolist dudu7
         run: ./gradlew :app:assembleGmsDudu7Debug --stacktrace
 
@@ -52,12 +52,13 @@ jobs:
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
           "$AAPT" dump badging 'artifact/Metrolist-dudu7-13.7.29.apk' | tee artifact/apk-badging.txt
           "$APKSIGNER" verify --verbose --print-certs 'artifact/Metrolist-dudu7-13.7.29.apk' | tee artifact/apk-signature.txt
+          unzip -l 'artifact/Metrolist-dudu7-13.7.29.apk' > artifact/apk-list.txt
 
           grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370038' versionName='13.7.29-dudu7'" artifact/apk-badging.txt
           grep -q "application-label:'Metrolist dudu7'" artifact/apk-badging.txt
           grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifact/apk-signature.txt
-          unzip -l 'artifact/Metrolist-dudu7-13.7.29.apk' | grep -q 'lib/arm64-v8a/'
-          unzip -l 'artifact/Metrolist-dudu7-13.7.29.apk' | grep -q 'lib/armeabi-v7a/'
+          grep -q 'lib/arm64-v8a/' artifact/apk-list.txt
+          grep -q 'lib/armeabi-v7a/' artifact/apk-list.txt
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
