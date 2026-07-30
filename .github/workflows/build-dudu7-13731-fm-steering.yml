@@ -59,6 +59,7 @@ jobs:
         run: |
           set -euxo pipefail
           rm scripts/apply_dudu7_13731_fm_steering_fix.py
+          rm scripts/.keep13731
           rm .github/workflows/build-dudu7-13731-fm-steering.yml
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
