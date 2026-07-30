@@ -1291,6 +1291,7 @@ object FytPhysicalRadio {
     }
 
     fun tunePreset(preset: Preset) {
+        rememberFmFavouriteSelection(preset.id)
         pendingPresetIdentity = preset
         tune(preset.frequency)
     }
@@ -1323,6 +1324,7 @@ object FytPhysicalRadio {
 
     fun clearPresets() {
         pendingPresetIdentity = null
+        rememberFmFavouriteSelection(null)
         persistPresets(emptyList())
         _state.update {
             it.copy(
@@ -1741,7 +1743,7 @@ object FytPhysicalRadio {
         }.distinctBy(Preset::id)
 
     private fun presetRef(preset: Preset): FmFavouriteRef =
-        FmFavouriteRef(preset.id, preset.stationId, preset.frequency)
+        FmFavouriteRef(preset.id, preset.stationId, preset.frequency, preset.pi)
 
     fun presetFrequencies(preset: Preset): List<Float> = listOf(normalizeFrequency(preset.frequency))
 
