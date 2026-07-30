@@ -4263,7 +4263,7 @@ class MusicService :
                 }
 
                 physicalFmSessionJob = scope.launch {
-                    controller.isActive.distinctUntilChanged().collect { active ->
+                    controller.isActive.collect { active ->
                         val target = if (active) controller.player else player
                         mediaSession?.let { session ->
                             if (session.player !== target) {
