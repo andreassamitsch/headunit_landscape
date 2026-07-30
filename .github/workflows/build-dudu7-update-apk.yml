@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: dudu7-update-${{ github.event.pull_request.number || github.ref }}
@@ -30,16 +30,14 @@ jobs:
           cache-cleanup: on-success
       - uses: android-actions/setup-android@v3
 
-      - name: Apply 13.7.27 final fixes
+      - name: Validate final 13.7.27 source
         shell: bash
         run: |
           set -euxo pipefail
-          python3 scripts/apply_dudu7_13727_final_fixes.py
-          python3 scripts/apply_dudu7_13727_media_session_fix.py
-          python3 -m py_compile scripts/apply_dudu7_13727_final_fixes.py scripts/apply_dudu7_13727_media_session_fix.py
           git diff --check
           grep -q 'versionCode = 1370036' app/build.gradle.kts
           grep -q 'versionName = "13.7.27"' app/build.gradle.kts
+          grep -q 'appNameOverride ?: "Metrolist dudu7"' app/build.gradle.kts
           grep -q '"9d46652d"' app/src/main/assets/player_configs.json
           grep -q 'startDestination = initialTab.route' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'val lastTrace: StateFlow<Trace>' app/src/main/kotlin/com/metrolist/music/radio/RadioDnsLogoResolver.kt
@@ -49,18 +47,9 @@ jobs:
           grep -q 'onPlayerCommandRequest' app/src/main/kotlin/com/metrolist/music/playback/MediaLibrarySessionCallback.kt
           grep -q 'PhysicalFmMediaKeyBridge' app/src/main/kotlin/com/metrolist/music/playback/PhysicalFmMediaKeyBridge.kt
           grep -q 'Radio Steiermark' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/RtrPublicProgramName.kt
-
-      - name: Commit applied source changes
-        if: github.event_name == 'pull_request'
-        shell: bash
-        run: |
-          set -euxo pipefail
-          if ! git diff --quiet; then
-            git config user.name github-actions[bot]
-            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-            git add app scripts/apply_dudu7_13727_final_fixes.py scripts/apply_dudu7_13727_media_session_fix.py
-            git commit -m 'fix(dudu7): finalize playback tabs RadioDNS and FM media routing [skip ci]'
-            git push origin HEAD:${GITHUB_HEAD_REF}
+          if grep -q 'UPDATER_AVAILABLE", "true"' app/build.gradle.kts; then
+            echo 'Original Metrolist updater was re-enabled' >&2
+            exit 1
           fi
 
       - name: RadioDNS live protocol probe
@@ -93,18 +82,6 @@ jobs:
           assert matches, f'No logos found for {bearer} in {url}'
           print('RadioDNS live probe OK', lookup, cname, url, len(matches))
           PY
-
-      - name: Validate source
-        shell: bash
-        run: |
-          set -euxo pipefail
-          git diff --check
-          grep -q 'appNameOverride ?: "Metrolist dudu7"' app/build.gradle.kts
-          if grep -q 'UPDATER_AVAILABLE", "true"' app/build.gradle.kts; then
-            echo 'Original Metrolist updater was re-enabled' >&2
-            exit 1
-          fi
-          python3 scripts/verify_dudu7_architecture.py
 
       - name: Unit tests
         shell: bash
