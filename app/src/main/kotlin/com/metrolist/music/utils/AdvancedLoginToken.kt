@@ -34,7 +34,7 @@ internal fun parseAdvancedLoginToken(input: String): AdvancedLoginToken {
         val match = linePattern.matchEntire(rawLine) ?: return@forEach
         val normalizedLabel = match.groupValues[1]
             .uppercase()
-            .replace(Regex("\s+"), " ")
+            .replace(Regex("""\s+"""), " ")
             .replace("DATA SYNC ID", "DATASYNC ID")
         val value = match.groupValues[2].trim().trim('`')
         values[normalizedLabel] = value
