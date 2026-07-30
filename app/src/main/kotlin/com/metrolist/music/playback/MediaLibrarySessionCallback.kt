@@ -110,7 +110,9 @@ constructor(
         controllerInfo: MediaSession.ControllerInfo,
         intent: Intent,
     ): Boolean {
-        if (PhysicalFmMediaKeyBridge.handleMediaButton(intent)) return true
+        if (!PhysicalFmSessionBridge.owns(session.player) &&
+            PhysicalFmMediaKeyBridge.handleMediaButton(intent)
+        ) return true
         return super.onMediaButtonEvent(session, controllerInfo, intent)
     }
 
@@ -125,7 +127,10 @@ constructor(
                 Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> false
                 else -> null
             }
-        if (direction != null && PhysicalFmMediaKeyBridge.handleDirection(direction)) {
+        if (direction != null &&
+            !PhysicalFmSessionBridge.owns(session.player) &&
+            PhysicalFmMediaKeyBridge.handleDirection(direction)
+        ) {
             return SessionResult.RESULT_SUCCESS
         }
         return super.onPlayerCommandRequest(session, controllerInfo, playerCommand)

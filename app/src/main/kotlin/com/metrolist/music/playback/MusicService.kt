@@ -402,6 +402,9 @@ class MusicService :
     private var isRunning = false
     private var mediaSession: MediaLibrarySession? = null
     private var controllerFuture: com.google.common.util.concurrent.ListenableFuture<MediaController>? = null
+    private var removePhysicalFmSessionObserver: (() -> Unit)? = null
+    private var physicalFmSessionJob: Job? = null
+    private var physicalFmController: PhysicalFmSessionBridge.Controller? = null
 
     private val playerInitialized = MutableStateFlow(false)
     val isPlayerReady: kotlinx.coroutines.flow.StateFlow<Boolean> = playerInitialized.asStateFlow()
@@ -712,6 +715,7 @@ class MusicService :
                     ),
                 ).setBitmapLoader(CoilBitmapLoader(this, scope))
                 .build()
+        observePhysicalFmSession()
         player.repeatMode = startupPrefs!![RepeatModeKey] ?: REPEAT_MODE_OFF
 
         if (startupPrefs!![RememberShuffleAndRepeatKey] ?: true) {
@@ -978,7 +982,9 @@ class MusicService :
                 sleepTimer?.player = newPlayer
 
                 try {
-                    mediaSession?.let { (it as MediaSession).player = newPlayer }
+                    if (!PhysicalFmSessionBridge.isActive()) {
+                        mediaSession?.let { (it as MediaSession).player = newPlayer }
+                    }
                 } catch (e: Exception) {
                     Timber.tag(TAG).e(e, "Failed to swap player in MediaSession")
                 }
@@ -2694,6 +2700,10 @@ class MusicService :
             return
         }
 
+        if (playWhenReady && PhysicalFmSessionBridge.isActive()) {
+            PhysicalFmSessionBridge.deactivate()
+        }
+
         if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST) {
             if (playWhenReady) {
                 isPausedByVolumeMute = false
@@ -4236,6 +4246,41 @@ class MusicService :
             false
         }
 
+
+    private fun observePhysicalFmSession() {
+        removePhysicalFmSessionObserver?.invoke()
+        removePhysicalFmSessionObserver = PhysicalFmSessionBridge.observe { controller ->
+            scope.launch {
+                physicalFmSessionJob?.cancel()
+                physicalFmController = controller
+                if (controller == null) {
+                    mediaSession?.let { session ->
+                        if (session.player !== player) {
+                            (session as MediaSession).player = player
+                        }
+                    }
+                    return@launch
+                }
+
+                physicalFmSessionJob = scope.launch {
+                    controller.isActive.collect { active ->
+                        val target = if (active) controller.player else player
+                        mediaSession?.let { session ->
+                            if (session.player !== target) {
+                                (session as MediaSession).player = target
+                                Timber.tag(TAG).i(
+                                    "MediaSession player switched to %s",
+                                    if (active) "physical FM" else "ExoPlayer",
+                                )
+                                updateNotification()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     override fun onDestroy() {
         isRunning = false
 
@@ -4275,6 +4320,11 @@ class MusicService :
         connectivityObserver.unregister()
         abandonAudioFocus()
         closeAudioEffectSession()
+        physicalFmSessionJob?.cancel()
+        physicalFmSessionJob = null
+        removePhysicalFmSessionObserver?.invoke()
+        removePhysicalFmSessionObserver = null
+        physicalFmController = null
         mediaLibrarySessionCallback.release()
         mediaSession?.release()
         player.removeListener(this)
