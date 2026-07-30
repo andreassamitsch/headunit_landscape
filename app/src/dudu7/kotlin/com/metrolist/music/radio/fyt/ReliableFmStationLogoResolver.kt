@@ -130,7 +130,9 @@ object ReliableFmStationLogoResolver {
             val updatedAt = prefs.getLong(UPDATED_PREFIX + key, 0L)
             val now = System.currentTimeMillis()
             val cacheFresh = cached != null && (updatedAt <= 0L || now - updatedAt < AUTO_REFRESH_MS)
-            if (!force && cacheFresh) return@withContext cached
+            val cachedSource = prefs.getString(SOURCE_PREFIX + key, "").orEmpty()
+            val cachedIsRadioDns = cachedSource == RadioLogoSource.RADIO_DNS.label
+            if (!force && cacheFresh && (pi <= 0 || cachedIsRadioDns)) return@withContext cached
 
             val resolvedStation = FmStationIdentity.resolve(stationName, null, frequencies, pi, ecc)
             val identity = AustrianFmStationCatalog.identify(resolvedStation.canonicalName, frequencies)

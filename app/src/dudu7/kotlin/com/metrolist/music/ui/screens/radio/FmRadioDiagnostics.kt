@@ -27,6 +27,7 @@ internal fun FmRadioDiagnostics(state: FytPhysicalRadio.State) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val revision by ReliableFmStationLogoResolver.revisions.collectAsState()
+    val radioDnsTrace by RadioDnsLogoResolver.lastTrace.collectAsState()
     val info = ReliableFmStationLogoResolver.logoInfo(
         context,
         state.displayStation,
@@ -59,6 +60,12 @@ internal fun FmRadioDiagnostics(state: FytPhysicalRadio.State) {
         )
         Text("RadioDNS: $lookup", style = MaterialTheme.typography.bodySmall)
         Text("Bearer: $bearer", style = MaterialTheme.typography.bodySmall)
+        Text("RadioDNS-Status: ${radioDnsTrace.status}", style = MaterialTheme.typography.bodySmall)
+        if (radioDnsTrace.cname.isNotBlank()) Text("CNAME: ${radioDnsTrace.cname}", style = MaterialTheme.typography.bodySmall)
+        if (radioDnsTrace.srv.isNotBlank()) Text("SRV: ${radioDnsTrace.srv}", style = MaterialTheme.typography.bodySmall)
+        if (radioDnsTrace.siUrl.isNotBlank()) Text("SI: ${radioDnsTrace.siUrl}", style = MaterialTheme.typography.bodySmall, maxLines = 3)
+        if (radioDnsTrace.logoCount > 0) Text("RadioDNS-Logos: ${radioDnsTrace.logoCount}", style = MaterialTheme.typography.bodySmall)
+        if (radioDnsTrace.error.isNotBlank()) Text("RadioDNS-Fehler: ${radioDnsTrace.error}", style = MaterialTheme.typography.bodySmall)
         Text("GPS/RTR: ${if (state.geoEnabled) state.geoLocationStatus else "deaktiviert"}", style = MaterialTheme.typography.bodySmall)
         Text("Position: $location", style = MaterialTheme.typography.bodySmall)
         Text(

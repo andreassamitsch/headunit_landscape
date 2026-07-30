@@ -7,6 +7,7 @@ package com.metrolist.music.playback
 
 import android.content.ContentResolver
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.annotation.DrawableRes
@@ -14,6 +15,7 @@ import androidx.core.net.toUri
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.offline.Download
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
@@ -101,6 +103,32 @@ constructor(
                 .build(),
             connectionResult.availablePlayerCommands,
         )
+    }
+
+    override fun onMediaButtonEvent(
+        session: MediaSession,
+        controllerInfo: MediaSession.ControllerInfo,
+        intent: Intent,
+    ): Boolean {
+        if (PhysicalFmMediaKeyBridge.handleMediaButton(intent)) return true
+        return super.onMediaButtonEvent(session, controllerInfo, intent)
+    }
+
+    override fun onPlayerCommandRequest(
+        session: MediaSession,
+        controllerInfo: MediaSession.ControllerInfo,
+        playerCommand: Int,
+    ): Int {
+        val direction =
+            when (playerCommand) {
+                Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> true
+                Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> false
+                else -> null
+            }
+        if (direction != null && PhysicalFmMediaKeyBridge.handleDirection(direction)) {
+            return SessionResult.RESULT_SUCCESS
+        }
+        return super.onPlayerCommandRequest(session, controllerInfo, playerCommand)
     }
 
     override fun onCustomCommand(
