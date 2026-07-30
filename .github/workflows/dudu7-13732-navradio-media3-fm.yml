@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -21,43 +21,80 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
           submodules: recursive
 
+      - name: Detect compile-fix synchronization run
+        id: guard
+        shell: bash
+        run: |
+          if git log -1 --pretty=%B | grep -q '\[13732-compile-fix\]'; then
+            echo 'skip=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'skip=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Apply compile fix
+        if: steps.guard.outputs.skip != 'true'
+        run: python3 scripts/apply_dudu7_13732_compile_fix.py
+
+      - name: Commit compile fix
+        if: steps.guard.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+            git commit -m 'Fix FM StateFlow collection [13732-compile-fix]'
+            git push origin HEAD:${{ github.head_ref || github.ref_name }}
+          fi
+
       - name: Set up Java 21
+        if: steps.guard.outputs.skip != 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Set up Android SDK
+        if: steps.guard.outputs.skip != 'true'
         uses: android-actions/setup-android@v3
 
       - name: Set up Gradle
+        if: steps.guard.outputs.skip != 'true'
         uses: gradle/actions/setup-gradle@v4
 
       - name: Verify implementation scope
+        if: steps.guard.outputs.skip != 'true'
         shell: bash
         run: |
           set -euo pipefail
           grep -q 'Dudu7FmSessionRouting.install' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
           grep -q 'observePhysicalFmSession()' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          grep -q 'controller.isActive.collect' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
           grep -q 'PhysicalFmSessionBridge.owns(session.player)' app/src/main/kotlin/com/metrolist/music/playback/MediaLibrarySessionCallback.kt
           grep -q 'Dudu7FmSessionNavigation.adjacentIndex' app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FmSessionPlayer.kt
           grep -q 'versionCode = 1370041' app/build.gradle.kts
           grep -q 'versionName = "13.7.32"' app/build.gradle.kts
 
       - name: Run FM MediaSession navigation regression tests
+        if: steps.guard.outputs.skip != 'true'
         run: ./gradlew :app:testGmsDudu7DebugUnitTest --tests 'com.metrolist.music.playback.Dudu7FmSessionNavigationTest' --stacktrace
 
       - name: Run complete Dudu7 unit tests
+        if: steps.guard.outputs.skip != 'true'
         run: ./gradlew :app:testGmsDudu7DebugUnitTest --stacktrace
 
       - name: Build update-compatible APK
+        if: steps.guard.outputs.skip != 'true'
         env:
           METROLIST_APP_NAME: Metrolist dudu7
         run: ./gradlew :app:assembleGmsDudu7Debug --stacktrace
 
       - name: Prepare and verify artifact
+        if: steps.guard.outputs.skip != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -80,6 +117,7 @@ jobs:
           grep -q 'lib/armeabi-v7a/' artifact/apk-list.txt
 
       - name: Upload APK
+        if: steps.guard.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: Metrolist-dudu7-13.7.32
