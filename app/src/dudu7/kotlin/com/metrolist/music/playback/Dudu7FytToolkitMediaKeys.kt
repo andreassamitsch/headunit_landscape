@@ -286,7 +286,7 @@ internal fun isSupportedFytMediaKey(keyCode: Int): Boolean =
         keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD ||
         keyCode == KeyEvent.KEYCODE_MEDIA_REWIND
 
-private val MEDIA_KEY_NUMBER = Regex("""\b(?:87|88|89|90)\b""")
+private val MEDIA_KEY_NUMBER = Regex("""(?<![\d.])(?:87|88|89|90)(?![\d.])""")
 
 private fun IntArray?.compact(): String =
     this?.joinToString(prefix = "[", postfix = "]", limit = 12, truncated = "…") ?: "null"
