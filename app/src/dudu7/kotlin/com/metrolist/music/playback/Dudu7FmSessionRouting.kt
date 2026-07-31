@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.media3.common.util.UnstableApi
 import com.metrolist.music.radio.fyt.FytPhysicalRadio
 
-/** Installs the Dudu7 hardware-radio Player into the variant-neutral bridge. */
+/** Installs the Dudu7 hardware-radio players and media-button routes. */
 @UnstableApi
 internal object Dudu7FmSessionRouting {
     @Volatile
@@ -14,13 +14,19 @@ internal object Dudu7FmSessionRouting {
         if (installed) return
         synchronized(this) {
             if (installed) return
-            val player = Dudu7FmSessionPlayer(context.applicationContext)
+            val appContext = context.applicationContext
+            Dudu7FmMediaButtonRouting.install(appContext)
+            val player = Dudu7FmSessionPlayer(appContext)
+            val legacyMediaSession = Dudu7FytLegacyMediaSession(appContext)
             PhysicalFmSessionBridge.install(
                 PhysicalFmSessionBridge.Controller(
                     player = player,
                     isActive = player.isActive,
                     deactivate = { FytPhysicalRadio.powerOff() },
-                    release = { player.release() },
+                    release = {
+                        legacyMediaSession.release()
+                        player.release()
+                    },
                 ),
             )
             installed = true
