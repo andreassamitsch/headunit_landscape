@@ -70,6 +70,8 @@ import com.metrolist.music.LocalPlayerAwareWindowInsets
 import com.metrolist.music.LocalPlayerConnection
 import com.metrolist.music.R
 import com.metrolist.music.extensions.move
+import com.metrolist.music.playback.Dudu7PlaybackSource
+import com.metrolist.music.playback.Dudu7SourcePlaybackCoordinator
 import com.metrolist.music.radio.fyt.FytPhysicalRadio
 import com.metrolist.music.ui.component.BottomSheetState
 import com.metrolist.music.ui.component.LocalRightPaneScrollBridge
@@ -231,8 +233,31 @@ fun VehicleLandscapeLayout(
             ?.let { selectedTab = it }
     }
 
+    LaunchedEffect(selectedTab, playerConnection) {
+        val activeConnection = playerConnection ?: return@LaunchedEffect
+        val targetSource =
+            when (selectedTab) {
+                VehicleRightPaneTab.QUEUE -> Dudu7PlaybackSource.YT_MUSIC
+                VehicleRightPaneTab.WEBRADIO -> Dudu7PlaybackSource.WEBRADIO
+                VehicleRightPaneTab.PHYSICAL_RADIO -> Dudu7PlaybackSource.FM
+                else -> null
+            }
+        if (targetSource != null) {
+            Dudu7SourcePlaybackCoordinator.activate(
+                context = context,
+                target = targetSource,
+                playerConnection = activeConnection,
+                physicalRadio = physicalRadio,
+            )
+        }
+    }
+
     LaunchedEffect(androidIsPlaying, physicalRadioState.isActive) {
-        if (androidIsPlaying && physicalRadioState.isActive) {
+        if (
+            androidIsPlaying &&
+            physicalRadioState.isActive &&
+            Dudu7SourcePlaybackCoordinator.activeSource != Dudu7PlaybackSource.FM
+        ) {
             physicalRadio.powerOff()
         }
     }
@@ -244,7 +269,15 @@ fun VehicleLandscapeLayout(
     DisposableEffect(playerConnection, paneNavController) {
         val activeConnection = playerConnection
         val returnToQueue: () -> Unit = {
-            if (physicalRadio.state.value.isActive) physicalRadio.powerOff()
+            if (activeConnection != null) {
+                Dudu7SourcePlaybackCoordinator.prepareForUserSongSelection(
+                    context = context,
+                    playerConnection = activeConnection,
+                    physicalRadio = physicalRadio,
+                )
+            } else if (physicalRadio.state.value.isActive) {
+                physicalRadio.powerOff()
+            }
             if (paneNavController.currentDestination?.route != VEHICLE_QUEUE_ROUTE) {
                 selectedTab = VehicleRightPaneTab.QUEUE
                 val popped = paneNavController.popBackStack(VEHICLE_QUEUE_ROUTE, inclusive = false)
@@ -377,9 +410,6 @@ fun VehicleLandscapeLayout(
                                 selected = selectedTab == tab,
                                 onClick = {
                                     if (!isDragging) {
-                                        if (tab == VehicleRightPaneTab.WEBRADIO && physicalRadio.state.value.isActive) {
-                                            physicalRadio.powerOff()
-                                        }
                                         if (selectedTab != tab || currentPaneRoute != tab.route) {
                                             selectedTab = tab
                                             val restoredExistingTab =
