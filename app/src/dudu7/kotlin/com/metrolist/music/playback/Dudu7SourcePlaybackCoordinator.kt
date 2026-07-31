@@ -5,6 +5,8 @@ package com.metrolist.music.playback
 import android.content.Context
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import com.metrolist.music.extensions.getCurrentQueueIndex
+import com.metrolist.music.extensions.getQueueWindows
 import com.metrolist.music.playback.queues.ListQueue
 import com.metrolist.music.radio.RadioStationStore
 import com.metrolist.music.radio.fyt.FytPhysicalRadio
@@ -50,7 +52,20 @@ internal data class Dudu7QueueSnapshot(
             Dudu7PlaybackSource.FM -> false
         }
     }
+
+    fun queueUiState(): Dudu7QueueUiState =
+        Dudu7QueueUiState(
+            title = title,
+            mediaIds = items.map { it.mediaId },
+            currentIndex = safeIndex,
+        )
 }
+
+internal data class Dudu7QueueUiState(
+    val title: String?,
+    val mediaIds: List<String>,
+    val currentIndex: Int,
+)
 
 internal class Dudu7SourcePlaybackMemory {
     private val snapshots = mutableMapOf<Dudu7PlaybackSource, Dudu7QueueSnapshot>()
@@ -231,6 +246,7 @@ internal object Dudu7SourcePlaybackCoordinator {
             isRadioMediaId(player.currentMediaItem?.mediaId)
         ) {
             playerConnection.play()
+            publishQueueUiState(playerConnection, snapshot, player)
             Timber.tag(TAG).i("WebRadio already active; resumed current favourite")
             return
         }
@@ -282,6 +298,7 @@ internal object Dudu7SourcePlaybackCoordinator {
         val player = playerOrNull(playerConnection)
         if (player != null && queueMatches(player, snapshot)) {
             applySnapshotState(player, snapshot, forcePlay)
+            publishQueueUiState(playerConnection, snapshot, player)
             return
         }
         restoreQueue(playerConnection, snapshot, forcePlay)
@@ -317,6 +334,27 @@ internal object Dudu7SourcePlaybackCoordinator {
         player.playWhenReady = forcePlay
     }
 
+    private fun publishQueueUiState(
+        playerConnection: PlayerConnection,
+        snapshot: Dudu7QueueSnapshot?,
+        player: Player,
+    ) {
+        val effectiveTitle = snapshot?.title ?: playerConnection.service.queueTitle
+        playerConnection.queueWindows.value = player.getQueueWindows()
+        playerConnection.queueTitle.value = effectiveTitle
+        playerConnection.currentMediaItemIndex.value = player.currentMediaItemIndex
+        playerConnection.currentWindowIndex.value = player.getCurrentQueueIndex()
+        playerConnection.shuffleModeEnabled.value = player.shuffleModeEnabled
+        playerConnection.repeatMode.value = player.repeatMode
+        Timber.tag(TAG).i(
+            "Published queue UI items=%d mediaIndex=%d windowIndex=%d title=%s",
+            playerConnection.queueWindows.value.size,
+            playerConnection.currentMediaItemIndex.value,
+            playerConnection.currentWindowIndex.value,
+            effectiveTitle,
+        )
+    }
+
     private suspend fun restoreQueue(
         playerConnection: PlayerConnection,
         snapshot: Dudu7QueueSnapshot,
@@ -339,6 +377,7 @@ internal object Dudu7SourcePlaybackCoordinator {
                     val player = playerOrNull(playerConnection)
                     if (player != null && queueMatches(player, snapshot)) {
                         applySnapshotState(player, snapshot, forcePlay)
+                        publishQueueUiState(playerConnection, snapshot, player)
                         break
                     }
                     delay(25L)
