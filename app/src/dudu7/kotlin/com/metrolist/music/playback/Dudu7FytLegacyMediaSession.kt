@@ -60,7 +60,7 @@ internal class Dudu7FytLegacyMediaSession(
             radio.state
                 .map { it.isActive }
                 .distinctUntilChanged()
-                .collect(::setFmActive)
+                .collect { active -> setFmActive(active) }
         }
     }
 
@@ -70,7 +70,7 @@ internal class Dudu7FytLegacyMediaSession(
         scope.cancel()
         runCatching {
             session.isActive = false
-            session.setCallback(null)
+            session.setCallback(null as MediaSession.Callback?)
             session.release()
         }.onFailure { error ->
             MediaKeyDiagnostics.record(
