@@ -1,0 +1,37 @@
+name: Validate Issue 60 diagnostics integration
+
+on:
+  pull_request:
+    branches:
+      - agent/fm-radio-ui-logos-tabs
+    paths:
+      - app/src/dudu7/AndroidManifest.xml
+      - app/src/main/kotlin/com/metrolist/music/ui/screens/settings/SettingsScreen.kt
+      - .github/workflows/issue-60-validate.yml
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Unit tests
+        run: ./gradlew :app:testGmsDudu7DebugUnitTest --stacktrace
+      - name: Build APK
+        run: ./gradlew :app:assembleGmsDudu7Debug --stacktrace
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-issue-60
+          path: app/build/outputs/apk/gms/dudu7/debug/*.apk
+          if-no-files-found: error
