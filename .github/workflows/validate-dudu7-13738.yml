@@ -1,0 +1,68 @@
+name: Validate Dudu7 13.7.38
+
+on:
+  push:
+    branches:
+      - agent/issues-58-66-fyt-toolkit-queue-ui
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout implementation branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/issues-58-66-fyt-toolkit-queue-ui
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+
+      - name: Validate formatting
+        run: git diff --check origin/agent/fm-radio-ui-logos-tabs...HEAD
+
+      - name: Run Dudu7 unit tests
+        run: ./gradlew :app:testGmsDudu7DebugUnitTest --stacktrace
+
+      - name: Build Dudu7 APK
+        run: ./gradlew :app:assembleGmsDudu7Debug --stacktrace
+
+      - name: Verify and prepare APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$(find app/build/outputs/apk -type f -name '*.apk' | head -n 1)"
+          test -n "$APK"
+          cp "$APK" "Metrolist dudu7 13.7.38.apk"
+          sha256sum "Metrolist dudu7 13.7.38.apk" | tee "Metrolist dudu7 13.7.38.apk.sha256"
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f \( -name aapt -o -name aapt2 \) | sort -V | tail -n 1)"
+          "$AAPT" dump badging "Metrolist dudu7 13.7.38.apk" | grep -E "package: name='com.metrolist.music.dudu7.debug'.*versionCode='1370047'.*versionName='13.7.38-dudu7'"
+          unzip -l "Metrolist dudu7 13.7.38.apk" | grep 'lib/arm64-v8a/'
+          unzip -l "Metrolist dudu7 13.7.38.apk" | grep 'lib/armeabi-v7a/'
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          "$APKSIGNER" verify --verbose "Metrolist dudu7 13.7.38.apk" | grep 'Verified using v2 scheme (APK Signature Scheme v2): true'
+
+      - name: Upload tested APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.38
+          path: |
+            Metrolist dudu7 13.7.38.apk
+            Metrolist dudu7 13.7.38.apk.sha256
+          if-no-files-found: error
+          retention-days: 14
