@@ -9,6 +9,7 @@ on:
 permissions:
   contents: read
 
+# Temporary implementation-branch validation; removed after a green build.
 jobs:
   test-build:
     runs-on: ubuntu-24.04
