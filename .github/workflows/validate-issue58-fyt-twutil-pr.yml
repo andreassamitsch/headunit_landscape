@@ -1,0 +1,105 @@
+name: Validate Issue 58 FYT TWUtil PR
+
+on:
+  pull_request:
+    branches:
+      - agent/fm-radio-ui-logos-tabs
+    paths:
+      - scripts/apply_issue58_fyt_twutil.py
+      - app/build.gradle.kts
+      - app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FmSessionRouting.kt
+      - app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FytTwMediaKeys.kt
+      - app/src/test/kotlin/com/metrolist/music/playback/Dudu7FytTwMediaKeysTest.kt
+      - .github/workflows/validate-issue58-fyt-twutil.yml
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  test-build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          ref: ${{ github.head_ref }}
+
+      - name: Apply FYT TWUtil source patch
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 scripts/apply_issue58_fyt_twutil.py
+          git diff --check
+          grep -q 'Dudu7FytTwMediaKeys(appContext)' app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FmSessionRouting.kt
+          grep -q 'android.tw.john.TWUtil' app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FytTwMediaKeys.kt
+          grep -q 'TW_KEY_EVENT = 0x0201' app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FytTwMediaKeys.kt
+          grep -q 'TW_KEY_NEXT = 19' app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FytTwMediaKeys.kt
+          grep -q 'TW_KEY_PREVIOUS = 21' app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FytTwMediaKeys.kt
+          grep -q 'versionCode = 1370048' app/build.gradle.kts
+          grep -q 'versionName = "13.7.39"' app/build.gradle.kts
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Run Dudu7 unit tests
+        shell: bash
+        run: |
+          set -euxo pipefail
+          chmod +x gradlew
+          ./gradlew :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+
+      - name: Commit validated source changes to PR branch
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if git diff --quiet; then
+            echo 'Source patch already committed.'
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add \
+              app/build.gradle.kts \
+              app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FmSessionRouting.kt \
+              app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FytTwMediaKeys.kt \
+              app/src/test/kotlin/com/metrolist/music/playback/Dudu7FytTwMediaKeysTest.kt
+            git commit -m 'fix(dudu7): route FM steering keys through FYT TWUtil [skip ci]'
+            git push origin HEAD:${GITHUB_HEAD_REF}
+          fi
+
+      - name: Build GMS Dudu7 APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ./gradlew :app:assembleGmsDudu7Debug --no-daemon --stacktrace
+
+      - name: Verify and collect APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p dist
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          test -n "$APK"
+          cp "$APK" 'dist/Metrolist dudu7 13.7.39.apk'
+          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$build_tools/aapt" dump badging 'dist/Metrolist dudu7 13.7.39.apk' > dist/apk-badging.txt
+          "$build_tools/apksigner" verify --verbose --print-certs 'dist/Metrolist dudu7 13.7.39.apk' > dist/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370048' versionName='13.7.39-dudu7'" dist/apk-badging.txt
+          grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' dist/apk-signature.txt
+          unzip -l 'dist/Metrolist dudu7 13.7.39.apk' | grep -E 'lib/(arm64-v8a|armeabi-v7a)/'
+          sha256sum 'dist/Metrolist dudu7 13.7.39.apk' > 'dist/Metrolist dudu7 13.7.39.apk.sha256'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.39-fyt-twutil
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
