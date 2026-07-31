@@ -54,7 +54,7 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          mkdir -p artifacts
+          mkdir -p artifacts/source
           ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace | tee artifacts/build.log
           APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
           test -n "$APK"
@@ -71,19 +71,9 @@ jobs:
           grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
           grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
           sha256sum "$OUT" | tee "$OUT.sha256"
-        env:
-          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
-          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
-
-      - name: Commit tested product source
-        shell: bash
-        run: |
-          set -euxo pipefail
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git rm -f .github/workflows/issue-58-media-keys.yml .github/workflows/issue-58-pr-run.yml
-          rm -rf .assistant
-          git add app/build.gradle.kts \
+          git diff --binary > artifacts/source/issue-58-product.patch
+          tar -czf artifacts/source/issue-58-product-files.tar.gz \
+            app/build.gradle.kts \
             app/src/dudu7/AndroidManifest.xml \
             app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7MediaButtonReceiver.kt \
             app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FmSessionPlayer.kt \
@@ -94,13 +84,26 @@ jobs:
             app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt \
             app/src/test/kotlin/com/metrolist/music/playback/Dudu7MediaButtonRoutingTest.kt \
             app/src/test/kotlin/com/metrolist/music/radio/WebRadioFavouriteQueueTest.kt
-          git diff --cached --check
-          git commit -m 'Fix Dudu7 media-key routing and add diagnostics'
-          git pull --rebase origin agent/issue-58-media-key-routing-diagnostics
-          git push origin HEAD:agent/issue-58-media-key-routing-diagnostics
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
 
       - uses: actions/upload-artifact@v4
         with:
           name: Metrolist-dudu7-13.7.34
           path: artifacts/
           retention-days: 14
+
+      - name: Commit tested product source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          rm -rf artifacts .assistant
+          git rm -f .github/workflows/issue-58-media-keys.yml .github/workflows/issue-58-pr-run.yml || true
+          git add -A
+          git status --short
+          git diff --cached --check
+          git commit -m 'Fix Dudu7 media-key routing and add diagnostics'
+          git push origin HEAD:agent/issue-58-media-key-routing-diagnostics
