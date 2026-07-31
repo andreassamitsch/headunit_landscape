@@ -122,10 +122,10 @@ constructor(
                     "index=${session.player.currentMediaItemIndex} " +
                     "fmOwner=${PhysicalFmSessionBridge.owns(session.player)}",
         )
-        if (!PhysicalFmSessionBridge.owns(session.player) &&
+        if (PhysicalFmSessionBridge.owns(session.player) &&
             PhysicalFmMediaKeyBridge.handleMediaButton(intent)
         ) {
-            MediaKeyDiagnostics.record(context, "SESSION_ROUTE", "fallback -> direct FM favourite; consumed=true")
+            MediaKeyDiagnostics.record(context, "SESSION_ROUTE", "hardware -> direct FM favourite; consumed=true")
             return true
         }
         val handled = super.onMediaButtonEvent(session, controllerInfo, intent)
@@ -147,19 +147,6 @@ constructor(
                 "count=${session.player.mediaItemCount} index=${session.player.currentMediaItemIndex} " +
                 "fmOwner=${PhysicalFmSessionBridge.owns(session.player)}",
         )
-        val direction =
-            when (playerCommand) {
-                Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> true
-                Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> false
-                else -> null
-            }
-        if (direction != null &&
-            !PhysicalFmSessionBridge.owns(session.player) &&
-            PhysicalFmMediaKeyBridge.handleDirection(direction)
-        ) {
-            MediaKeyDiagnostics.record(context, "PLAYER_COMMAND_ROUTE", "fallback -> direct FM favourite")
-            return SessionResult.RESULT_SUCCESS
-        }
         return super.onPlayerCommandRequest(session, controllerInfo, playerCommand)
     }
 
