@@ -89,6 +89,7 @@ import com.metrolist.music.radio.RadioStationLogoResolver
 import com.metrolist.music.radio.RadioStationLogoSearch
 import com.metrolist.music.radio.RadioStationStore
 import com.metrolist.music.radio.orderWebRadioFavourites
+import com.metrolist.music.radio.webRadioFavouriteStartIndex
 import com.metrolist.music.radio.mergeSavedStationUpdates
 import com.metrolist.music.utils.rememberEnumPreference
 import kotlinx.coroutines.Job
@@ -196,7 +197,7 @@ fun WebRadioScreen() {
                     ListQueue(
                         title = "WebRadio",
                         items = queueStations.map { it.toMediaItem() },
-                        startIndex = 0,
+                        startIndex = webRadioFavouriteStartIndex(playable, queueStations),
                     ),
                 notifyUserSelection = false,
             )
