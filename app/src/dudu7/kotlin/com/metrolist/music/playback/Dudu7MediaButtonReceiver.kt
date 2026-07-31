@@ -3,31 +3,31 @@ package com.metrolist.music.playback
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.view.KeyEvent
 import androidx.media3.session.MediaButtonReceiver
 import com.metrolist.music.radio.fyt.FytPhysicalRadio
 import com.metrolist.music.radio.fyt.tuneAdjacentFavourite
 
-/**
- * Routes steering-wheel/CAN media keys to FM favourites while physical FM is active.
- * Every other media key and every non-FM mode stays on the normal Media3 path.
- */
 class Dudu7MediaButtonReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        Dudu7FmMediaButtonRouting.install(context.applicationContext)
-        Dudu7FmSessionRouting.install(context.applicationContext)
-        if (!PhysicalFmSessionBridge.isActive() && PhysicalFmMediaKeyBridge.handleMediaButton(intent)) return
+        val appContext = context.applicationContext
+        Dudu7FmMediaButtonRouting.install(appContext)
+        Dudu7FmSessionRouting.install(appContext)
+        MediaKeyDiagnostics.recordMediaButton(
+            appContext,
+            stage = "RECEIVER",
+            intent = intent,
+            details = "fmActive=${PhysicalFmSessionBridge.isActive()}",
+        )
+
+        if (PhysicalFmMediaKeyBridge.handleMediaButton(intent)) {
+            MediaKeyDiagnostics.record(appContext, "ROUTE", "receiver -> direct FM favourite; consumed=true")
+            return
+        }
+
+        MediaKeyDiagnostics.record(appContext, "ROUTE", "receiver -> Media3 MediaButtonReceiver")
         MediaButtonReceiver().onReceive(context, intent)
     }
-
-    private fun Intent.mediaKeyEvent(): KeyEvent? =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            getParcelableExtra(Intent.EXTRA_KEY_EVENT)
-        }
 }
 
 internal object Dudu7FmMediaButtonRouting {
@@ -41,6 +41,11 @@ internal object Dudu7FmMediaButtonRouting {
             val appContext = context.applicationContext
             PhysicalFmMediaKeyBridge.install { next ->
                 if (!FytPhysicalRadio.state.value.isActive) return@install false
+                MediaKeyDiagnostics.record(
+                    appContext,
+                    "FM_DIRECT",
+                    "direction=${if (next) "NEXT" else "PREVIOUS"}",
+                )
                 FytPhysicalRadio.tuneAdjacentFavourite(appContext, next)
                 true
             }
@@ -48,7 +53,6 @@ internal object Dudu7FmMediaButtonRouting {
         }
     }
 
-    /** Returns true for next, false for previous and null when Media3 should handle the key. */
     fun directionFor(
         action: Int,
         keyCode: Int,
