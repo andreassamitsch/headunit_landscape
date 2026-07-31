@@ -88,6 +88,7 @@ import com.metrolist.music.radio.RadioStationLogoCache
 import com.metrolist.music.radio.RadioStationLogoResolver
 import com.metrolist.music.radio.RadioStationLogoSearch
 import com.metrolist.music.radio.RadioStationStore
+import com.metrolist.music.radio.orderWebRadioFavourites
 import com.metrolist.music.radio.mergeSavedStationUpdates
 import com.metrolist.music.utils.rememberEnumPreference
 import kotlinx.coroutines.Job
@@ -185,11 +186,17 @@ fun WebRadioScreen() {
         favoritePlayJob?.cancel()
 
         fun startFavorite(playable: RadioStation) {
+            val queueStations =
+                orderWebRadioFavourites(
+                    selected = playable,
+                    savedStations = orderedSavedStations.toList().ifEmpty { listOf(station) },
+                )
             playerConnection.playQueue(
                 queue =
                     ListQueue(
-                        title = playable.name,
-                        items = listOf(playable.toMediaItem()),
+                        title = "WebRadio",
+                        items = queueStations.map { it.toMediaItem() },
+                        startIndex = 0,
                     ),
                 notifyUserSelection = false,
             )

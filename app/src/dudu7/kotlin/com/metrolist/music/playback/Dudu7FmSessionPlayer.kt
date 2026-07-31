@@ -106,6 +106,12 @@ internal class Dudu7FmSessionPlayer(
         positionMs: Long,
         seekCommand: Int,
     ): ListenableFuture<Any> {
+        MediaKeyDiagnostics.record(
+            appContext,
+            "FM_PLAYER_COMMAND",
+            "command=$seekCommand requestedIndex=$mediaItemIndex currentIndex=$currentIndex " +
+                "count=${favourites.size} activeId=${activeFavouriteId.orEmpty()}",
+        )
         if (favourites.isEmpty()) {
             when (seekCommand) {
                 Player.COMMAND_SEEK_TO_NEXT,
@@ -146,6 +152,11 @@ internal class Dudu7FmSessionPlayer(
                 targetIndex,
                 target.id,
                 target.frequency,
+            )
+            MediaKeyDiagnostics.record(
+                appContext,
+                "FM_PLAYER_TARGET",
+                "command=$seekCommand targetIndex=$targetIndex targetId=${target.id} frequency=${target.frequency}",
             )
             radio.tunePreset(target)
         }

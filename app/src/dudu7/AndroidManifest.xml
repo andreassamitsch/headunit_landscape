@@ -19,10 +19,26 @@
             android:name=".MainActivity"
             android:screenOrientation="landscape" />
 
+        <activity
+            android:name=".playback.MediaKeyDiagnosticsActivity"
+            android:exported="true"
+            android:label="Metrolist Media-Key-Diagnose"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.Metrolist">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
         <receiver
             android:name="androidx.media3.session.MediaButtonReceiver"
-            android:exported="true"
-            tools:node="merge">
+            tools:node="remove" />
+
+        <receiver
+            android:name=".playback.Dudu7MediaButtonReceiver"
+            android:enabled="true"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
