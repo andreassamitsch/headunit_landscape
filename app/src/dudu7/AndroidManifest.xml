@@ -21,15 +21,10 @@
 
         <activity
             android:name=".playback.MediaKeyDiagnosticsActivity"
-            android:exported="true"
+            android:exported="false"
             android:label="Metrolist Media-Key-Diagnose"
             android:screenOrientation="landscape"
-            android:theme="@style/Theme.Metrolist">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:theme="@style/Theme.Metrolist" />
 
         <receiver
             android:name="androidx.media3.session.MediaButtonReceiver"

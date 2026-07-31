@@ -223,6 +223,37 @@ fun SettingsScreen(
                         )
                     )
                 }
+                if (BuildConfig.IS_DUDU7) {
+                    add(
+                        Material3SettingsItem(
+                            icon = painterResource(R.drawable.info),
+                            title = { Text("Media-Key-Diagnose") },
+                            description = {
+                                Text(
+                                    text = "Aufzeichnung, Textauswahl und TXT-Export",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            onClick = {
+                                try {
+                                    context.startActivity(
+                                        Intent().setClassName(
+                                            context,
+                                            "com.metrolist.music.playback.MediaKeyDiagnosticsActivity"
+                                        )
+                                    )
+                                } catch (e: ActivityNotFoundException) {
+                                    Toast.makeText(
+                                        context,
+                                        "Diagnoseansicht konnte nicht geöffnet werden",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            }
+                        )
+                    )
+                }
                 val showChangelog = com.metrolist.music.LocalChangelogState.current
                 add(
                     Material3SettingsItem(
