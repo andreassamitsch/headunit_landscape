@@ -1,0 +1,31 @@
+name: Clean issue 58 branch
+
+on:
+  pull_request:
+    branches: [agent/fm-radio-ui-logos-tabs]
+
+permissions:
+  contents: write
+
+jobs:
+  restore-base-files:
+    if: github.head_ref == 'agent/issue-58-media-key-routing-diagnostics'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+      - name: Restore unrelated base files and commit cleanup
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git fetch origin agent/fm-radio-ui-logos-tabs
+          git checkout origin/agent/fm-radio-ui-logos-tabs -- .assistant
+          git rm -f .github/workflows/issue-58-cleanup.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git diff --cached --check
+          git commit -m 'Restore unrelated assistant files from base'
+          git push origin HEAD:agent/issue-58-media-key-routing-diagnostics
