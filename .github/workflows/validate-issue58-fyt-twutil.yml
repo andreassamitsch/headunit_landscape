@@ -9,7 +9,7 @@ on:
       - .github/workflows/validate-issue58-fyt-twutil.yml
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test-build:
@@ -23,12 +23,13 @@ jobs:
           submodules: recursive
           ref: agent/issue-58-fyt-twutil-media-keys
 
-      - name: Apply FYT TWUtil source patch
+      - name: Validate committed FYT TWUtil source
         shell: bash
         run: |
           set -euxo pipefail
           python3 scripts/apply_issue58_fyt_twutil.py
           git diff --check
+          git diff --exit-code
           grep -q 'Dudu7FytTwMediaKeys(appContext)' app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FmSessionRouting.kt
           grep -q 'android.tw.john.TWUtil' app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FytTwMediaKeys.kt
           grep -q 'TW_KEY_EVENT = 0x0201' app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FytTwMediaKeys.kt
@@ -51,24 +52,6 @@ jobs:
           set -euxo pipefail
           chmod +x gradlew
           ./gradlew :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
-
-      - name: Commit validated source changes
-        shell: bash
-        run: |
-          set -euxo pipefail
-          if git diff --quiet; then
-            echo 'Source patch already committed.'
-          else
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add \
-              app/build.gradle.kts \
-              app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FmSessionRouting.kt \
-              app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FytTwMediaKeys.kt \
-              app/src/test/kotlin/com/metrolist/music/playback/Dudu7FytTwMediaKeysTest.kt
-            git commit -m 'fix(dudu7): route FM steering keys through FYT TWUtil [skip ci]'
-            git push origin HEAD:agent/issue-58-fyt-twutil-media-keys
-          fi
 
       - name: Build GMS Dudu7 APK
         shell: bash
