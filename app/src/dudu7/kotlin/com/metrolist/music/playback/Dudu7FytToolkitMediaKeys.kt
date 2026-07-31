@@ -9,7 +9,6 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.Parcel
-import android.os.RemoteException
 import android.os.SystemClock
 import android.view.KeyEvent
 import com.metrolist.music.radio.fyt.FytPhysicalRadio
@@ -135,9 +134,10 @@ internal class Dudu7FytToolkitMediaKeys(
 
     private fun registerModules(toolkitBinder: IBinder) {
         clearModules(unregister = false)
+        val toolkit = FytToolkit(toolkitBinder)
         MODULES.forEach { moduleCode ->
             val moduleBinder =
-                runCatching { FytToolkit(toolkitBinder).getRemoteModule(moduleCode) }
+                runCatching { toolkit.getRemoteModule(moduleCode) }
                     .onFailure { error ->
                         MediaKeyDiagnostics.record(
                             appContext,
@@ -190,7 +190,7 @@ internal class Dudu7FytToolkitMediaKeys(
         updateCode: Int,
         ints: IntArray?,
         floats: FloatArray?,
-        strings: Array<String?>?,
+        strings: Array<String>?,
     ) {
         if (released) return
         val fmActive = radio.state.value.isActive
@@ -215,11 +215,11 @@ internal class Dudu7FytToolkitMediaKeys(
                 KeyEvent.KEYCODE_MEDIA_NEXT -> PhysicalFmMediaKeyBridge.handleDirection(next = true)
                 KeyEvent.KEYCODE_MEDIA_PREVIOUS -> PhysicalFmMediaKeyBridge.handleDirection(next = false)
                 KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
-                    radio.seek(next = true)
+                    radio.seek(up = true)
                     true
                 }
                 KeyEvent.KEYCODE_MEDIA_REWIND -> {
-                    radio.seek(next = false)
+                    radio.seek(up = false)
                     true
                 }
                 else -> false
@@ -264,13 +264,13 @@ internal class Dudu7FytToolkitMediaKeys(
 internal fun extractMediaKeyCode(
     updateCode: Int,
     ints: IntArray?,
-    strings: Array<String?>?,
+    strings: Array<out String?>?,
 ): Int? {
     if (isSupportedFytMediaKey(updateCode)) return updateCode
 
-    ints.orEmpty().firstOrNull(::isSupportedFytMediaKey)?.let { return it }
+    ints?.firstOrNull(::isSupportedFytMediaKey)?.let { return it }
 
-    strings.orEmpty()
+    (strings ?: emptyArray())
         .asSequence()
         .filterNotNull()
         .flatMap { value -> MEDIA_KEY_NUMBER.findAll(value).mapNotNull { it.value.toIntOrNull() } }
@@ -294,8 +294,8 @@ private fun IntArray?.compact(): String =
 private fun FloatArray?.compact(): String =
     this?.joinToString(prefix = "[", postfix = "]", limit = 8, truncated = "…") ?: "null"
 
-private fun Array<String?>?.compact(): String =
-    this?.joinToString(prefix = "[", postfix = "]", limit = 8, truncated = "…") { it.orEmpty() } ?: "null"
+private fun Array<String>?.compact(): String =
+    this?.joinToString(prefix = "[", postfix = "]", limit = 8, truncated = "…") ?: "null"
 
 private data class FytModuleRegistration(
     val module: FytRemoteModule,
@@ -305,7 +305,6 @@ private data class FytModuleRegistration(
 private class FytToolkit(
     private val binder: IBinder,
 ) {
-    @Throws(RemoteException::class)
     fun getRemoteModule(moduleCode: Int): IBinder? {
         val data = Parcel.obtain()
         val reply = Parcel.obtain()
@@ -330,7 +329,6 @@ private class FytToolkit(
 private class FytRemoteModule(
     private val binder: IBinder,
 ) {
-    @Throws(RemoteException::class)
     fun register(
         callback: IBinder,
         updateCode: Int,
@@ -348,7 +346,6 @@ private class FytRemoteModule(
         }
     }
 
-    @Throws(RemoteException::class)
     fun unregister(
         callback: IBinder,
         updateCode: Int,
@@ -376,7 +373,7 @@ private class FytModuleCallback(
         updateCode: Int,
         ints: IntArray?,
         floats: FloatArray?,
-        strings: Array<String?>?,
+        strings: Array<String>?,
     ) -> Unit,
 ) : Binder() {
     init {
