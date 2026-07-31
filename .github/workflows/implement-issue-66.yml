@@ -29,7 +29,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Apply issue 66 product changes
-        run: python3 .github/scripts/implement-issue-66.py
+        run: |
+          python3 .github/scripts/implement-issue-66.py
+          python3 .github/scripts/fix-issue-66.py
 
       - name: Validate patch formatting
         run: git diff --check
