@@ -1,22 +1,22 @@
 name: Implement Issue 66 Source State
 
 on:
-  push:
-    branches:
-      - agent/issue-66-source-state-restoration
+  pull_request:
+    types:
+      - ready_for_review
 
 permissions:
   contents: write
 
 jobs:
   implement-test-build:
-    if: contains(github.event.head_commit.message, '[build-66]')
+    if: github.event.pull_request.head.ref == 'agent/issue-66-source-state-restoration'
     runs-on: ubuntu-latest
     timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: agent/issue-66-source-state-restoration
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
           submodules: recursive
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -77,4 +77,4 @@ jobs:
             app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt \
             app/src/test/kotlin/com/metrolist/music/playback/Dudu7SourcePlaybackCoordinatorTest.kt
           git commit -m "Preserve Dudu7 source playback states"
-          git push origin HEAD:agent/issue-66-source-state-restoration
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
