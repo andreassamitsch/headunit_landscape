@@ -11,7 +11,36 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
 
 root = Path(__file__).resolve().parents[2]
 coordinator_path = root / "app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7SourcePlaybackCoordinator.kt"
+test_path = root / "app/src/test/kotlin/com/metrolist/music/playback/Dudu7SourcePlaybackCoordinatorTest.kt"
 coordinator = coordinator_path.read_text(encoding="utf-8")
+
+coordinator = replace_once(
+    coordinator,
+    """    fun markUserYtSelection() {
+        pendingUserYtSelection = true
+        activeSource = Dudu7PlaybackSource.YT_MUSIC
+    }
+""",
+    """    fun markUserYtSelection(requiresRestoreBypass: Boolean) {
+        pendingUserYtSelection = requiresRestoreBypass
+        activeSource = Dudu7PlaybackSource.YT_MUSIC
+    }
+""",
+    "explicit YT handoff state",
+)
+
+coordinator = replace_once(
+    coordinator,
+    """        memory.markUserYtSelection()
+        Timber.tag(TAG).i("User selected YT content; source handoff prepared from %s", current)
+""",
+    """        memory.markUserYtSelection(
+            requiresRestoreBypass = current != Dudu7PlaybackSource.YT_MUSIC,
+        )
+        Timber.tag(TAG).i("User selected YT content; source handoff prepared from %s", current)
+""",
+    "YT selection from current source",
+)
 
 coordinator = replace_once(
     coordinator,
@@ -54,15 +83,16 @@ coordinator = replace_once(
         if (!restored) {
 """,
     """        val restored: Boolean =
-            withTimeoutOrNull<Boolean>(RESTORE_TIMEOUT_MS) {
+            withTimeoutOrNull(RESTORE_TIMEOUT_MS) {
                 while (true) {
                     val player = playerOrNull(playerConnection)
                     if (player != null && queueMatches(player, snapshot)) {
                         applySnapshotState(player, snapshot, forcePlay)
-                        return@withTimeoutOrNull true
+                        break
                     }
                     delay(25L)
                 }
+                true
             } ?: false
         if (!restored) {
 """,
@@ -103,4 +133,58 @@ coordinator = replace_once(
 )
 
 coordinator_path.write_text(coordinator, encoding="utf-8")
-print("Issue 66 compile and FM transition fixes applied")
+
+test = test_path.read_text(encoding="utf-8")
+test = replace_once(
+    test,
+    """        memory.markUserYtSelection()
+
+        assertEquals(Dudu7PlaybackSource.YT_MUSIC, memory.activeSource)
+""",
+    """        memory.markUserYtSelection(requiresRestoreBypass = true)
+
+        assertEquals(Dudu7PlaybackSource.YT_MUSIC, memory.activeSource)
+""",
+    "explicit YT handoff test call",
+)
+test = replace_once(
+    test,
+    """    @Test
+    fun `explicit YT selection is consumed exactly once`() {
+        val memory = Dudu7SourcePlaybackMemory()
+
+        memory.markUserYtSelection(requiresRestoreBypass = true)
+
+        assertEquals(Dudu7PlaybackSource.YT_MUSIC, memory.activeSource)
+        assertTrue(memory.consumeUserYtSelection())
+        assertFalse(memory.consumeUserYtSelection())
+    }
+}
+""",
+    """    @Test
+    fun `explicit YT selection is consumed exactly once`() {
+        val memory = Dudu7SourcePlaybackMemory()
+
+        memory.markUserYtSelection(requiresRestoreBypass = true)
+
+        assertEquals(Dudu7PlaybackSource.YT_MUSIC, memory.activeSource)
+        assertTrue(memory.consumeUserYtSelection())
+        assertFalse(memory.consumeUserYtSelection())
+    }
+
+    @Test
+    fun `new YT selection while YT is already active leaves no stale bypass`() {
+        val memory = Dudu7SourcePlaybackMemory()
+
+        memory.markUserYtSelection(requiresRestoreBypass = false)
+
+        assertEquals(Dudu7PlaybackSource.YT_MUSIC, memory.activeSource)
+        assertFalse(memory.consumeUserYtSelection())
+    }
+}
+""",
+    "same-source YT selection regression test",
+)
+test_path.write_text(test, encoding="utf-8")
+
+print("Issue 66 compile, FM transition and YT handoff fixes applied")
