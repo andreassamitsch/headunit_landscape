@@ -1,4 +1,4 @@
-# Validation workflow for issues 58 and 62
+# Validation workflow for issues 58 and 62 — base-installed trigger
 name: Implement Issues 58 and 62
 
 on:
