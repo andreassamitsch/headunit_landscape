@@ -29,9 +29,14 @@ jobs:
         run: ./gradlew :app:testGmsDudu7DebugUnitTest --stacktrace
       - name: Build APK
         run: ./gradlew :app:assembleGmsDudu7Debug --stacktrace
+      - name: Locate and hash APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          find app/build/outputs/apk -type f -name '*.apk' -print -exec sha256sum {} \;
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Metrolist-dudu7-issue-60
-          path: app/build/outputs/apk/gms/dudu7/debug/*.apk
+          path: app/build/outputs/apk/**/*.apk
           if-no-files-found: error
