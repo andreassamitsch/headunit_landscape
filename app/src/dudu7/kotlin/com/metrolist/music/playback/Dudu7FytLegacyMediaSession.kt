@@ -125,7 +125,7 @@ internal class Dudu7FytLegacyMediaSession(
             MediaKeyDiagnostics.record(
                 appContext,
                 "FYT_LEGACY_ROUTE",
-                "keyCode=${event.keyCode} action=${KeyEvent.actionToString(event.action)} " +
+                "keyCode=${event.keyCode} action=${keyActionName(event.action)} " +
                     "repeat=${event.repeatCount} decision=consumed_without_action",
             )
             return true
@@ -217,3 +217,11 @@ internal fun fytLegacyMediaActionFor(
         else -> null
     }
 }
+
+internal fun keyActionName(action: Int): String =
+    when (action) {
+        KeyEvent.ACTION_DOWN -> "ACTION_DOWN"
+        KeyEvent.ACTION_UP -> "ACTION_UP"
+        KeyEvent.ACTION_MULTIPLE -> "ACTION_MULTIPLE"
+        else -> action.toString()
+    }
