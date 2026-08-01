@@ -10,7 +10,9 @@ import android.os.Looper
 import com.android.fmradio.FmNative
 import com.android.fmradio.FmService
 import com.metrolist.music.playback.Dudu7FmMediaButtonRouting
+import com.metrolist.music.playback.Dudu7FmSessionOwnership
 import com.metrolist.music.playback.Dudu7FmSessionRouting
+import com.metrolist.music.playback.MediaKeyDiagnostics
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -26,15 +28,14 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
-import java.lang.reflect.Method
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
  * Independent physical FM backend for FYT/Dudu7 head units.
  *
- * It talks directly to the firmware-provided libfmjni.so and TWUtil MCU bridge;
- * NavRadio+ is neither referenced nor required at runtime.
+ * It uses the Dudu7/UIS7870 FmService/FmNative path exposed by the Syu RadioProxy.
+ * Optional TWUtil backends belong to other head-unit families and are not used here.
  */
 object FytPhysicalRadio {
     private const val TAG = "FytPhysicalRadio"
@@ -60,6 +61,7 @@ object FytPhysicalRadio {
     private const val AF_RSSI_WINDOW_SIZE = 4
     private const val AF_WEAK_SAMPLE_COUNT = 3
     private const val AF_RSSI_HYSTERESIS = 3
+    private const val DUDU7_SESSION_PROPAGATION_MS = 150L
 
     data class Preset(
         val frequency: Float,
@@ -189,7 +191,6 @@ object FytPhysicalRadio {
 
     private var appContext: Context? = null
     private var native: FmNative? = null
-    private var twUtil: TwUtilBridge? = null
     private var pollingJob: Job? = null
     private var scanJob: Job? = null
     private var afJob: Job? = null
@@ -230,7 +231,6 @@ object FytPhysicalRadio {
             val loadedPresets = readPresets(presetPayload ?: legacyPresetPayload)
             native = FmNative.getInstance()
             FmNative.initAudio(applicationContext)
-            twUtil = TwUtilBridge()
             audioManager = applicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
             _state.value =
                 State(
@@ -392,27 +392,25 @@ object FytPhysicalRadio {
             }
 
             try {
+                // NavRadio+ publishes its Dudu7 MediaSession before claiming RadioProxy/FmNative.
+                // Give Android/com.syu.ms one dispatch turn before activating the hardware source.
+                val claimChanged = Dudu7FmSessionOwnership.claim()
+                MediaKeyDiagnostics.record(
+                    context,
+                    "DUDU7_SESSION_CLAIM",
+                    "source=powerOn claimed=true changed=$claimChanged target=$target",
+                )
+                delay(DUDU7_SESSION_PROPAGATION_MS)
+
                 requestAudioFocus()
                 FytAudioRouter.prepare(context)
                 installRdsListener()
-
-                twUtil?.open()
-                twUtil?.initRadioSequence()
-                delay(150)
-                twUtil?.radioOnFm()
-                delay(100)
-                twUtil?.unmute()
-                delay(50)
 
                 val openOk = fm.openDev()
                 val powerOk = fm.powerUp(target)
                 runCatching { fm.setRds(false) }
                 val tuneOk = fm.tune(target)
                 fm.setMute(false)
-                repeat(3) { index ->
-                    twUtil?.setAudioSourceFm()
-                    if (index < 2) delay(100)
-                }
                 FmNative.setFirmwareFmVolumeEnabled(true)
                 runCatching { fm.setEuropeArea() }
                 runCatching { fm.setRds(true) }
@@ -453,6 +451,12 @@ object FytPhysicalRadio {
             } catch (error: Throwable) {
                 Timber.tag(TAG).e(error, "Could not start physical FM")
                 cleanupHardware()
+                val released = Dudu7FmSessionOwnership.release()
+                MediaKeyDiagnostics.record(
+                    context,
+                    "DUDU7_SESSION_CLAIM",
+                    "source=powerOn_failed claimed=false changed=$released error=${error.javaClass.simpleName}",
+                )
                 _state.update { it.copy(isActive = false, isBusy = false, error = error.message ?: "Radio konnte nicht gestartet werden") }
             }
         }
@@ -487,6 +491,14 @@ object FytPhysicalRadio {
                     pty = 0,
                     tp = false,
                     ta = false,
+                )
+            }
+            val released = Dudu7FmSessionOwnership.release()
+            appContext?.let { context ->
+                MediaKeyDiagnostics.record(
+                    context,
+                    "DUDU7_SESSION_CLAIM",
+                    "source=powerOff claimed=false changed=$released",
                 )
             }
             Timber.tag(TAG).i("Physical FM released")
@@ -1561,8 +1573,6 @@ object FytPhysicalRadio {
         runCatching { native?.setRds(false) }
         runCatching { native?.powerDown(0) }
         runCatching { native?.closeDev() }
-        runCatching { twUtil?.radioOff() }
-        runCatching { twUtil?.close() }
         FmNative.setFirmwareFmVolumeEnabled(false)
         appContext?.let(FytAudioRouter::release)
         abandonAudioFocus()
@@ -1944,93 +1954,4 @@ object FytPhysicalRadio {
         }
     }
 
-    private class TwUtilBridge {
-        private val clazz = runCatching { Class.forName("android.tw.john.TWUtil") }.getOrNull()
-        private var instance: Any? = null
-        private var write2: Method? = null
-        private var write3: Method? = null
-
-        fun open(): Boolean {
-            val type = clazz ?: return false
-            if (instance != null) return true
-            return runCatching {
-                val value = type.getConstructor(Int::class.javaPrimitiveType).newInstance(1)
-                val commands =
-                    shortArrayOf(
-                        0x101,
-                        0x102,
-                        0x103,
-                        0x104,
-                        0x105,
-                        0x106,
-                        0x110,
-                        0x111,
-                        0x112,
-                        0x113,
-                        0x114,
-                        0x115,
-                    )
-                val result = type.getMethod("open", ShortArray::class.java).invoke(value, commands) as? Int ?: -1
-                if (result != 0) return@runCatching false
-                type.getMethod("start").invoke(value)
-                instance = value
-                write2 = type.getMethod("write", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
-                write3 =
-                    type.getMethod(
-                        "write",
-                        Int::class.javaPrimitiveType,
-                        Int::class.javaPrimitiveType,
-                        Int::class.javaPrimitiveType,
-                    )
-                true
-            }.onFailure { Timber.tag(TAG).w(it, "TWUtil open failed") }.getOrDefault(false)
-        }
-
-        fun close() {
-            val value = instance ?: return
-            runCatching { clazz?.getMethod("stop")?.invoke(value) }
-            runCatching { clazz?.getMethod("close")?.invoke(value) }
-            instance = null
-        }
-
-        fun initRadioSequence() {
-            write(0x101, 0xFF)
-            write(0x102, 0xFF)
-            write(0x102, 0xFF, 1)
-            write(0x112, 0xFF)
-            write(0x102, 0xFF, 0)
-            write(0x104, 0xFF)
-            write(0x103, 0)
-            write(0x105, 0xFF)
-            write(0x101, 0xFF)
-            write(0x110, 0xFF)
-        }
-
-        fun radioOnFm() {
-            write(0x101, 1)
-            setAudioSourceFm()
-        }
-
-        fun radioOff() {
-            write(0x101, 0)
-        }
-
-        fun setAudioSourceFm() {
-            write(0x110, 1)
-        }
-
-        fun mute() {
-            write(0x105, 1)
-        }
-
-        fun unmute() {
-            write(0x105, 0)
-        }
-
-        private fun write(command: Int, value: Int): Int =
-            runCatching { write2?.invoke(instance, command, value) as? Int ?: -1 }.getOrDefault(-1)
-
-        private fun write(command: Int, value1: Int, value2: Int): Int =
-            runCatching { write3?.invoke(instance, command, value1, value2) as? Int ?: -1 }.getOrDefault(-1)
-    }
 }
