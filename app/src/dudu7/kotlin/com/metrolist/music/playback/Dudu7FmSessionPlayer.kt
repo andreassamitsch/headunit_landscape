@@ -27,11 +27,15 @@ import timber.log.Timber
 import kotlin.math.abs
 
 /**
- * Media3 representation of the FYT hardware tuner.
+ * Media3 representation of the Dudu7 hardware tuner.
  *
- * The class does not render audio. The FYT/MCU audio path remains responsible for
- * sound, while this Player publishes the ordered FM favourites, current station,
- * playback state and transport commands to Android's MediaSession.
+ * The class does not render audio. FmService/FmNative and the Dudu7 MCU remain responsible
+ * for sound. This player is the single Android media owner and publishes the ordered FM
+ * favourites, current station, playback state and transport commands.
+ *
+ * NavRadio+ creates its Dudu7 MediaSession player before it activates RadioProxy/FmNative.
+ * [Dudu7FmSessionOwnership] mirrors that order so com.syu.ms routes steering-wheel media
+ * keys to this timeline rather than letting the stock radio service change raw frequencies.
  */
 @UnstableApi
 internal class Dudu7FmSessionPlayer(
@@ -40,11 +44,17 @@ internal class Dudu7FmSessionPlayer(
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val radio = FytPhysicalRadio.get(appContext)
-    private val _isActive = MutableStateFlow(radio.state.value.isActive)
-
-    val isActive: StateFlow<Boolean> = _isActive.asStateFlow()
 
     private var snapshot = radio.state.value
+    private var sessionClaimed = Dudu7FmSessionOwnership.claimed.value
+    private val _isActive = MutableStateFlow(sessionClaimed || snapshot.isActive)
+
+    /**
+     * Session ownership flow consumed by MusicService. It becomes true before the physical
+     * FM source is activated and stays true until shutdown or failed startup.
+     */
+    val isActive: StateFlow<Boolean> = _isActive.asStateFlow()
+
     private var favourites: List<FytPhysicalRadio.Preset> = emptyList()
     private var activeFavouriteId: String? = null
     private var currentIndex: Int = C.INDEX_UNSET
@@ -57,13 +67,25 @@ internal class Dudu7FmSessionPlayer(
                 syncFromRadio(state)
             }
         }
+        scope.launch {
+            Dudu7FmSessionOwnership.claimed.collect { claimed ->
+                sessionClaimed = claimed
+                _isActive.value = claimed || snapshot.isActive
+                MediaKeyDiagnostics.record(
+                    appContext,
+                    "DUDU7_SESSION_OWNER",
+                    "claimed=$claimed tunerActive=${snapshot.isActive} count=${favourites.size} index=$currentIndex",
+                )
+                invalidateState()
+            }
+        }
     }
 
     override fun getState(): State {
         val playlist = buildPlaylist()
         val hasItems = playlist.isNotEmpty()
         val index = if (hasItems) currentIndex.coerceIn(0, playlist.lastIndex) else C.INDEX_UNSET
-        val active = snapshot.isActive
+        val ownsSession = sessionClaimed || snapshot.isActive
 
         return State.Builder()
             .setAvailableCommands(availableCommands(hasItems))
@@ -76,9 +98,9 @@ internal class Dudu7FmSessionPlayer(
             )
             .setCurrentMediaItemIndex(index)
             .setContentPositionMs(0L)
-            .setPlaybackState(if (hasItems && active) Player.STATE_READY else Player.STATE_IDLE)
+            .setPlaybackState(if (hasItems && ownsSession) Player.STATE_READY else Player.STATE_IDLE)
             .setPlayWhenReady(
-                active && !snapshot.isMuted,
+                ownsSession && !snapshot.isMuted,
                 Player.PLAY_WHEN_READY_CHANGE_REASON_REMOTE,
             )
             .setRepeatMode(Player.REPEAT_MODE_ALL)
@@ -87,13 +109,19 @@ internal class Dudu7FmSessionPlayer(
     }
 
     override fun handlePrepare(): ListenableFuture<Any> {
-        if (!snapshot.isActive) radio.powerOn()
+        if (!snapshot.isActive) {
+            claimSession("prepare")
+            radio.powerOn()
+        }
         return completed()
     }
 
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<Any> {
         if (playWhenReady) {
-            if (!snapshot.isActive) radio.powerOn()
+            if (!snapshot.isActive) {
+                claimSession("play")
+                radio.powerOn()
+            }
             radio.setMute(false)
         } else if (snapshot.isActive) {
             radio.setMute(true)
@@ -110,7 +138,8 @@ internal class Dudu7FmSessionPlayer(
             appContext,
             "FM_PLAYER_COMMAND",
             "command=$seekCommand requestedIndex=$mediaItemIndex currentIndex=$currentIndex " +
-                "count=${favourites.size} activeId=${activeFavouriteId.orEmpty()}",
+                "count=${favourites.size} activeId=${activeFavouriteId.orEmpty()} " +
+                "claimed=$sessionClaimed tunerActive=${snapshot.isActive}",
         )
         if (favourites.isEmpty()) {
             when (seekCommand) {
@@ -166,9 +195,19 @@ internal class Dudu7FmSessionPlayer(
     override fun handleRelease(): ListenableFuture<Any> {
         if (!released) {
             released = true
+            Dudu7FmSessionOwnership.release()
             scope.cancel()
         }
         return completed()
+    }
+
+    private fun claimSession(source: String) {
+        val changed = Dudu7FmSessionOwnership.claim()
+        MediaKeyDiagnostics.record(
+            appContext,
+            "DUDU7_SESSION_CLAIM",
+            "source=$source claimed=true changed=$changed tunerActive=${snapshot.isActive}",
+        )
     }
 
     private fun syncFromRadio(state: FytPhysicalRadio.State) {
@@ -191,7 +230,7 @@ internal class Dudu7FmSessionPlayer(
             activeFavouriteId = favourites[currentIndex].id
         }
 
-        _isActive.value = state.isActive
+        _isActive.value = sessionClaimed || state.isActive
         invalidateState()
     }
 
@@ -218,7 +257,7 @@ internal class Dudu7FmSessionPlayer(
 
     private fun buildPlaylist(): List<MediaItemData> {
         if (favourites.isEmpty()) {
-            if (!snapshot.isActive) return emptyList()
+            if (!snapshot.isActive && !sessionClaimed) return emptyList()
             val metadata = currentMetadata(
                 title = snapshot.displayStation.ifBlank { "FM ${formatFrequency(snapshot.frequency)}" },
                 frequency = snapshot.frequency,
@@ -304,7 +343,6 @@ internal class Dudu7FmSessionPlayer(
             .build()
 
     private fun completed(): ListenableFuture<Any> = Futures.immediateFuture(Unit as Any)
-
 
     private fun formatFrequency(value: Float): String = "%.1f".format(java.util.Locale.US, value)
 
