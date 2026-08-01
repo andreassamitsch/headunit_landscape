@@ -40,11 +40,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          RADIO=app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
           if grep -q 'versionName = "13.7.42"' app/build.gradle.kts; then
-            echo 'Patch already applied.'
+            echo 'Main patch already applied.'
           else
             python3 tools/issue58_dudu7_session_patch.py
           fi
+          # A former TWUtil mute hook was outside the removed bridge and must not survive
+          # in the Dudu7/UIS7870 RadioProxy/FmNative backend.
+          sed -i '/if (mute) twUtil?.mute() else twUtil?.unmute()/d' "$RADIO"
 
       - name: Verify Dudu7 reference constraints
         shell: bash
@@ -59,7 +63,7 @@ jobs:
           grep -q 'Dudu7FmSessionOwnership.claim()' "$RADIO"
           grep -q 'delay(DUDU7_SESSION_PROPAGATION_MS)' "$RADIO"
           grep -q 'val openOk = fm.openDev()' "$RADIO"
-          ! grep -q 'TwUtilBridge' "$RADIO"
+          ! grep -qi 'twutil' "$RADIO"
           ! grep -q 'Dudu7FytLegacyMediaSession' "$ROUTING"
           ! grep -q 'Dudu7FytTwMediaKeys' "$ROUTING"
           grep -q 'Dudu7FmSessionOwnership.claimed.collect' "$PLAYER"
@@ -85,7 +89,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add app
-          git commit -m 'fix: claim Dudu7 FM MediaSession before RadioProxy [skip dudu-session]'
+          git commit -m 'fix: complete Dudu7 RadioProxy session ownership [skip dudu-session]'
           git push origin HEAD:agent/issue-58-dudu7-media-session-ownership
 
       - name: Run Dudu7 unit tests
