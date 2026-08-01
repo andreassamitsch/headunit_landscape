@@ -18,15 +18,14 @@ internal object Dudu7FmSessionRouting {
             Dudu7FmMediaButtonRouting.install(appContext)
             val player = Dudu7FmSessionPlayer(appContext)
             val legacyMediaSession = Dudu7FytLegacyMediaSession(appContext)
-            val twMediaKeys = Dudu7FytTwMediaKeys(appContext)
             PhysicalFmSessionBridge.install(
                 PhysicalFmSessionBridge.Controller(
                     player = player,
                     isActive = player.isActive,
                     deactivate = { FytPhysicalRadio.powerOff() },
                     release = {
-                        twMediaKeys.release()
                         legacyMediaSession.release()
+                        com.metrolist.music.radio.fyt.Dudu7FytTwController.get(appContext).close()
                         player.release()
                     },
                 ),
