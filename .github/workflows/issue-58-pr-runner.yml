@@ -7,12 +7,12 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  implement-test-build:
-    if: github.event.pull_request.head.ref == 'agent/issue-58-navradio-twutil-parity' && github.actor != 'github-actions[bot]'
-    runs-on: ubuntu-latest
+  test-build:
+    if: github.event.pull_request.head.ref == 'agent/issue-58-navradio-twutil-parity'
+    runs-on: ubuntu-22.04
     timeout-minutes: 45
 
     steps:
@@ -20,7 +20,7 @@ jobs:
         with:
           ref: agent/issue-58-navradio-twutil-parity
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          submodules: recursive
 
       - uses: actions/setup-java@v4
         with:
@@ -28,41 +28,41 @@ jobs:
           java-version: '21'
           cache: gradle
 
-      - name: Apply NavRadio TWUtil parity patch
-        run: python3 tools/issue58_navradio_patch.py
+      - uses: android-actions/setup-android@v3
 
-      - name: Commit implementation
+      - name: Verify implementation structure
         shell: bash
         run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add app/build.gradle.kts \
-            app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FmSessionRouting.kt \
-            app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FytTwMediaKeys.kt \
-            app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/Dudu7FytTwController.kt \
-            app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt \
-            app/src/test/kotlin/com/metrolist/music/playback/Dudu7FytTwMediaKeysTest.kt
-          git commit -m "Unify FYT TWUtil with NavRadio logic [skip ci]"
-          git push origin HEAD:agent/issue-58-navradio-twutil-parity
+          set -euo pipefail
+          test -f metroproto/listentogether.proto
+          test -f app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/Dudu7FytTwController.kt
+          ! grep -q 'Dudu7FytTwMediaKeys(appContext)' app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FmSessionRouting.kt
+          grep -q 'Dudu7FytTwController.get(applicationContext)' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+          grep -q 'versionCode = 1370049' app/build.gradle.kts
+          grep -q 'versionName = "13.7.40"' app/build.gradle.kts
 
       - name: Run Dudu7 unit tests
-        run: ./gradlew :app:testGmsDudu7DebugUnitTest --stacktrace
+        run: ./gradlew :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
 
       - name: Build Dudu7 APK
-        run: ./gradlew :app:assembleGmsDudu7Debug --stacktrace
+        run: ./gradlew :app:assembleGmsDudu7Debug --no-daemon --stacktrace
 
       - name: Verify APK and prepare artifact
         shell: bash
         run: |
           set -euo pipefail
-          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep -i 'dudu7' | head -n 1)"
-          test -n "$APK"
           mkdir -p artifacts
+          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -n 1)"
+          test -n "$APK"
           cp "$APK" "artifacts/Metrolist dudu7 13.7.40.apk"
-          sha256sum "artifacts/Metrolist dudu7 13.7.40.apk" > "artifacts/Metrolist dudu7 13.7.40.apk.sha256"
           BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
           "$BUILD_TOOLS/aapt" dump badging "artifacts/Metrolist dudu7 13.7.40.apk" | tee artifacts/aapt-badging.txt
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "artifacts/Metrolist dudu7 13.7.40.apk" | tee artifacts/apksigner.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370049' versionName='13.7.40-dudu7'" artifacts/aapt-badging.txt
+          grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' artifacts/apksigner.txt
+          unzip -l "artifacts/Metrolist dudu7 13.7.40.apk" | grep -q 'lib/arm64-v8a/'
+          unzip -l "artifacts/Metrolist dudu7 13.7.40.apk" | grep -q 'lib/armeabi-v7a/'
+          sha256sum "artifacts/Metrolist dudu7 13.7.40.apk" | tee "artifacts/Metrolist dudu7 13.7.40.apk.sha256"
 
       - uses: actions/upload-artifact@v4
         with:
