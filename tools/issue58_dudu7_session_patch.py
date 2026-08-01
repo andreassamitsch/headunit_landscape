@@ -34,6 +34,7 @@ replace_once(
 )
 replace_once('    private var twUtil: TwUtilBridge? = null\n', '')
 replace_once('            twUtil = TwUtilBridge()\n', '')
+replace_once('            if (mute) twUtil?.mute() else twUtil?.unmute()\n', '')
 
 replace_once(
     '''            try {
