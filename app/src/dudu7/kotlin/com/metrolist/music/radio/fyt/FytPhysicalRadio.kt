@@ -818,7 +818,6 @@ object FytPhysicalRadio {
         scope.launch {
             if (!_state.value.isActive) return@launch
             val result = runCatching { native?.setMute(mute) }.getOrNull()
-            if (mute) twUtil?.mute() else twUtil?.unmute()
             if (result != null) _state.update { it.copy(isMuted = mute) }
         }
     }
