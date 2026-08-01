@@ -1,0 +1,73 @@
+name: Validate FM Hotfix 13.7.41
+
+on:
+  pull_request:
+    branches:
+      - agent/fm-radio-ui-logos-tabs
+    paths:
+      - 'app/**'
+      - 'metroproto/**'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-hotfix:
+    if: github.head_ref == 'agent/issue-72-restore-fm-hotfix'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Verify source and version
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'versionCode = 1370050' app/build.gradle.kts
+          grep -q 'versionName = "13.7.41"' app/build.gradle.kts
+          test ! -e app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/Dudu7FytTwController.kt
+          grep -q 'private var twUtil: TwUtilBridge?' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+          grep -q 'val twMediaKeys = Dudu7FytTwMediaKeys(appContext)' app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FmSessionRouting.kt
+          ! grep -q 'FYT TWUtil konnte nicht initialisiert werden' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+
+      - name: Run Dudu7 unit tests
+        run: ./gradlew :app:testGmsDudu7DebugUnitTest --stacktrace
+
+      - name: Build Dudu7 APK
+        run: ./gradlew :app:assembleGmsDudu7Debug --stacktrace
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$(find app/build/outputs/apk -type f -name '*.apk' | head -n 1)"
+          test -n "$APK"
+          mkdir -p artifact
+          cp "$APK" 'artifact/Metrolist dudu7 13.7.41.apk'
+          sha256sum 'artifact/Metrolist dudu7 13.7.41.apk' > 'artifact/Metrolist dudu7 13.7.41.apk.sha256'
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          "$APKSIGNER" verify --verbose --print-certs 'artifact/Metrolist dudu7 13.7.41.apk' > artifact/apksigner.txt
+          grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' artifact/apksigner.txt
+          unzip -l 'artifact/Metrolist dudu7 13.7.41.apk' > artifact/apk-contents.txt
+          grep -q 'lib/arm64-v8a/' artifact/apk-contents.txt
+          grep -q 'lib/armeabi-v7a/' artifact/apk-contents.txt
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.41-fm-hotfix
+          path: artifact/*
+          if-no-files-found: error
