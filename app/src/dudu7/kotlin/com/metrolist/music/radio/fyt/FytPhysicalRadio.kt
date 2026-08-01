@@ -395,21 +395,18 @@ object FytPhysicalRadio {
                 FytAudioRouter.prepare(context)
                 installRdsListener()
 
-                twUtil?.open()
-                twUtil?.initRadioSequence()
+                if (twUtil?.open() != true) {
+                    error("FYT TWUtil konnte nicht initialisiert werden")
+                }
                 delay(150)
                 twUtil?.radioOnFm()
                 delay(100)
-                twUtil?.unmute()
-                delay(50)
 
                 val openOk = fm.openDev()
                 val powerOk = fm.powerUp(target)
                 runCatching { fm.setRds(false) }
                 val tuneOk = fm.tune(target)
                 fm.setMute(false)
-                // Reassert the NavRadio+ FM audio-source ownership after native tuning.
-                twUtil?.setAudioSourceFm()
                 FmNative.setFirmwareFmVolumeEnabled(true)
                 runCatching { fm.setEuropeArea() }
                 runCatching { fm.setRds(true) }
@@ -803,7 +800,6 @@ object FytPhysicalRadio {
         scope.launch {
             if (!_state.value.isActive) return@launch
             val result = runCatching { native?.setMute(mute) }.getOrNull()
-            if (mute) twUtil?.mute() else twUtil?.unmute()
             if (result != null) _state.update { it.copy(isMuted = mute) }
         }
     }
@@ -1558,8 +1554,8 @@ object FytPhysicalRadio {
         runCatching { native?.setRds(false) }
         runCatching { native?.powerDown(0) }
         runCatching { native?.closeDev() }
+        // NavRadio+ releases FM ownership here but keeps the shared TWUtil handler alive.
         runCatching { twUtil?.radioOff() }
-        runCatching { twUtil?.close() }
         FmNative.setFirmwareFmVolumeEnabled(false)
         appContext?.let(FytAudioRouter::release)
         abandonAudioFocus()

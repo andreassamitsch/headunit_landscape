@@ -25,6 +25,7 @@ internal object Dudu7FmSessionRouting {
                     deactivate = { FytPhysicalRadio.powerOff() },
                     release = {
                         legacyMediaSession.release()
+                        com.metrolist.music.radio.fyt.Dudu7FytTwController.get(appContext).close()
                         player.release()
                     },
                 ),

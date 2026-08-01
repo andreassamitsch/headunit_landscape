@@ -78,6 +78,11 @@ internal class Dudu7FytTwController private constructor(
                 write3 = clazz.getMethod("write", Integer.TYPE, Integer.TYPE, Integer.TYPE)
                 vendorRadioActive = false
 
+                // NavRadio+ performs this sequence exactly once after registering the handler.
+                Dudu7FytTwProtocol.INITIALIZATION_WRITES.forEach {
+                    writeAndRecord("init", it)
+                }
+
                 MediaKeyDiagnostics.record(
                     appContext,
                     "FYT_TW_STATE",
@@ -112,20 +117,9 @@ internal class Dudu7FytTwController private constructor(
         }
     }
 
-    fun initRadioSequence() {
-        applySequence("init", Dudu7FytTwProtocol.INITIALIZATION_WRITES)
-    }
-
     fun radioOnFm() {
+        // NavRadio+ does not assume ownership here. Event 0x0301 is the source of truth.
         applySequence("enter_fm", Dudu7FytTwProtocol.ENTER_FM_WRITES)
-        // NavRadio subsequently confirms this through event 0x0301. Keep an optimistic
-        // state so a key arriving before that acknowledgement is not dropped.
-        vendorRadioActive = true
-        MediaKeyDiagnostics.record(
-            appContext,
-            "FYT_TW_RADIO_STATE",
-            "source=enter_fm active=true",
-        )
     }
 
     fun radioOff() {
@@ -136,20 +130,6 @@ internal class Dudu7FytTwController private constructor(
             "FYT_TW_RADIO_STATE",
             "source=exit_fm active=false",
         )
-    }
-
-    /** Reassert only the NavRadio+ audio-source writes after native tuner startup. */
-    fun setAudioSourceFm() {
-        applySequence("source_fm", Dudu7FytTwProtocol.ENTER_FM_WRITES.drop(1))
-    }
-
-    // FmNative controls tuner mute; these proven FYT writes retain audio-path compatibility.
-    fun mute() {
-        writeAndRecord("mute", FytTwWrite(0x0105, 1))
-    }
-
-    fun unmute() {
-        writeAndRecord("unmute", FytTwWrite(0x0105, 0))
     }
 
     private fun applySequence(
