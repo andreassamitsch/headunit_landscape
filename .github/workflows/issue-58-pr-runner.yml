@@ -7,11 +7,11 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   test-build:
-    if: github.event.pull_request.head.ref == 'agent/issue-58-navradio-twutil-parity'
+    if: github.event.pull_request.head.ref == 'agent/issue-58-navradio-twutil-parity' && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-22.04
     timeout-minutes: 45
 
@@ -21,6 +21,7 @@ jobs:
           ref: agent/issue-58-navradio-twutil-parity
           fetch-depth: 0
           submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-java@v4
         with:
@@ -30,6 +31,21 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
+      - name: Apply final NavRadio lifecycle alignment
+        run: python3 tools/issue58_navradio_lifecycle_patch.py
+
+      - name: Commit lifecycle alignment
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FmSessionRouting.kt \
+            app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/Dudu7FytTwController.kt \
+            app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+          git commit -m "Align shared TWUtil lifecycle with NavRadio [skip ci]"
+          git push origin HEAD:agent/issue-58-navradio-twutil-parity
+
       - name: Verify implementation structure
         shell: bash
         run: |
@@ -38,6 +54,10 @@ jobs:
           test -f app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/Dudu7FytTwController.kt
           ! grep -q 'Dudu7FytTwMediaKeys(appContext)' app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FmSessionRouting.kt
           grep -q 'Dudu7FytTwController.get(applicationContext)' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+          grep -q 'Dudu7FytTwController.get(appContext).close()' app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FmSessionRouting.kt
+          ! grep -q 'initRadioSequence' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+          ! grep -q 'setAudioSourceFm' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+          ! grep -q 'twUtil?.close()' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
           grep -q 'versionCode = 1370049' app/build.gradle.kts
           grep -q 'versionName = "13.7.40"' app/build.gradle.kts
 
