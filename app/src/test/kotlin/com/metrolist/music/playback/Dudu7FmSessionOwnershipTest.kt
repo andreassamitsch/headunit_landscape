@@ -25,6 +25,12 @@ class Dudu7FmSessionOwnershipTest {
     }
 
     @Test
+    fun `release without prior claim keeps normal player ownership`() {
+        assertFalse(Dudu7FmSessionOwnership.release())
+        assertFalse(Dudu7FmSessionOwnership.claimed.value)
+    }
+
+    @Test
     fun `claim and release are idempotent`() {
         assertTrue(Dudu7FmSessionOwnership.claim())
         assertFalse(Dudu7FmSessionOwnership.claim())
