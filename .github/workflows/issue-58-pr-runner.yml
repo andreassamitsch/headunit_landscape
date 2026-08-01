@@ -1,0 +1,96 @@
+name: Issue 58 PR implementation runner
+
+on:
+  pull_request:
+    branches:
+      - agent/fm-radio-ui-logos-tabs
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-build:
+    if: github.event.pull_request.head.ref == 'agent/issue-58-navradio-twutil-parity' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/issue-58-navradio-twutil-parity
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Execute embedded parity patch
+        shell: bash
+        run: |
+          python3 <<'RUNNER'
+          from pathlib import Path
+          import textwrap
+
+          workflow = Path('.github/workflows/issue-58-navradio-twutil-parity.yml').read_text()
+          marker = "          python3 <<'PY'\n"
+          start = workflow.index(marker) + len(marker)
+          end = workflow.index("\n          PY\n", start)
+          script = textwrap.dedent(workflow[start:end])
+          exec(compile(script, 'issue58_patch.py', 'exec'))
+          RUNNER
+
+      - name: Commit implementation
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/build.gradle.kts \
+            app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FmSessionRouting.kt \
+            app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7FytTwMediaKeys.kt \
+            app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/Dudu7FytTwController.kt \
+            app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt \
+            app/src/test/kotlin/com/metrolist/music/playback/Dudu7FytTwMediaKeysTest.kt
+          git commit -m "Unify FYT TWUtil with NavRadio logic [skip ci]"
+          git push origin HEAD:agent/issue-58-navradio-twutil-parity
+
+      - name: Run Dudu7 unit tests
+        run: ./gradlew :app:testGmsDudu7DebugUnitTest --stacktrace
+
+      - name: Build Dudu7 APK
+        run: ./gradlew :app:assembleGmsDudu7Debug --stacktrace
+
+      - name: Verify APK and prepare artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep -i 'dudu7' | head -n 1)"
+          test -n "$APK"
+          mkdir -p artifacts
+          cp "$APK" "artifacts/Metrolist dudu7 13.7.40.apk"
+          sha256sum "artifacts/Metrolist dudu7 13.7.40.apk" > "artifacts/Metrolist dudu7 13.7.40.apk.sha256"
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          "$BUILD_TOOLS/aapt" dump badging "artifacts/Metrolist dudu7 13.7.40.apk" | tee artifacts/aapt-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "artifacts/Metrolist dudu7 13.7.40.apk" | tee artifacts/apksigner.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.40-navradio-twutil
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove temporary workflows
+        if: always()
+        shell: bash
+        run: |
+          git fetch origin agent/issue-58-navradio-twutil-parity
+          git reset --hard origin/agent/issue-58-navradio-twutil-parity
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm -f .github/workflows/issue-58-navradio-twutil-parity.yml .github/workflows/issue-58-pr-runner.yml
+          git commit -m "Remove temporary Issue 58 workflows [skip ci]"
+          git push origin HEAD:agent/issue-58-navradio-twutil-parity
