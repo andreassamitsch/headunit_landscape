@@ -1,0 +1,28 @@
+NavRadio+ 4.08 reference validation
+Date: 2026-08-02
+
+Command:
+python tools/navradio_reference/extract_navradio_408_reference.py \
+  NavRadio+_4.08_APKPure.xapk \
+  --out /tmp/navradio-408-reference \
+  --expected-sha256 4e362521d4b3bb093e32fc71dc16836ab1259ec38047dc4619958caa44a723c8
+
+Result:
+- input SHA-256 verified
+- package: com.navimods.radio
+- versionName: 4.08
+- versionCode: 1088
+- base APK SHA-256 verified: 9f28fd88d4df40920a4fae85f71c1e7975437b2af2b15c7a67005b581ceddf9f
+- classes.dex SHA-256 verified: 3b76fbe9660d66b47936323b71739976e1e157bd01f1b8208c7757d19fdc6e5c
+- strings: 50,439
+- types: 9,759
+- fields: 53,373
+- method references: 49,198
+- classes: 8,061
+- direct reference hits: 234
+- automatically selected methods: 423
+- class/method index contains RadioService, FmService, QFService, nextStation and prevStation
+
+Status: PASS
+
+This validates static extraction and reference generation only. It does not validate runtime media-key delivery on a physical Dudu7.

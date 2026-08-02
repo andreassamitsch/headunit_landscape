@@ -1,0 +1,35 @@
+{
+  "reference": "NavRadio+ 4.08 static interoperability analysis",
+  "created_at": "2026-08-02",
+  "source": {
+    "file": "NavRadio+_4.08_APKPure.xapk",
+    "package": "com.navimods.radio",
+    "application_name": "NavRadio+",
+    "version_code": 1088,
+    "version_name": "4.08",
+    "min_sdk": 25,
+    "target_sdk": 35,
+    "xapk_sha256": "4e362521d4b3bb093e32fc71dc16836ab1259ec38047dc4619958caa44a723c8",
+    "base_apk_sha256": "9f28fd88d4df40920a4fae85f71c1e7975437b2af2b15c7a67005b581ceddf9f",
+    "arm64_split_sha256": "923046e321e65f8399ba3bc893bb77f894f6ed3552a77738d3228cb2a29fed9a",
+    "xxxhdpi_split_sha256": "355ef7dd859b2172e676a0fee7779468f9b724c9a0a57d00016f0249c834022e",
+    "classes_dex_sha256": "3b76fbe9660d66b47936323b71739976e1e157bd01f1b8208c7757d19fdc6e5c"
+  },
+  "dex": {
+    "size_bytes": 8445700,
+    "strings": 50439,
+    "types": 9759,
+    "fields": 53373,
+    "method_references": 49198,
+    "classes": 8061
+  },
+  "checked_in_scope": {
+    "relevant_classes": 509,
+    "relevant_defined_methods": 2890,
+    "code_snapshot": "Dudu7/FYT device selection, Media3 session/player, station navigation, QF listener and alternate vendor key paths"
+  },
+  "external_context": {
+    "xda_thread": "https://xdaforums.com/t/dev-new-navradio-ported-to-uis7862-uis7870-and-other-fyt-devices.4387965/",
+    "developer": "KoTiX2"
+  }
+}
