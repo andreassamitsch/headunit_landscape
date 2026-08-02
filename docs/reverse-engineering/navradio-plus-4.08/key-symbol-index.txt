@@ -1,0 +1,60 @@
+NavRadio+ 4.08 key symbols
+Source XAPK SHA-256: 4e362521d4b3bb093e32fc71dc16836ab1259ec38047dc4619958caa44a723c8
+Source classes.dex SHA-256: 3b76fbe9660d66b47936323b71739976e1e157bd01f1b8208c7757d19fdc6e5c
+
+DEVICE DETECTION
+41130 Lcom/google/gson/internal/c;->h()V
+      DUDUAUTO, SC7870, uis7870 and FYT-family property detection
+
+RADIO SERVICE / BACKEND SELECTION
+41594 Lcom/navimods/radio/RadioService;-><init>()V
+41614 Lcom/navimods/radio/RadioService;->g(Lcom/navimods/radio/RadioService;)V
+41635 Lcom/navimods/radio/RadioService;->init()V
+41714 Lcom/navimods/radio/RadioService;->x()V
+      FYT/Dudu7: com.syu.music or com.syu.radio -> FmService
+41715 Lcom/navimods/radio/RadioService;->y()V
+      QF-specific QFService initialization and key registration
+
+MEDIA3 SESSION / PLAYER
+41647 Lcom/navimods/radio/RadioService;->onCreate()V
+41666 Lcom/navimods/radio/RadioService;->onGetSession(Landroidx/media3/session/x1;)Landroidx/media3/session/z1;
+42409 Lcom/navimods/radio/media/b;-><init>(Landroid/os/Looper;Lcom/navimods/radio/RadioService;)V
+42471 Lcom/navimods/radio/media/b;->m1(IIJZ)V
+      Media3 next/previous commands -> station broadcasts
+
+SERVICE COMMAND ROUTING
+41670 Lcom/navimods/radio/RadioService;->onStartCommand(Landroid/content/Intent;II)I
+      Handles com.navimods.radio.set.next_station and .set.prev_station
+
+APP-OWNED STATION NAVIGATION
+41644 Lcom/navimods/radio/RadioService;->nextStation()V
+41677 Lcom/navimods/radio/RadioService;->prevStation()V
+41690 Lcom/navimods/radio/RadioService;->seekNextStation()V
+41691 Lcom/navimods/radio/RadioService;->seekPrevStation()V
+41696 Lcom/navimods/radio/RadioService;->setStation(ILcom/navimods/radio/Station;)V
+
+FYT TUNER BACKEND
+18369 Lcom/android/fmradio/FmService;-><init>(Lcom/navimods/radio/RadioService;)V
+18390 Lcom/android/fmradio/FmService;->initService(I)V
+18404 Lcom/android/fmradio/FmService;->powerUp(F)Z
+18426 Lcom/android/fmradio/FmService;->tuneStation(F)Z
+18336 Lcom/android/fmradio/FmNative;->openDev()Z
+18338 Lcom/android/fmradio/FmNative;->powerUp(F)Z
+18354 Lcom/android/fmradio/FmNative;->tune(F)Z
+
+QF-ONLY DIRECT MEDIA-BUTTON PATH
+18448 Lcom/android/fmradio/QFService$1;->onMediaButtonEvent(Landroid/content/Intent;)Z
+18501 Lcom/android/fmradio/QFService;->setMediaButtonListener(Lcom/android/fmradio/iface/IMediaButtonListener;)V
+43312 Lcom/navimods/radio/v0;->onReceived(ILandroid/qf/util/QFKeyEventInfo;)V
+41642 Lcom/navimods/radio/RadioService;->m(Lcom/navimods/radio/RadioService;I)V
+      Keycode 87 -> nextStation; keycode 88 -> prevStation
+
+ADDITIONAL KEY ADAPTERS PRESENT IN THE APK
+41667 Lcom/navimods/radio/RadioService;->onKeyPress(II)V
+  620 Landroid/car/utils/eventhub/c;->handleMessage(Landroid/os/Message;)V
+
+Full generated reference counts:
+- 509 relevant classes
+- 2,890 relevant defined methods
+- 8,061 total DEX classes
+- 49,198 total method references
