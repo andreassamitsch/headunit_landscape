@@ -527,7 +527,7 @@ internal fun extractSyuFmFrequency(
     floats: FloatArray?,
     strings: Array<out String?>?,
 ): Float? {
-    ints?.asSequence()?.mapNotNull { decodeSyuFmFrequency(it.toFloat()) }?.firstOrNull()?.let { return it }
+    ints?.asSequence()?.mapNotNull(::decodeSyuFmInteger)?.firstOrNull()?.let { return it }
     floats?.asSequence()?.mapNotNull(::decodeSyuFmFrequency)?.firstOrNull()?.let { return it }
     strings
         ?.asSequence()
@@ -540,10 +540,22 @@ internal fun extractSyuFmFrequency(
                 decodeSyuFmFrequency(whole + fraction)?.let { return it }
             }
             SYU_FM_INTEGER.findAll(value).forEach { match ->
-                decodeSyuFmFrequency(match.value.toFloatOrNull() ?: return@forEach)?.let { return it }
+                decodeSyuFmInteger(match.value.toIntOrNull() ?: return@forEach)?.let { return it }
             }
         }
     return null
+}
+
+/** Integer payloads use scaled vendor units; raw 87/88 are steering-key values, not MHz. */
+internal fun decodeSyuFmInteger(raw: Int): Float? {
+    val decoded =
+        when (raw) {
+            in 875..1080 -> raw / 10f
+            in 8750..10800 -> raw / 100f
+            in 87500..108000 -> raw / 1000f
+            else -> return null
+        }
+    return (decoded * 10f).roundToInt() / 10f
 }
 
 internal fun decodeSyuFmFrequency(raw: Float): Float? {
