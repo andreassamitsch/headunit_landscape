@@ -12,6 +12,7 @@ import com.android.fmradio.FmService
 import com.metrolist.music.playback.Dudu7FmMediaButtonRouting
 import com.metrolist.music.playback.Dudu7FmSessionOwnership
 import com.metrolist.music.playback.Dudu7FmSessionRouting
+import com.metrolist.music.playback.Dudu7SyuRadioIpc
 import com.metrolist.music.playback.MediaKeyDiagnostics
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -400,6 +401,12 @@ object FytPhysicalRadio {
                     "DUDU7_SESSION_CLAIM",
                     "source=powerOn claimed=true changed=$claimChanged target=$target",
                 )
+                val syuReady = Dudu7SyuRadioIpc.claimFmSource()
+                MediaKeyDiagnostics.record(
+                    context,
+                    "SYU_IPC_SOURCE",
+                    "source=powerOn requestQueued=true mainReady=$syuReady target=$target",
+                )
                 delay(DUDU7_SESSION_PROPAGATION_MS)
 
                 requestAudioFocus()
@@ -450,6 +457,7 @@ object FytPhysicalRadio {
                 Timber.tag(TAG).i("Physical FM active at %.1f MHz", target)
             } catch (error: Throwable) {
                 Timber.tag(TAG).e(error, "Could not start physical FM")
+                Dudu7SyuRadioIpc.releaseFmSource()
                 cleanupHardware()
                 val released = Dudu7FmSessionOwnership.release()
                 MediaKeyDiagnostics.record(
@@ -469,6 +477,7 @@ object FytPhysicalRadio {
                 if (_state.value.isBusy && !_state.value.isActive) return@launch
                 _state.update { it.copy(isBusy = true) }
             }
+            Dudu7SyuRadioIpc.releaseFmSource()
             cleanupHardware()
             _state.update {
                 it.copy(
