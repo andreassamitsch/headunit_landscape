@@ -385,6 +385,7 @@ object FytPhysicalRadio {
                 _state.update { it.copy(isBusy = true, error = null) }
             }
             val target = normalizeFrequency(frequency)
+            Dudu7SyuRadioIpc.resetFrequencyAnchor("powerOn:$target", target)
             val context = appContext
             val fm = native
             if (context == null || fm == null || !FmNative.isLibraryLoaded()) {
@@ -516,6 +517,7 @@ object FytPhysicalRadio {
 
     fun tune(frequency: Float) {
         val target = normalizeFrequency(frequency)
+        Dudu7SyuRadioIpc.onMetroListTuneRequested("tune:$target", target)
         if (!_state.value.isActive) {
             powerOn(target)
             return
@@ -609,6 +611,7 @@ object FytPhysicalRadio {
                 }
 
             if (found != null) {
+                Dudu7SyuRadioIpc.resetFrequencyAnchor("seekResult:$found", found)
                 persistFrequency(found)
                 _state.update { it.copy(isBusy = false, frequency = found) }
                 triggerRdsRead()
@@ -620,6 +623,7 @@ object FytPhysicalRadio {
 
     fun startAutoScan() {
         if (_state.value.isScanning) return
+        Dudu7SyuRadioIpc.resetFrequencyAnchor("autoScanStart", null)
         scanJob?.cancel()
         scanJob =
             scope.launch {
@@ -746,6 +750,7 @@ object FytPhysicalRadio {
                     fm.tune(originalFrequency)
                     fm.setRds(true)
                 }
+                Dudu7SyuRadioIpc.resetFrequencyAnchor("autoScanComplete", originalFrequency)
                 persistFrequency(originalFrequency)
                 _state.update {
                     it.copy(
@@ -909,6 +914,10 @@ object FytPhysicalRadio {
                     return@launch
                 }
 
+                Dudu7SyuRadioIpc.resetFrequencyAnchor(
+                    reason = "afCheck:${if (manual) "manual" else "automatic"}",
+                    baselineFrequency = null,
+                )
                 val preset = before.currentPreset
                 val expectedPi = before.pi.takeIf { before.rdsConfirmed && it > 0 } ?: preset?.pi.orZero()
                 val currentRtrMatch = before.rtrStableId.isNotBlank() &&
@@ -1029,6 +1038,7 @@ object FytPhysicalRadio {
                     }
                     triggerRdsRead()
                 } finally {
+                    Dudu7SyuRadioIpc.resetFrequencyAnchor("afComplete", _state.value.frequency)
                     runCatching { fm.setMute(before.isMuted) }
                 }
             }
