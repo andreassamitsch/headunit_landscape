@@ -11,6 +11,13 @@ class Dudu7SyuRadioIpcTest {
         assertEquals(0, SYU_MAIN_MODULE)
         assertEquals(0, SYU_MAIN_COMMAND_SOURCE)
         assertTrue(SYU_RADIO_SOURCE_PAYLOAD.contentEquals(intArrayOf(1)))
+        assertNull(
+            extractSyuMediaKeyCandidate(
+                SYU_MAIN_COMMAND_SOURCE,
+                SYU_RADIO_SOURCE_PAYLOAD,
+                null,
+            ),
+        )
     }
 
     @Test
