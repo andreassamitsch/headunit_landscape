@@ -119,7 +119,8 @@ Offen bleibt die gerätespezifische Zustellung durch `com.syu.ms`. Diese muss we
 
 - `source-manifest.json`: Hashes, Paket- und DEX-Metadaten
 - `key-symbol-index.txt`: kompakter Index der zentralen Klassen und Methoden; das Skript erzeugt zusätzlich den vollständigen Index mit 509 relevanten Klassen und 2.890 definierten Methoden
-- `smali/`: verifizierte Schlüsselmethode als einzelne, direkt in GitHub lesbare Pseudo-Smali-Dateien
+- `verified-code-paths.smali.txt`: direkt lesbare, verifizierte DEX-Ausschnitte der entscheidenden Dudu7-, MediaSession-, Senderlisten- und QF-Pfade
+- `validation.txt`: protokollierter Regenerierungstest
 - `../../../tools/navradio_reference/extract_navradio_408_reference.py`: reproduzierbares Analysewerkzeug
 
 ## Reproduzieren
