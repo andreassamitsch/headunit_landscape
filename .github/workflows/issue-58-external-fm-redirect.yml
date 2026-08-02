@@ -32,6 +32,49 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Correct directed FM seek inference
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7SyuRadioIpc.kt')
+          text = path.read_text()
+          old = '''    val upDistance =
+              if (observed > current) {
+                  observed - current
+              } else {
+                  (SYU_FM_MAX - current) + SYU_FM_STEP + (observed - SYU_FM_MIN)
+              }
+          val downDistance =
+              if (observed < current) {
+                  current - observed
+              } else {
+                  (current - SYU_FM_MIN) + SYU_FM_STEP + (SYU_FM_MAX - observed)
+              }
+          return upDistance <= downDistance
+          '''
+          new = '''    val highEdge = SYU_FM_MAX - SYU_FM_WRAP_EDGE_MHZ
+          val lowEdge = SYU_FM_MIN + SYU_FM_WRAP_EDGE_MHZ
+          return when {
+              current >= highEdge && observed <= lowEdge -> true
+              current <= lowEdge && observed >= highEdge -> false
+              else -> observed > current
+          }
+          '''
+          if old not in text:
+              if 'SYU_FM_WRAP_EDGE_MHZ' in text:
+                  raise SystemExit(0)
+              raise SystemExit('Expected direction block not found')
+          text = text.replace(old, new, 1)
+          text = text.replace(
+              'private const val SYU_FM_STEP = 0.1f\n',
+              'private const val SYU_FM_STEP = 0.1f\nprivate const val SYU_FM_WRAP_EDGE_MHZ = 2.0f\n',
+              1,
+          )
+          path.write_text(text)
+          PY
+
       - name: Set version 13.7.44
         shell: bash
         run: |
@@ -65,22 +108,23 @@ jobs:
           grep -q 'sourceOwnerPackage != appContext.packageName' "$IPC"
           grep -q 'snapshot.isBusy' "$IPC"
           grep -q 'snapshot.isScanning' "$IPC"
+          grep -q 'SYU_FM_WRAP_EDGE_MHZ' "$IPC"
           grep -q 'val openOk = fm.openDev()' "$RADIO"
           ! grep -q 'extractSyuMediaKeyCandidate' "$IPC"
           ! grep -Eq 'module\.cmd\([^\n]*26|command *= *26' "$IPC"
           ! grep -Eq 'TwUtilBridge|twUtil\?\.|Dudu7FytTwController' "$RADIO"
 
-      - name: Commit version
+      - name: Commit implementation adjustments
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --quiet -- app/build.gradle.kts; then
-            echo 'Version already committed.'
+          if git diff --quiet -- app; then
+            echo 'Implementation and version already committed.'
           else
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add app/build.gradle.kts
-            git commit -m 'build: set Dudu7 version 13.7.44 [skip external-fm]'
+            git add app
+            git commit -m 'fix: use directed FM seek with edge wrap [skip external-fm]'
             git push origin HEAD:agent/issue-58-external-fm-favourite-redirect
           fi
 
