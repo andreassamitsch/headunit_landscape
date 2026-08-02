@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.media3.common.util.UnstableApi
 import com.metrolist.music.radio.fyt.FytPhysicalRadio
 
-/** Installs the Dudu7 hardware-radio player and the diagnostic Syu radio-source client. */
+/** Installs the Dudu7 hardware-radio player and Syu source/frequency observer. */
 @UnstableApi
 internal object Dudu7FmSessionRouting {
     @Volatile
@@ -21,9 +21,9 @@ internal object Dudu7FmSessionRouting {
             PhysicalFmSessionBridge.install(
                 PhysicalFmSessionBridge.Controller(
                     player = player,
-                    // This flow intentionally represents session ownership, not only the
-                    // already-active tuner. The additional Syu client claims the Dudu7 radio
-                    // source before FmNative is opened and logs all MAIN-module callbacks.
+                    // The Syu client claims the Dudu7 source before FmNative starts and
+                    // observes vendor RADIO/STEER activity. A vendor-originated frequency
+                    // jump is redirected through the same ordered FM-favourite player.
                     isActive = player.isActive,
                     deactivate = { FytPhysicalRadio.powerOff() },
                     release = {
