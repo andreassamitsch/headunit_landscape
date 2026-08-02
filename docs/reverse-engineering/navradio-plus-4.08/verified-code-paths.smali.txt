@@ -1,0 +1,274 @@
+# NavRadio+ 4.08 – verified Dudu7/FYT/media-key DEX excerpts
+# Source XAPK SHA-256: 4e362521d4b3bb093e32fc71dc16836ab1259ec38047dc4619958caa44a723c8
+# Source classes.dex SHA-256: 3b76fbe9660d66b47936323b71739976e1e157bd01f1b8208c7757d19fdc6e5c
+#
+# Pseudo-Smali reconstructed from DEX. Non-relevant instructions are marked with
+# "...". Method IDs and code offsets allow the exact method to be regenerated
+# with tools/navradio_reference/extract_navradio_408_reference.py.
+
+################################################################################
+# Device identification
+# Lcom/google/gson/internal/c;->h()V
+# method_idx=41130 code_off=0x529524
+################################################################################
+
+    const-string v11, "ro.customize.brand"
+    invoke-static {v11}, Lcom/google/common/util/concurrent/d0;->x(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v11
+    const-string v13, "ro.product.device"
+    invoke-static {v13}, Lcom/google/common/util/concurrent/d0;->x(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v13
+    sput-object v13, Lcom/google/gson/internal/c;->K:Ljava/lang/String;
+
+    sget-object v13, Landroid/os/Build;->BRAND:Ljava/lang/String;
+    const-string v14, "DUDUAUTO"
+    invoke-virtual {v14, v13}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+    move-result v15
+    if-nez v15, :dudu_true
+    invoke-virtual {v14, v11}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+    move-result v11
+    if-eqz v11, :dudu_false
+:dudu_true
+    const/4 v11, #1
+:dudu_store
+    sput-boolean v11, Lcom/google/gson/internal/c;->a:Z
+
+    const-string v11, "SC7870"
+    invoke-virtual {v11, v2}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+    move-result v11
+    const-string v14, "uis7870"
+    if-nez v11, :uis7870_true
+    sget-object v11, Lcom/google/gson/internal/c;->K:Ljava/lang/String;
+    invoke-virtual {v11, v14}, Ljava/lang/String;->startsWith(Ljava/lang/String;)Z
+    move-result v11
+    if-eqz v11, :uis7870_false
+:uis7870_true
+    const/4 v11, #1
+:uis7870_store
+    sput-boolean v11, Lcom/google/gson/internal/c;->b:Z
+
+    # FYT family test includes product-device prefixes:
+    # uis7870, ums512, uis8581, sp9853i, sp7731e
+    # plus the FYT/UIS7862 property fallback.
+    ...
+    sput-boolean v0, Lcom/google/gson/internal/c;->D:Z
+
+################################################################################
+# RadioService copies the independently detected flags
+# Lcom/navimods/radio/RadioService;-><init>()V
+# method_idx=41594 code_off=0x54d354
+################################################################################
+
+    invoke-static {}, Lcom/google/gson/internal/c;->h()V
+    sget-boolean v1, Lcom/google/gson/internal/c;->a:Z
+    sput-boolean v1, Lcom/navimods/radio/RadioService;->isDUDU7:Z
+    sget-boolean v1, Lcom/google/gson/internal/c;->b:Z
+    sput-boolean v1, Lcom/navimods/radio/RadioService;->is7870:Z
+    sget-boolean v1, Lcom/google/gson/internal/c;->D:Z
+    sput-boolean v1, Lcom/navimods/radio/RadioService;->isFYT7862:Z
+    sget-boolean v1, Lcom/google/gson/internal/c;->z:Z
+    sput-boolean v1, Lcom/navimods/radio/RadioService;->isQF01:Z
+
+################################################################################
+# Backend selector: FYT x() and QF y() are separate selections
+# Lcom/navimods/radio/RadioService;->g(Lcom/navimods/radio/RadioService;)V
+# method_idx=41614 code_off=0x54ccec
+################################################################################
+
+    sget-boolean v0, Lcom/navimods/radio/RadioService;->isFYT7862:Z
+    if-eqz v0, :after_fyt
+    invoke-virtual {v4}, Lcom/navimods/radio/RadioService;->x()V
+:after_fyt
+    ...
+    sget-boolean v0, Lcom/navimods/radio/RadioService;->isQF01:Z
+    if-eqz v0, :after_qf
+    invoke-virtual {v4}, Lcom/navimods/radio/RadioService;->y()V
+:after_qf
+
+################################################################################
+# TWUtil block is excluded for FYT
+# Lcom/navimods/radio/RadioService;->init()V
+# method_idx=41635 code_off=0x54eda4
+################################################################################
+
+    sget-boolean v0, Lcom/navimods/radio/RadioService;->isAllwinner:Z
+    if-nez v0, :possible_tw_backend
+    sget-boolean v0, Lcom/navimods/radio/RadioService;->isTS9:Z
+    if-nez v0, :possible_tw_backend
+    sget-boolean v0, Lcom/navimods/radio/RadioService;->isTS10:Z
+    if-eqz v0, :skip_tw_backend
+:possible_tw_backend
+    sget-boolean v0, Lcom/navimods/radio/RadioService;->isFYT7862:Z
+    if-nez v0, :skip_tw_backend
+    ...
+    const-string v2, "android.tw.john.TWUtil"
+    new-instance v2, Landroid/tw/john/TWUtil;
+    ...
+:skip_tw_backend
+
+################################################################################
+# FYT/Dudu7 tuner initializer
+# Lcom/navimods/radio/RadioService;->x()V
+# method_idx=41714 code_off=0x54f5b8
+################################################################################
+
+    const-string v0, "com.syu.music"
+    const-string v1, "com.syu.radio"
+    sget-boolean v2, Lcom/navimods/radio/RadioService;->isDUDU7:Z
+    if-nez v2, :dudu_media_check
+    sget-boolean v2, Lcom/navimods/radio/RadioService;->is7870:Z
+    if-nez v2, :dudu_media_check
+
+    # Non-Dudu FYT branch checks com.syu.radio / label RadioProxy / version >= 1.2.
+    ...
+    const-string v3, "RadioProxy"
+    invoke-virtual {v3, v0}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+    ...
+    sput-boolean v5, Lcom/navimods/radio/RadioService;->radioProxyOK:Z
+    goto :create_fm_service
+
+:dudu_media_check
+    # Dudu7/UIS7870 branch reads com.syu.music.
+    invoke-virtual {v8}, Landroid/content/Context;->getPackageManager()Landroid/content/pm/PackageManager;
+    move-result-object v1
+    invoke-virtual {v1, v0, v3}, Landroid/content/pm/PackageManager;->getApplicationInfo(Ljava/lang/String;I)Landroid/content/pm/ApplicationInfo;
+    ...
+    const-string v0, "Media"
+    invoke-virtual {v0, v1}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+    ...
+    # Version comparison is against 2.0.
+    sput-boolean v5, Lcom/navimods/radio/RadioService;->radioProxyOK:Z
+
+:create_fm_service
+    new-instance v0, Lcom/android/fmradio/FmService;
+    invoke-direct {v0, v8}, Lcom/android/fmradio/FmService;-><init>(Lcom/navimods/radio/RadioService;)V
+    iput-object v0, v8, Lcom/navimods/radio/RadioService;->mFMService:Lcom/android/fmradio/FmService;
+    iget-object v0, v8, Lcom/navimods/radio/RadioService;->broadcastManager:Lcom/navimods/radio/util/n;
+    iget-object v8, v8, Lcom/navimods/radio/RadioService;->fytReceiver:Landroid/content/BroadcastReceiver;
+    invoke-virtual {v0, v8}, Lcom/navimods/radio/util/n;->a(Landroid/content/BroadcastReceiver;)V
+
+################################################################################
+# QF initializer is a different backend
+# Lcom/navimods/radio/RadioService;->y()V
+# method_idx=41715 code_off=0x54f7ec
+################################################################################
+
+    new-instance v0, Lcom/android/fmradio/QFService;
+    invoke-direct {v0, v3}, Lcom/android/fmradio/QFService;-><init>(Lcom/navimods/radio/RadioService;)V
+    iput-object v0, v3, Lcom/navimods/radio/RadioService;->mQFService:Lcom/android/fmradio/QFService;
+    ...
+    iget-object v0, v3, Lcom/navimods/radio/RadioService;->registerKeyEvent:Ljava/lang/Runnable;
+    invoke-virtual {v1, v0}, Landroid/os/Handler;->post(Ljava/lang/Runnable;)Z
+
+################################################################################
+# Media3 player and MediaSession are created by RadioService.onCreate()
+# Lcom/navimods/radio/RadioService;->onCreate()V
+# method_idx=41647 code_off=0x54f9e8
+################################################################################
+
+    invoke-super {v1}, Landroidx/media3/session/MediaSessionService;->onCreate()V
+    ...
+    new-instance v2, Lcom/navimods/radio/media/b;
+    invoke-static {}, Landroid/os/Looper;->getMainLooper()Landroid/os/Looper;
+    move-result-object v3
+    invoke-direct {v2, v3, v1}, Lcom/navimods/radio/media/b;-><init>(Landroid/os/Looper;Lcom/navimods/radio/RadioService;)V
+    iput-object v2, v1, Lcom/navimods/radio/RadioService;->player:Lcom/navimods/radio/media/b;
+    ...
+    # MediaSession builder receives the custom radio player.
+    iget-object v4, v1, Lcom/navimods/radio/RadioService;->player:Lcom/navimods/radio/media/b;
+    ...
+    invoke-virtual {v3}, Landroidx/media3/session/t1;->a()Landroidx/media3/session/z1;
+    move-result-object v3
+    iput-object v3, v1, Lcom/navimods/radio/RadioService;->mediaSession:Landroidx/media3/session/z1;
+
+################################################################################
+# Media3 navigation commands become NavRadio station broadcasts
+# Lcom/navimods/radio/media/b;->m1(IIJZ)V
+# method_idx=42471 code_off=0x570808
+################################################################################
+
+    packed-switch v12, :navigation_switch
+    ...
+:next
+    const-string v5, "com.navimods.radio.set.next_station"
+    invoke-direct {v11, v5}, Lcom/navimods/radio/media/b;->E1(Ljava/lang/String;)V
+    goto :done
+:previous
+    const-string v5, "com.navimods.radio.set.prev_station"
+    invoke-direct {v11, v5}, Lcom/navimods/radio/media/b;->E1(Ljava/lang/String;)V
+:done
+    ...
+:navigation_switch
+    # command 6 -> previous
+    # command 7 -> previous
+    # command 8 -> next
+    # command 9 -> next
+
+################################################################################
+# Own station-list navigation, not tuner seek
+# Lcom/navimods/radio/RadioService;->nextStation()V
+# method_idx=41644 code_off=0x54f948
+################################################################################
+
+    iget-object v0, v3, Lcom/navimods/radio/RadioService;->mIndexes:Ljava/util/HashMap;
+    iget-object v1, v3, Lcom/navimods/radio/RadioService;->mListName:Ljava/lang/String;
+    invoke-virtual {v0, v1}, Ljava/util/HashMap;->get(Ljava/lang/Object;)Ljava/lang/Object;
+    move-result-object v0
+    check-cast v0, Ljava/lang/Integer;
+    invoke-virtual {v0}, Ljava/lang/Integer;->intValue()I
+    move-result v0
+    add-int/lit8 v0, v0, #1
+    ...
+    # wrap to index 0 when index reaches list size
+    invoke-virtual {v3, v0, v1}, Lcom/navimods/radio/RadioService;->setStation(ILcom/navimods/radio/Station;)V
+
+# Lcom/navimods/radio/RadioService;->prevStation()V
+# method_idx=41677 code_off=0x55221c
+
+    iget-object v0, v3, Lcom/navimods/radio/RadioService;->mIndexes:Ljava/util/HashMap;
+    iget-object v1, v3, Lcom/navimods/radio/RadioService;->mListName:Ljava/lang/String;
+    invoke-virtual {v0, v1}, Ljava/util/HashMap;->get(Ljava/lang/Object;)Ljava/lang/Object;
+    move-result-object v0
+    check-cast v0, Ljava/lang/Integer;
+    invoke-virtual {v0}, Ljava/lang/Integer;->intValue()I
+    move-result v0
+    add-int/lit8 v0, v0, #-1
+    ...
+    # wrap to list size - 1 when index becomes negative
+    invoke-virtual {v3, v0, v1}, Lcom/navimods/radio/RadioService;->setStation(ILcom/navimods/radio/Station;)V
+
+################################################################################
+# Direct MediaButton listener is QF-specific
+# Lcom/android/fmradio/QFService$1;->onMediaButtonEvent(Landroid/content/Intent;)Z
+# method_idx=18448 code_off=0x2ff7ec
+################################################################################
+
+    const-string v0, "android.intent.extra.KEY_EVENT"
+    invoke-virtual {v5, v0}, Landroid/content/Intent;->getParcelableExtra(Ljava/lang/String;)Landroid/os/Parcelable;
+    move-result-object v0
+    check-cast v0, Landroid/view/KeyEvent;
+    ...
+    iget-object v1, v4, Lcom/android/fmradio/QFService$1;->this$0:Lcom/android/fmradio/QFService;
+    iget-object v1, v1, Lcom/android/fmradio/QFService;->mMediaButtonListener:Lcom/android/fmradio/iface/IMediaButtonListener;
+    invoke-virtual {v0}, Landroid/view/KeyEvent;->getKeyCode()I
+    move-result v0
+    invoke-interface {v1, v0}, Lcom/android/fmradio/iface/IMediaButtonListener;->onMediaButton(I)V
+
+# Lcom/navimods/radio/v0;->onReceived(ILandroid/qf/util/QFKeyEventInfo;)V
+# method_idx=43312 code_off=0x54b360
+
+    invoke-virtual {v5}, Landroid/qf/util/QFKeyEventInfo;->getKeyCode()I
+    move-result v4
+    iget-object v5, v3, Lcom/navimods/radio/v0;->a:Lcom/navimods/radio/RadioService;
+    invoke-static {v5, v4}, Lcom/navimods/radio/RadioService;->m(Lcom/navimods/radio/RadioService;I)V
+
+# Lcom/navimods/radio/RadioService;->m(Lcom/navimods/radio/RadioService;I)V
+# method_idx=41642 code_off=0x54cecc
+
+    # switch includes:
+    # 87 (KEYCODE_MEDIA_NEXT)     -> nextStation()
+    # 88 (KEYCODE_MEDIA_PREVIOUS) -> prevStation()
+    ...
+    invoke-virtual {v1}, Lcom/navimods/radio/RadioService;->nextStation()V
+    ...
+    invoke-virtual {v1}, Lcom/navimods/radio/RadioService;->prevStation()V
