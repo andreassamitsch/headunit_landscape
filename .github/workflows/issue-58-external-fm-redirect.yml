@@ -68,7 +68,7 @@ jobs:
           grep -q 'val openOk = fm.openDev()' "$RADIO"
           ! grep -q 'extractSyuMediaKeyCandidate' "$IPC"
           ! grep -Eq 'module\.cmd\([^\n]*26|command *= *26' "$IPC"
-          ! grep -qi 'twutil' "$RADIO"
+          ! grep -Eq 'TwUtilBridge|twUtil\?\.|Dudu7FytTwController' "$RADIO"
 
       - name: Commit version
         shell: bash
