@@ -1,7 +1,7 @@
 package com.metrolist.music.radio.fyt
 
 import android.content.Context
-import com.metrolist.music.radio.RadioDnsLogoResolver
+import com.metrolist.music.radio.RadioAtPageLogoResolver
 import com.metrolist.music.radio.RadioLogoCandidate
 import com.metrolist.music.radio.RadioLogoSource
 import com.metrolist.music.radio.RadioStation
@@ -18,6 +18,7 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.text.Normalizer
 import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -26,13 +27,13 @@ import kotlin.math.roundToInt
  * Reliable FM artwork resolution inspired by NavRadio+'s station-first approach.
  *
  * Automatic resolution is deliberately conservative:
- * 1. exact RadioDNS bearer matching for the current and every known AF frequency;
- * 2. a curated Austrian PS/frequency identity mapping;
+ * 1. a curated Austrian PS/frequency identity mapping with a cheap direct radio.at URL;
+ * 2. only if that URL fails, the exact radio.at station page is parsed for its real logo;
  * 3. an exact, Austria-only match from locally saved WebRadio stations.
  *
- * Broad web/logo searches are only exposed in the manual logo picker. This avoids
- * assigning regional or similarly named stations to short RDS names such as
- * "ANTENNE", "RADIO-ST" or "OE 1".
+ * RadioDNS is intentionally not part of FM logo resolution. Broad web/logo searches are only
+ * exposed in the manual logo picker. This avoids assigning regional or similarly named stations
+ * to short RDS names such as "ANTENNE", "RADIO-ST" or "OE 1".
  */
 object ReliableFmStationLogoResolver {
     private const val TAG = "ReliableFmLogo"
@@ -48,9 +49,6 @@ object ReliableFmStationLogoResolver {
     private const val MANUAL_UPDATED_PREFIX = "manual_updated_"
     private const val RETRY_COOLDOWN_MS = 10L * 60L * 1000L
     private const val AUTO_REFRESH_MS = 30L * 24L * 60L * 60L * 1000L
-    private const val RADIODNS_RETRY_MS = 6L * 60L * 60L * 1000L
-    private const val RADIODNS_CHECKED_PREFIX = "radiodns_checked_"
-    private const val RADIODNS_RESULT_PREFIX = "radiodns_result_"
 
     data class LogoInfo(
         val localUri: String,
@@ -131,34 +129,10 @@ object ReliableFmStationLogoResolver {
 
             val cached = prefs.getString(AUTO_PREFIX + key, null)?.takeIf(String::isNotBlank)
             val cachedSource = prefs.getString(SOURCE_PREFIX + key, "").orEmpty()
+            val cachedSourceUrl = prefs.getString(SOURCE_URL_PREFIX + key, "").orEmpty()
             val updatedAt = prefs.getLong(UPDATED_PREFIX + key, 0L)
             val now = System.currentTimeMillis()
             val cacheFresh = cached != null && (updatedAt <= 0L || now - updatedAt < AUTO_REFRESH_MS)
-            val radioDnsDue = force || now - prefs.getLong(RADIODNS_CHECKED_PREFIX + key, 0L) >= RADIODNS_RETRY_MS
-            if (!force && cacheFresh && (pi <= 0 || cachedSource == RadioLogoSource.RADIO_DNS.label || !radioDnsDue)) {
-                return@withContext cached
-            }
-
-            if (pi > 0 && radioDnsDue) {
-                for (candidateFrequency in frequencies) {
-                    val candidates = RadioDnsLogoResolver.resolveFm(appContext, candidateFrequency, pi, ecc)
-                    for (candidate in candidates) {
-                        val stored = cacheAndPersistAutomatic(appContext, key, candidate)
-                        if (stored != null) {
-                            prefs.edit()
-                                .putLong(RADIODNS_CHECKED_PREFIX + key, now)
-                                .putString(RADIODNS_RESULT_PREFIX + key, RadioDnsLogoResolver.lastTrace.value.summary)
-                                .apply()
-                            return@withContext stored
-                        }
-                    }
-                }
-                prefs.edit()
-                    .putLong(RADIODNS_CHECKED_PREFIX + key, now)
-                    .putString(RADIODNS_RESULT_PREFIX + key, RadioDnsLogoResolver.lastTrace.value.summary)
-                    .apply()
-                if (!force && cacheFresh) return@withContext cached
-            }
             if (!force && cacheFresh) return@withContext cached
 
             val resolvedStation = FmStationIdentity.resolve(stationName, null, frequencies, pi, ecc)
@@ -167,8 +141,53 @@ object ReliableFmStationLogoResolver {
             val lastFailure = failedAt[key] ?: 0L
             if (!force && now - lastFailure < RETRY_COOLDOWN_MS) return@withContext cached
 
-            identity?.candidate()?.let { candidate ->
-                cacheAndPersistAutomatic(appContext, key, candidate)?.let { return@withContext it }
+            identity?.let { radioAtIdentity ->
+                val direct = radioAtIdentity.candidate()
+                Timber.tag(TAG).i(
+                    "FM logo direct attempt station=%s slug=%s url=%s",
+                    radioAtIdentity.canonicalName,
+                    radioAtIdentity.radioAtSlug,
+                    direct.url,
+                )
+                cacheAndPersistAutomatic(appContext, key, direct)?.let { return@withContext it }
+                Timber.tag(TAG).i(
+                    "FM logo direct failed; scraper fallback eligible station=%s slug=%s",
+                    radioAtIdentity.canonicalName,
+                    radioAtIdentity.radioAtSlug,
+                )
+
+                cachedSourceUrl
+                    .takeIf {
+                        cachedSource == RadioLogoSource.RADIO_AT.label &&
+                            it.isHttpUrl() &&
+                            it != direct.url
+                    }?.let { knownUrl ->
+                        val knownCandidate =
+                            RadioLogoCandidate(
+                                url = knownUrl,
+                                source = RadioLogoSource.RADIO_AT,
+                                matchScore = 100,
+                                title = radioAtIdentity.canonicalName,
+                            )
+                        Timber.tag(TAG).i(
+                            "FM logo retry cached radio.at image before scraper station=%s url=%s",
+                            radioAtIdentity.canonicalName,
+                            knownUrl,
+                        )
+                        cacheAndPersistAutomatic(appContext, key, knownCandidate)?.let { return@withContext it }
+                    }
+
+                Timber.tag(TAG).i(
+                    "FM logo scraper triggered station=%s page=https://www.radio.at/s/%s",
+                    radioAtIdentity.canonicalName,
+                    radioAtIdentity.radioAtSlug,
+                )
+                RadioAtPageLogoResolver.resolve(
+                    slug = radioAtIdentity.radioAtSlug,
+                    expectedName = radioAtIdentity.canonicalName,
+                )?.let { scraped ->
+                    cacheAndPersistAutomatic(appContext, key, scraped)?.let { return@withContext it }
+                }
             }
 
             val exactLocal = exactLocalMatch(identity?.canonicalName ?: resolvedStation.canonicalName, RadioStationStore.get(appContext).stations.value)
@@ -217,14 +236,17 @@ object ReliableFmStationLogoResolver {
             val query = identity?.canonicalName ?: resolvedStation.canonicalName
             val localStations = RadioStationStore.get(appContext).stations.value
             val localMatch = bestManualMatch(query, localStations)
+            val pageCandidate =
+                identity?.let {
+                    RadioAtPageLogoResolver.resolve(
+                        slug = it.radioAtSlug,
+                        expectedName = it.canonicalName,
+                    )
+                }
 
             buildList {
-                if (pi > 0) {
-                    frequencies.forEach { candidateFrequency ->
-                        addAll(RadioDnsLogoResolver.resolveFm(appContext, candidateFrequency, pi, ecc))
-                    }
-                }
                 identity?.candidate()?.let(::add)
+                pageCandidate?.let(::add)
                 localMatch?.let { station ->
                     val fixed =
                         when {
@@ -308,8 +330,8 @@ object ReliableFmStationLogoResolver {
             .remove(SOURCE_PREFIX + key)
             .remove(SOURCE_URL_PREFIX + key)
             .remove(UPDATED_PREFIX + key)
-            .remove(RADIODNS_CHECKED_PREFIX + key)
-            .remove(RADIODNS_RESULT_PREFIX + key)
+            .remove("radiodns_checked_$key")
+            .remove("radiodns_result_$key")
             .apply()
         bumpRevision()
     }
@@ -390,7 +412,7 @@ object ReliableFmStationLogoResolver {
         if (resolved.recognized) return "station_${resolved.stableId.replace(':', '_')}"
         if (pi > 0) {
             val piHex = (pi and 0xffff).toString(16).padStart(4, '0')
-            val resolvedEcc = normaliseEcc(ecc) ?: RadioDnsLogoResolver.defaultEcc(context)
+            val resolvedEcc = normaliseEcc(ecc) ?: defaultRegionalEcc(context)
             val gcc = resolvedEcc?.let { "${piHex.first()}$it" } ?: "unknown"
             return "gcc_${gcc}_pi_$piHex"
         }
@@ -418,6 +440,31 @@ object ReliableFmStationLogoResolver {
 
     private fun normaliseEcc(value: String?): String? =
         value?.trim()?.lowercase(Locale.ROOT)?.takeIf { it.matches(Regex("[0-9a-f]{2}")) }
+
+    private fun defaultRegionalEcc(context: Context): String? {
+        val countries = buildList {
+            val locales = context.resources.configuration.locales
+            for (index in 0 until locales.size()) add(locales[index].country)
+            add(Locale.getDefault().country)
+            add(System.getProperty("user.country").orEmpty())
+        }
+        countries.map(String::uppercase).firstNotNullOfOrNull { country ->
+            when (country) {
+                "AT", "DE" -> "e0"
+                "CH" -> "e1"
+                "LI" -> "e2"
+                else -> null
+            }
+        }?.let { return it }
+        return when (TimeZone.getDefault().id.lowercase(Locale.ROOT)) {
+            "europe/vienna", "europe/berlin" -> "e0"
+            "europe/zurich" -> "e1"
+            else -> null
+        }
+    }
+
+    private fun String.isHttpUrl(): Boolean =
+        startsWith("https://", ignoreCase = true) || startsWith("http://", ignoreCase = true)
 
     private fun bumpRevision() = _revisions.update { it + 1L }
 
