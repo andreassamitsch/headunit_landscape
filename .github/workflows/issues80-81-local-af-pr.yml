@@ -27,6 +27,7 @@ jobs:
           else
             python3 .github/scripts/issues80_81_local_af_patch.py
           fi
+          python3 .github/scripts/issues80_81_compile_fix.py
 
       - name: Verify AF safety rules
         run: |
@@ -44,7 +45,9 @@ jobs:
           assert 'receptionPathStore?.rememberConfirmed' in source
           assert 'activeFavouriteId = favouriteId' in source
           assert 'expectedPi > 0' in selector and 'receivedPi > 0' in selector
-          assert 'tryNativeAfFallback(' in source  # retained only as unused compatibility code
+          assert 'tryNativeAfFallback(' not in source
+          assert 'val activePreset = preset ?: return@launch' in source
+          assert 'val activeRegionKey = regionKey ?: return@launch' in source
           print('AF safety rules verified')
           PY
 
