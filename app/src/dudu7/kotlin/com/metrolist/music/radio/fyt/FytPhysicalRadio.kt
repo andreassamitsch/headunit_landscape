@@ -1045,7 +1045,6 @@ object FytPhysicalRadio {
                             target = selected.frequency,
                             targetRssi = selected.rssi,
                             targetPi = selected.pi,
-                            knownFrequencies = listOf(before.frequency) + candidates.map(FmAfCandidate::frequency),
                             result =
                                 "Gewechselt ${formatFrequency(before.frequency)} → ${formatFrequency(selected.frequency)} MHz " +
                                     "(PI bestätigt; RSSI $currentRssi → ${selected.rssi}; ${selected.source})",
@@ -1124,7 +1123,6 @@ object FytPhysicalRadio {
         target: Float,
         targetRssi: Int,
         targetPi: Int,
-        knownFrequencies: List<Float>,
         result: String,
         nativeResult: Int?,
         predictedCoverage: Int,
@@ -1144,8 +1142,10 @@ object FytPhysicalRadio {
                 stereo = null,
                 pi = targetPi,
                 ecc = "",
+                // Only the source frequency is already PI-confirmed at this moment.
+                // RTR proposals and rejected measurements must never appear as AF entries.
                 alternativeFrequencies =
-                    normalizeFrequencyList(knownFrequencies + before.frequency)
+                    normalizeFrequencyList(listOf(before.frequency))
                         .filterNot { frequency -> abs(frequency - target) < 0.05f },
                 rdsConfirmed = targetPi > 0,
                 rdsFreshFrequency = if (targetPi > 0) target else 0f,
@@ -1434,22 +1434,32 @@ object FytPhysicalRadio {
             }
         val stereoState = runCatching { fm.stereoState }.getOrDefault(-1)
         val directEcc = runCatching { fm.extendedCountryCode }.getOrDefault("")
-        val normalizedAf =
-            if (piConfirmedNow || (_state.value.rdsConfirmed && stablePi > 0)) {
-                normalizeFrequencyList(runCatching { fm.alternativeFrequencies.toList() }.getOrDefault(emptyList()))
+        val identityForPaths = _state.value.currentPreset
+        val regionForPaths = currentRegionKey()
+        val stationForPaths =
+            _state.value.rtrStableId.takeIf {
+                it.isNotBlank() &&
+                    abs(_state.value.rtrMatchedFrequency - _state.value.frequency) < 0.05f &&
+                    _state.value.rtrMatchConfidence >= 60
+            }.orEmpty().ifBlank { identityForPaths?.stationId.orEmpty() }
+        val confirmedLocalAf =
+            if (
+                identityForPaths != null &&
+                regionForPaths != null &&
+                stablePi > 0 &&
+                stationForPaths.isNotBlank()
+            ) {
+                receptionPathStore?.candidatesFor(
+                    favouriteId = identityForPaths.id,
+                    regionKey = regionForPaths,
+                    expectedPi = stablePi,
+                    stationId = stationForPaths,
+                ).orEmpty()
+                    .map(FmReceptionPath::frequency)
                     .filterNot { abs(it - _state.value.frequency) < 0.05f }
             } else {
                 emptyList()
             }
-        if (normalizedAf.isNotEmpty()) {
-            if (normalizedAf == pendingAfFrequencies) {
-                pendingAfCount += 1
-            } else {
-                pendingAfFrequencies = normalizedAf
-                pendingAfCount = 1
-            }
-        }
-        val stableAf = if (pendingAfCount >= 2) pendingAfFrequencies else _state.value.alternativeFrequencies
 
         _state.update { current ->
             current.copy(
@@ -1461,7 +1471,7 @@ object FytPhysicalRadio {
                 stereo = stereoState.takeIf { it >= 0 }?.let { it == 1 } ?: current.stereo,
                 pi = stablePi,
                 ecc = if (piConfirmedNow && directEcc.isNotBlank()) directEcc else current.ecc,
-                alternativeFrequencies = stableAf,
+                alternativeFrequencies = confirmedLocalAf,
                 rdsConfirmed = freshConfirmed,
                 rdsFreshFrequency = if (freshConfirmed) current.frequency else current.rdsFreshFrequency,
             )
