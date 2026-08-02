@@ -13,7 +13,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.metrolist.music.radio.RadioDnsLogoResolver
 import com.metrolist.music.radio.fyt.FytPhysicalRadio
 import com.metrolist.music.radio.fyt.ReliableFmStationLogoResolver
 import kotlinx.coroutines.launch
@@ -27,7 +26,6 @@ internal fun FmRadioDiagnostics(state: FytPhysicalRadio.State) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val revision by ReliableFmStationLogoResolver.revisions.collectAsState()
-    val radioDnsTrace by RadioDnsLogoResolver.lastTrace.collectAsState()
     val info = ReliableFmStationLogoResolver.logoInfo(
         context,
         state.displayStation,
@@ -37,11 +35,6 @@ internal fun FmRadioDiagnostics(state: FytPhysicalRadio.State) {
         listOf(state.frequency) + state.alternativeFrequencies + state.rtrAfPredictions.map { it.frequency },
     )
     val piHex = (state.pi and 0xffff).toString(16).padStart(4, '0')
-    val ecc = state.ecc.ifBlank { RadioDnsLogoResolver.defaultEcc(context).orEmpty() }.lowercase(Locale.ROOT)
-    val gcc = if (state.pi > 0 && ecc.matches(Regex("[0-9a-f]{2}"))) "${piHex.first()}$ecc" else ""
-    val frequencyCode = (state.frequency * 100f).roundToInt().toString().padStart(5, '0')
-    val lookup = if (gcc.isNotBlank()) "$frequencyCode.$piHex.$gcc.fm.radiodns.org" else "–"
-    val bearer = if (gcc.isNotBlank()) "fm:$gcc.$piHex.$frequencyCode" else "–"
     val location = if (state.geoLatitude != null && state.geoLongitude != null) {
         "${"%.5f".format(Locale.ROOT, state.geoLatitude)}, ${"%.5f".format(Locale.ROOT, state.geoLongitude)}" +
             state.geoAccuracyMeters?.let { " (±${it.roundToInt()} m)" }.orEmpty()
@@ -56,29 +49,8 @@ internal fun FmRadioDiagnostics(state: FytPhysicalRadio.State) {
         Text("Sender: ${state.displayStation}  •  ID: ${state.stableStationId}")
         Text(
             "PI: ${if (state.pi > 0) piHex.uppercase(Locale.ROOT) else "–"}  •  " +
-                "ECC: ${state.ecc.ifBlank { "– (Fallback $ecc)" }}  •  GCC: ${gcc.ifBlank { "–" }}",
+                "ECC: ${state.ecc.ifBlank { "–" }}",
         )
-        Text("RadioDNS: $lookup", style = MaterialTheme.typography.bodySmall)
-        Text("Bearer: $bearer", style = MaterialTheme.typography.bodySmall)
-        Text(
-            "RadioDNS-Status: ${radioDnsTrace.stage}${radioDnsTrace.detail.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()}",
-            style = MaterialTheme.typography.bodySmall,
-        )
-        if (radioDnsTrace.eccSource.isNotBlank()) {
-            Text(
-                "RadioDNS-ECC: ${radioDnsTrace.ecc.uppercase(Locale.ROOT)} aus ${radioDnsTrace.eccSource}",
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        if (radioDnsTrace.cnameChain.isNotEmpty()) {
-            Text("CNAME: ${radioDnsTrace.cnameChain.joinToString(" → ")}", style = MaterialTheme.typography.bodySmall, maxLines = 3)
-        }
-        if (radioDnsTrace.srvTargets.isNotEmpty()) {
-            Text("SRV: ${radioDnsTrace.srvTargets.joinToString()}", style = MaterialTheme.typography.bodySmall, maxLines = 2)
-        }
-        if (radioDnsTrace.siUrl.isNotBlank()) {
-            Text("SI: ${radioDnsTrace.siUrl}", style = MaterialTheme.typography.bodySmall, maxLines = 3)
-        }
         Text("GPS/RTR: ${if (state.geoEnabled) state.geoLocationStatus else "deaktiviert"}", style = MaterialTheme.typography.bodySmall)
         Text("Position: $location", style = MaterialTheme.typography.bodySmall)
         Text(
@@ -120,20 +92,6 @@ internal fun FmRadioDiagnostics(state: FytPhysicalRadio.State) {
         if (!info?.sourceUrl.isNullOrBlank()) {
             Text("Logo-URL: ${info?.sourceUrl}", style = MaterialTheme.typography.bodySmall, maxLines = 3)
         }
-        Button(
-            onClick = {
-                scope.launch {
-                    val frequencies =
-                        (listOf(state.frequency) + state.alternativeFrequencies + state.rtrAfPredictions.map { it.frequency })
-                            .distinctBy { (it * 100f).roundToInt() }
-                    for (candidateFrequency in frequencies) {
-                        if (RadioDnsLogoResolver.resolveFm(context, candidateFrequency, state.pi, state.ecc).isNotEmpty()) break
-                    }
-                }
-            },
-            enabled = state.pi > 0,
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("RADIODNS DIREKT TESTEN") }
         Button(
             onClick = {
                 scope.launch {
