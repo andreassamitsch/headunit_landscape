@@ -47,6 +47,20 @@ internal object Dudu7SyuRadioIpc {
         client?.setFmRequested(false)
     }
 
+    fun onMetroListTuneRequested(
+        reason: String,
+        targetFrequency: Float,
+    ) {
+        client?.onMetroListTuneRequested(reason, targetFrequency)
+    }
+
+    fun resetFrequencyAnchor(
+        reason: String,
+        baselineFrequency: Float? = null,
+    ) {
+        client?.resetFrequencyAnchor(reason, baselineFrequency)
+    }
+
     fun release() {
         synchronized(lock) {
             client?.release()
@@ -90,8 +104,8 @@ internal object Dudu7SyuRadioIpc {
 
         private var sourceOwnerPackage = ""
         private var sourceOwnedAt = 0L
-        private var lastObservedFrequency = Float.NaN
-        private var lastObservedAt = 0L
+        private val frequencyAnchor = SyuFmFrequencyAnchor()
+        private val redirectTuneGate = SyuFmRedirectTuneGate()
         private var lastRedirectDirection: Boolean? = null
         private var lastRedirectAt = 0L
 
@@ -177,9 +191,40 @@ internal object Dudu7SyuRadioIpc {
             val immediate = mainModule != null
             worker.post {
                 if (released.get()) return@post
-                if (requested) activateForFm("powerOn") else deactivateForFm("powerOff")
+                if (requested) {
+                    resetFrequencyAnchorInternal("powerOn", null)
+                    activateForFm("powerOn")
+                } else {
+                    deactivateForFm("powerOff")
+                }
             }
             return immediate
+        }
+
+        fun onMetroListTuneRequested(
+            reason: String,
+            targetFrequency: Float,
+        ) {
+            val now = SystemClock.elapsedRealtime()
+            val target = decodeSyuFmFrequency(targetFrequency) ?: return
+            val redirectTune = redirectTuneGate.consume(now)
+            if (redirectTune) {
+                MediaKeyDiagnostics.record(
+                    appContext,
+                    "SYU_FM_ANCHOR",
+                    "reason=$reason target=$target decision=preserveRedirect " +
+                        "anchor=${frequencyAnchor.current().frequency}",
+                )
+            } else {
+                resetFrequencyAnchorInternal(reason, target)
+            }
+        }
+
+        fun resetFrequencyAnchor(
+            reason: String,
+            baselineFrequency: Float?,
+        ) {
+            resetFrequencyAnchorInternal(reason, baselineFrequency)
         }
 
         fun release() {
@@ -213,6 +258,7 @@ internal object Dudu7SyuRadioIpc {
             connectedComponent = null
             sourceOwnerPackage = ""
             sourceOwnedAt = 0L
+            resetFrequencyAnchorInternal("connectionReset", null)
         }
 
         private fun bindCurrentEndpoint() {
@@ -307,7 +353,7 @@ internal object Dudu7SyuRadioIpc {
             steerRegistered = false
             sourceOwnerPackage = ""
             sourceOwnedAt = 0L
-            lastObservedFrequency = Float.NaN
+            resetFrequencyAnchorInternal(source, null)
             MediaKeyDiagnostics.record(
                 appContext,
                 "SYU_IPC_STATE",
@@ -366,13 +412,18 @@ internal object Dudu7SyuRadioIpc {
             if (released.get()) return
             if (updateCode == SYU_MAIN_UPDATE_SOURCE_OWNER) {
                 val owner = strings?.firstOrNull().orEmpty()
+                val wasOurs = sourceOwnerPackage == appContext.packageName
+                val isOurs = owner == appContext.packageName
                 sourceOwnerPackage = owner
-                sourceOwnedAt =
-                    if (owner == appContext.packageName) SystemClock.elapsedRealtime() else 0L
+                sourceOwnedAt = if (isOurs) SystemClock.elapsedRealtime() else 0L
+                if (wasOurs && !isOurs) {
+                    resetFrequencyAnchorInternal("sourceOwnerLost:$owner", null)
+                }
                 MediaKeyDiagnostics.record(
                     appContext,
                     "SYU_IPC_OWNER",
-                    "package=$owner ours=${owner == appContext.packageName} fmRequested=$fmRequested",
+                    "package=$owner ours=$isOurs fmRequested=$fmRequested " +
+                        "anchor=${frequencyAnchor.current().frequency}",
                 )
             } else {
                 MediaKeyDiagnostics.record(
@@ -435,42 +486,82 @@ internal object Dudu7SyuRadioIpc {
         ) {
             val now = SystemClock.elapsedRealtime()
             val snapshot = FytPhysicalRadio.state.value
-            val ignoreReason =
+            val currentAnchor = frequencyAnchor.current()
+
+            val hardIgnoreReason =
                 when {
                     !fmRequested -> "fmNotRequested"
                     sourceOwnerPackage != appContext.packageName -> "notSourceOwner:$sourceOwnerPackage"
-                    sourceOwnedAt <= 0L || now - sourceOwnedAt < SYU_REDIRECT_ARM_DELAY_MS -> "ownerGrace"
                     !snapshot.isActive -> "fmInactive"
-                    snapshot.isBusy -> "metroListBusy"
-                    snapshot.isScanning -> "scanActive"
                     snapshot.presets.size < 2 -> "notEnoughFavourites"
-                    abs(observedFrequency - snapshot.frequency) < SYU_FREQUENCY_TOLERANCE -> "matchesMetroList"
-                    !lastObservedFrequency.isNaN() &&
-                        abs(observedFrequency - lastObservedFrequency) < SYU_FREQUENCY_TOLERANCE &&
-                        now - lastObservedAt < SYU_EXTERNAL_DUPLICATE_WINDOW_MS -> "duplicateFrequency"
                     else -> null
                 }
-
-            lastObservedFrequency = observedFrequency
-            lastObservedAt = now
-
-            if (ignoreReason != null) {
+            if (hardIgnoreReason != null) {
+                resetFrequencyAnchorInternal(hardIgnoreReason, null)
                 MediaKeyDiagnostics.record(
                     appContext,
                     "SYU_FM_REDIRECT",
-                    "source=$source observed=$observedFrequency current=${snapshot.frequency} " +
-                        "decision=ignore reason=$ignoreReason",
+                    "source=$source observed=$observedFrequency anchor=${currentAnchor.frequency} " +
+                        "current=${snapshot.frequency} decision=ignore reason=$hardIgnoreReason",
                 )
                 return
             }
 
-            val next = inferExternalFmDirection(snapshot.frequency, observedFrequency)
-            if (next == null) {
+            val baselineReason =
+                when {
+                    sourceOwnedAt <= 0L || now - sourceOwnedAt < SYU_REDIRECT_ARM_DELAY_MS -> "ownerGrace"
+                    snapshot.isBusy -> "metroListBusy"
+                    snapshot.isScanning -> "scanActive"
+                    abs(observedFrequency - snapshot.frequency) < SYU_FREQUENCY_TOLERANCE -> "matchesMetroList"
+                    else -> null
+                }
+            if (baselineReason != null) {
+                if (baselineReason == "ownerGrace" && currentAnchor.frequency.isNaN()) {
+                    frequencyAnchor.reset(observedFrequency, now)
+                }
+                lastRedirectDirection = null
+                lastRedirectAt = 0L
+                MediaKeyDiagnostics.record(
+                    appContext,
+                    "SYU_FM_REDIRECT",
+                    "source=$source observed=$observedFrequency anchor=${currentAnchor.frequency} " +
+                        "current=${snapshot.frequency} decision=ignore reason=$baselineReason",
+                )
+                return
+            }
+
+            if (!currentAnchor.frequency.isNaN() &&
+                abs(observedFrequency - currentAnchor.frequency) < SYU_FREQUENCY_TOLERANCE &&
+                now - currentAnchor.observedAt < SYU_EXTERNAL_DUPLICATE_WINDOW_MS
+            ) {
+                MediaKeyDiagnostics.record(
+                    appContext,
+                    "SYU_FM_REDIRECT",
+                    "source=$source observed=$observedFrequency anchor=${currentAnchor.frequency} " +
+                        "current=${snapshot.frequency} decision=ignore reason=duplicateFrequency",
+                )
+                return
+            }
+
+            val observation = frequencyAnchor.observe(observedFrequency, now)
+            val previousObserved = observation.previousFrequency
+            if (previousObserved.isNaN()) {
                 MediaKeyDiagnostics.record(
                     appContext,
                     "SYU_FM_REDIRECT",
                     "source=$source observed=$observedFrequency current=${snapshot.frequency} " +
-                        "decision=ignore reason=noDirection",
+                        "decision=baseline reason=anchorInitialized",
+                )
+                return
+            }
+
+            val next = inferExternalFmDirection(previousObserved, observedFrequency)
+            if (next == null) {
+                MediaKeyDiagnostics.record(
+                    appContext,
+                    "SYU_FM_REDIRECT",
+                    "source=$source observed=$observedFrequency anchor=$previousObserved " +
+                        "current=${snapshot.frequency} decision=ignore reason=noDirection",
                 )
                 return
             }
@@ -479,22 +570,43 @@ internal object Dudu7SyuRadioIpc {
                 MediaKeyDiagnostics.record(
                     appContext,
                     "SYU_FM_REDIRECT",
-                    "source=$source observed=$observedFrequency current=${snapshot.frequency} " +
-                        "direction=${if (next) "NEXT" else "PREVIOUS"} decision=duplicate",
+                    "source=$source observed=$observedFrequency anchor=$previousObserved " +
+                        "current=${snapshot.frequency} direction=${if (next) "NEXT" else "PREVIOUS"} " +
+                        "decision=duplicate",
                 )
                 return
             }
 
+            redirectTuneGate.expect(now, SYU_REDIRECT_TUNE_EXPECTATION_MS)
             val handled = PhysicalFmMediaKeyBridge.handleDirection(next)
             if (handled) {
                 lastRedirectDirection = next
                 lastRedirectAt = now
+            } else {
+                redirectTuneGate.clear()
             }
             MediaKeyDiagnostics.record(
                 appContext,
                 "SYU_FM_REDIRECT",
-                "source=$source observed=$observedFrequency current=${snapshot.frequency} " +
-                    "direction=${if (next) "NEXT" else "PREVIOUS"} handled=$handled",
+                "source=$source observed=$observedFrequency anchor=$previousObserved " +
+                    "current=${snapshot.frequency} direction=${if (next) "NEXT" else "PREVIOUS"} " +
+                    "handled=$handled",
+            )
+        }
+
+        private fun resetFrequencyAnchorInternal(
+            reason: String,
+            baselineFrequency: Float?,
+        ) {
+            val normalizedBaseline = baselineFrequency?.let(::decodeSyuFmFrequency)
+            val previous = frequencyAnchor.reset(normalizedBaseline, SystemClock.elapsedRealtime())
+            redirectTuneGate.clear()
+            lastRedirectDirection = null
+            lastRedirectAt = 0L
+            MediaKeyDiagnostics.record(
+                appContext,
+                "SYU_FM_ANCHOR",
+                "reason=$reason previous=$previous baseline=${normalizedBaseline ?: "none"}",
             )
         }
 
@@ -508,6 +620,70 @@ internal object Dudu7SyuRadioIpc {
                 "stage=$stage failed=${error.javaClass.simpleName}:${error.message.orEmpty()}",
             )
         }
+    }
+}
+
+internal class SyuFmFrequencyAnchor {
+    data class Observation(
+        val previousFrequency: Float,
+        val previousAt: Long,
+    )
+
+    data class Current(
+        val frequency: Float,
+        val observedAt: Long,
+    )
+
+    private var frequency = Float.NaN
+    private var observedAt = 0L
+
+    @Synchronized
+    fun observe(
+        observedFrequency: Float,
+        now: Long,
+    ): Observation {
+        val previous = Observation(frequency, observedAt)
+        frequency = observedFrequency
+        observedAt = now
+        return previous
+    }
+
+    @Synchronized
+    fun reset(
+        baselineFrequency: Float? = null,
+        now: Long = 0L,
+    ): Float {
+        val previous = frequency
+        frequency = baselineFrequency ?: Float.NaN
+        observedAt = if (baselineFrequency == null) 0L else now
+        return previous
+    }
+
+    @Synchronized
+    fun current(): Current = Current(frequency, observedAt)
+}
+
+internal class SyuFmRedirectTuneGate {
+    private var expectedUntil = 0L
+
+    @Synchronized
+    fun expect(
+        now: Long,
+        windowMs: Long,
+    ) {
+        expectedUntil = now + windowMs
+    }
+
+    @Synchronized
+    fun consume(now: Long): Boolean {
+        val expected = expectedUntil > 0L && now <= expectedUntil
+        expectedUntil = 0L
+        return expected
+    }
+
+    @Synchronized
+    fun clear() {
+        expectedUntil = 0L
     }
 }
 
@@ -621,6 +797,7 @@ private const val SYU_RECONNECT_DELAY_MS = 1_500L
 private const val SYU_REDIRECT_ARM_DELAY_MS = 900L
 private const val SYU_EXTERNAL_DUPLICATE_WINDOW_MS = 700L
 private const val SYU_REDIRECT_DEDUP_WINDOW_MS = 450L
+private const val SYU_REDIRECT_TUNE_EXPECTATION_MS = 1_500L
 private const val SYU_FREQUENCY_TOLERANCE = 0.05f
 private const val SYU_FM_MIN = 87.5f
 private const val SYU_FM_MAX = 108.0f
