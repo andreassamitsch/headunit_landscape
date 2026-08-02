@@ -38,8 +38,8 @@ class FmAlternativeFrequencySelectorTest {
     }
 
     @Test
-    fun allowsUnknownPiOnlyForStoredPresetFrequency() {
-        val trusted =
+    fun rejectsUnknownPiEvenForCachedOrRtrTrustedFrequency() {
+        val cached =
             FmAlternativeFrequencySelector.choose(
                 currentFrequency = 99.7f,
                 currentRssi = 18,
@@ -47,7 +47,7 @@ class FmAlternativeFrequencySelectorTest {
                 measurements = listOf(FmAfMeasurement(106.8f, 40, 0, true)),
                 minimumImprovement = 1,
             )
-        val untrusted =
+        val rtrOnly =
             FmAlternativeFrequencySelector.choose(
                 currentFrequency = 99.7f,
                 currentRssi = 18,
@@ -56,7 +56,7 @@ class FmAlternativeFrequencySelectorTest {
                 minimumImprovement = 1,
             )
 
-        assertEquals(106.8f, trusted?.frequency)
-        assertNull(untrusted)
+        assertNull(cached)
+        assertNull(rtrOnly)
     }
 }
