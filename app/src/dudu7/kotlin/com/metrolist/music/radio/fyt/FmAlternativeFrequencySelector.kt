@@ -39,14 +39,17 @@ object FmAlternativeFrequencySelector {
                     .thenByDescending { it.frequency },
             )
 
+    /**
+     * RTR and a cached reception path may propose a frequency, but neither is proof that the
+     * frequency currently carries the same station. Every accepted target therefore needs a
+     * fresh, non-zero PI that exactly matches the source PI.
+     */
     fun compatiblePi(
         expectedPi: Int,
         receivedPi: Int,
-        trustedPresetFrequency: Boolean,
+        @Suppress("UNUSED_PARAMETER") trustedPresetFrequency: Boolean,
     ): Boolean =
-        when {
-            expectedPi <= 0 -> trustedPresetFrequency
-            receivedPi <= 0 -> trustedPresetFrequency
-            else -> (expectedPi and 0xffff) == (receivedPi and 0xffff)
-        }
+        expectedPi > 0 &&
+            receivedPi > 0 &&
+            (expectedPi and 0xffff) == (receivedPi and 0xffff)
 }
