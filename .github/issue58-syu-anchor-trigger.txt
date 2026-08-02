@@ -1,1 +1,0 @@
-Trigger the issue #58 Syu frequency anchor patch, full tests, and APK build.
