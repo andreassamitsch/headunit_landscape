@@ -85,4 +85,23 @@ class FmFavouriteModelTest {
         assertEquals(first, again)
         assertNotEquals(first, second)
     }
+    @org.junit.Test
+    fun `active favourite id wins when two regional paths share one frequency`() {
+        val favourites =
+            listOf(
+                FmFavouriteRef("home", "rtr:home", 99.7f, 0xA101),
+                FmFavouriteRef("travel", "rtr:travel", 99.7f, 0xB202),
+            )
+        val index =
+            FmFavouriteModel.resolveCurrentIndex(
+                favourites = favourites,
+                activeId = "travel",
+                frequency = 99.7f,
+                stationId = "rtr:home",
+                pi = 0xA101,
+                rdsConfirmed = true,
+            )
+        org.junit.Assert.assertEquals(1, index)
+    }
+
 }
