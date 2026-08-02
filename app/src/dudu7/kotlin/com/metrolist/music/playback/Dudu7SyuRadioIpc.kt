@@ -9,21 +9,22 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Parcel
+import android.os.SystemClock
+import com.metrolist.music.radio.fyt.FytPhysicalRadio
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
- * Minimal Dudu7/FYT Syu radio-source client derived from the live Dudu7 analysis and the
- * NavRadio+ 4.09 Dudu7 path.
+ * Dudu7/UIS7870 Syu radio-source client.
  *
- * This is intentionally a diagnostic prototype:
- * - it binds to the Syu IRemoteToolkit service;
- * - resolves MAIN module 0;
- * - while physical FM is requested, registers broad MAIN callbacks and sends only the
- *   observed radio/source claim MAIN.cmd(0, [1]);
- * - it logs every callback and possible 87/88 payload, but does not route an unconfirmed
- *   callback to a favourite or send radio tune command 26.
+ * The physical tuner remains exclusively controlled by FmService/FmNative. This client
+ * claims the Syu radio source and observes the vendor MAIN, RADIO and STEER modules.
  *
- * The working FmService/FmNative tuner path remains the sole tuner implementation.
+ * Real Dudu7 captures show that steering-wheel next/previous is consumed inside com.syu.ms
+ * and translated directly into RADIO cmd 26 before Android MediaSession sees a key. The
+ * fallback below therefore detects a vendor-originated frequency change that was not
+ * initiated by MetroList and redirects it to the adjacent MetroList FM favourite.
  */
 internal object Dudu7SyuRadioIpc {
     private val lock = Any()
@@ -39,14 +40,9 @@ internal object Dudu7SyuRadioIpc {
         }
     }
 
-    /**
-     * Requests Syu radio-source ownership before FmNative is opened.
-     * Returns true when a connected MAIN module accepted the command immediately.
-     * A pending request is automatically replayed after a later service connection.
-     */
     fun claimFmSource(): Boolean = client?.setFmRequested(true) ?: false
 
-    /** Stops diagnostic callback registration. No unverified Syu source-release command is sent. */
+    /** Stops callback registration. No unverified Syu source-release command is sent. */
     fun releaseFmSource() {
         client?.setFmRequested(false)
     }
@@ -64,7 +60,10 @@ internal object Dudu7SyuRadioIpc {
         private val workerThread = HandlerThread("Dudu7SyuRadioIpc").apply { start() }
         private val worker = Handler(workerThread.looper)
         private val released = AtomicBoolean(false)
-        private val callback = SyuModuleCallback(::onModuleUpdate)
+
+        private val mainCallback = SyuModuleCallback(::onMainUpdate)
+        private val radioCallback = SyuModuleCallback(::onRadioUpdate)
+        private val steerCallback = SyuModuleCallback(::onSteerUpdate)
 
         @Volatile
         private var bound = false
@@ -73,15 +72,28 @@ internal object Dudu7SyuRadioIpc {
         private var fmRequested = false
 
         @Volatile
-        private var registered = false
+        private var mainModule: SyuRemoteModule? = null
 
         @Volatile
-        private var mainModule: SyuRemoteModule? = null
+        private var radioModule: SyuRemoteModule? = null
+
+        @Volatile
+        private var steerModule: SyuRemoteModule? = null
 
         @Volatile
         private var connectedComponent: ComponentName? = null
 
+        private var mainRegistered = false
+        private var radioRegistered = false
+        private var steerRegistered = false
         private var endpointIndex = 0
+
+        private var sourceOwnerPackage = ""
+        private var sourceOwnedAt = 0L
+        private var lastObservedFrequency = Float.NaN
+        private var lastObservedAt = 0L
+        private var lastRedirectDirection: Boolean? = null
+        private var lastRedirectAt = 0L
 
         private val reconnect = Runnable { bindCurrentEndpoint() }
 
@@ -102,44 +114,16 @@ internal object Dudu7SyuRadioIpc {
                             "connected=${name.flattenToShortString()} descriptor=${descriptor.orEmpty()}",
                         )
 
-                        val moduleBinder =
-                            runCatching { SyuToolkit(service).getRemoteModule(SYU_MAIN_MODULE) }
-                                .onFailure { error ->
-                                    logFailure("resolveMain", error)
-                                }.getOrNull()
-
-                        if (moduleBinder == null) {
-                            MediaKeyDiagnostics.record(
-                                appContext,
-                                "SYU_IPC_STATE",
-                                "mainModule=unavailable component=${name.flattenToShortString()}",
-                            )
-                            return@post
-                        }
-
-                        mainModule = SyuRemoteModule(moduleBinder)
-                        runCatching {
-                            moduleBinder.linkToDeath(
-                                {
-                                    worker.post {
-                                        MediaKeyDiagnostics.record(
-                                            appContext,
-                                            "SYU_IPC_STATE",
-                                            "mainModule=binderDied component=${name.flattenToShortString()}",
-                                        )
-                                        mainModule = null
-                                        registered = false
-                                        scheduleReconnect()
-                                    }
-                                },
-                                0,
-                            )
-                        }
+                        val toolkit = SyuToolkit(service)
+                        mainModule = resolveModule(toolkit, SYU_MAIN_MODULE, "MAIN")
+                        radioModule = resolveModule(toolkit, SYU_RADIO_MODULE, "RADIO")
+                        steerModule = resolveModule(toolkit, SYU_STEER_MODULE, "STEER")
 
                         MediaKeyDiagnostics.record(
                             appContext,
                             "SYU_IPC_STATE",
-                            "mainModule=ready fmRequested=$fmRequested component=${name.flattenToShortString()}",
+                            "modules main=${mainModule != null} radio=${radioModule != null} " +
+                                "steer=${steerModule != null} fmRequested=$fmRequested",
                         )
                         if (fmRequested) activateForFm("serviceConnected")
                     }
@@ -152,10 +136,7 @@ internal object Dudu7SyuRadioIpc {
                             "SYU_IPC_STATE",
                             "disconnected=${name.flattenToShortString()}",
                         )
-                        bound = false
-                        registered = false
-                        mainModule = null
-                        connectedComponent = null
+                        resetConnectionState()
                         scheduleReconnect()
                     }
                 }
@@ -168,10 +149,7 @@ internal object Dudu7SyuRadioIpc {
                             "bindingDied=${name.flattenToShortString()}",
                         )
                         runCatching { appContext.unbindService(this) }
-                        bound = false
-                        registered = false
-                        mainModule = null
-                        connectedComponent = null
+                        resetConnectionState()
                         scheduleReconnect()
                     }
                 }
@@ -184,7 +162,7 @@ internal object Dudu7SyuRadioIpc {
                             "nullBinding=${name.flattenToShortString()}",
                         )
                         runCatching { appContext.unbindService(this) }
-                        bound = false
+                        resetConnectionState()
                         tryNextEndpoint()
                     }
                 }
@@ -199,11 +177,7 @@ internal object Dudu7SyuRadioIpc {
             val immediate = mainModule != null
             worker.post {
                 if (released.get()) return@post
-                if (requested) {
-                    activateForFm("powerOn")
-                } else {
-                    deactivateForFm("powerOff")
-                }
+                if (requested) activateForFm("powerOn") else deactivateForFm("powerOff")
             }
             return immediate
         }
@@ -213,11 +187,32 @@ internal object Dudu7SyuRadioIpc {
             worker.removeCallbacksAndMessages(null)
             deactivateForFm("serviceRelease")
             if (bound) runCatching { appContext.unbindService(connection) }
-            bound = false
-            mainModule = null
-            connectedComponent = null
+            resetConnectionState()
             MediaKeyDiagnostics.record(appContext, "SYU_IPC_STATE", "released")
             workerThread.quitSafely()
+        }
+
+        private fun resolveModule(
+            toolkit: SyuToolkit,
+            moduleCode: Int,
+            name: String,
+        ): SyuRemoteModule? =
+            runCatching { toolkit.getRemoteModule(moduleCode) }
+                .onFailure { error -> logFailure("resolve$name", error) }
+                .getOrNull()
+                ?.let(::SyuRemoteModule)
+
+        private fun resetConnectionState() {
+            bound = false
+            mainRegistered = false
+            radioRegistered = false
+            steerRegistered = false
+            mainModule = null
+            radioModule = null
+            steerModule = null
+            connectedComponent = null
+            sourceOwnerPackage = ""
+            sourceOwnedAt = 0L
         }
 
         private fun bindCurrentEndpoint() {
@@ -230,9 +225,8 @@ internal object Dudu7SyuRadioIpc {
             val accepted =
                 runCatching {
                     appContext.bindService(intent, connection, Context.BIND_AUTO_CREATE)
-                }.onFailure { error ->
-                    logFailure("bind:${endpoint}", error)
-                }.getOrDefault(false)
+                }.onFailure { error -> logFailure("bind:$endpoint", error) }
+                    .getOrDefault(false)
 
             MediaKeyDiagnostics.record(
                 appContext,
@@ -255,90 +249,253 @@ internal object Dudu7SyuRadioIpc {
         }
 
         private fun activateForFm(source: String) {
-            val module = mainModule
-            if (module == null) {
+            val main = mainModule
+            if (main == null) {
                 MediaKeyDiagnostics.record(
                     appContext,
                     "SYU_IPC_SOURCE",
-                    "source=$source claim=pending reason=mainModuleUnavailable endpoint=${connectedComponent?.packageName.orEmpty()}",
+                    "source=$source claim=pending reason=mainModuleUnavailable " +
+                        "endpoint=${connectedComponent?.packageName.orEmpty()}",
                 )
                 if (!bound) scheduleReconnect()
                 return
             }
 
-            registerCallbacks(module)
+            registerMainCallbacks(main)
+            radioModule?.let(::registerRadioCallbacks)
+            steerModule?.let(::registerSteerCallbacks)
+
             val claimed =
                 runCatching {
-                    module.cmd(
+                    main.cmd(
                         command = SYU_MAIN_COMMAND_SOURCE,
                         ints = SYU_RADIO_SOURCE_PAYLOAD.copyOf(),
                         floats = null,
                         strings = null,
                     )
-                }.onFailure { error ->
-                    logFailure("sourceClaim", error)
-                }.isSuccess
+                }.onFailure { error -> logFailure("sourceClaim", error) }
+                    .isSuccess
 
             MediaKeyDiagnostics.record(
                 appContext,
                 "SYU_IPC_SOURCE",
-                "source=$source command=$SYU_MAIN_COMMAND_SOURCE ints=${SYU_RADIO_SOURCE_PAYLOAD.contentToString()} " +
-                    "claimed=$claimed endpoint=${connectedComponent?.packageName.orEmpty()}",
+                "source=$source command=$SYU_MAIN_COMMAND_SOURCE " +
+                    "ints=${SYU_RADIO_SOURCE_PAYLOAD.contentToString()} claimed=$claimed " +
+                    "endpoint=${connectedComponent?.packageName.orEmpty()}",
             )
         }
 
         private fun deactivateForFm(source: String) {
-            val module = mainModule
-            if (module != null && registered) {
-                var removed = 0
-                SYU_MAIN_CALLBACK_CODES.forEach { updateCode ->
-                    if (runCatching { module.unregister(callback, updateCode) }.isSuccess) removed += 1
+            var removed = 0
+            mainModule?.takeIf { mainRegistered }?.let { module ->
+                SYU_MAIN_CALLBACK_CODES.forEach { code ->
+                    if (runCatching { module.unregister(mainCallback, code) }.isSuccess) removed += 1
                 }
-                MediaKeyDiagnostics.record(
-                    appContext,
-                    "SYU_IPC_STATE",
-                    "source=$source callbacksUnregistered=$removed",
-                )
             }
-            registered = false
-        }
-
-        private fun registerCallbacks(module: SyuRemoteModule) {
-            if (registered) return
-            var accepted = 0
-            SYU_MAIN_CALLBACK_CODES.forEach { updateCode ->
-                if (runCatching { module.register(callback, updateCode, 1) }.isSuccess) accepted += 1
+            radioModule?.takeIf { radioRegistered }?.let { module ->
+                SYU_RADIO_CALLBACK_CODES.forEach { code ->
+                    if (runCatching { module.unregister(radioCallback, code) }.isSuccess) removed += 1
+                }
             }
-            registered = true
+            steerModule?.takeIf { steerRegistered }?.let { module ->
+                SYU_STEER_CALLBACK_CODES.forEach { code ->
+                    if (runCatching { module.unregister(steerCallback, code) }.isSuccess) removed += 1
+                }
+            }
+            mainRegistered = false
+            radioRegistered = false
+            steerRegistered = false
+            sourceOwnerPackage = ""
+            sourceOwnedAt = 0L
+            lastObservedFrequency = Float.NaN
             MediaKeyDiagnostics.record(
                 appContext,
                 "SYU_IPC_STATE",
-                "callbacksRegistered=$accepted range=${SYU_MAIN_CALLBACK_CODES.first}..${SYU_MAIN_CALLBACK_CODES.last} " +
-                    "includes=${SYU_KNOWN_MAIN_CALLBACKS.contentToString()}",
+                "source=$source callbacksUnregistered=$removed",
             )
         }
 
-        private fun onModuleUpdate(
+        private fun registerMainCallbacks(module: SyuRemoteModule) {
+            if (mainRegistered) return
+            var accepted = 0
+            SYU_MAIN_CALLBACK_CODES.forEach { updateCode ->
+                if (runCatching { module.register(mainCallback, updateCode, 1) }.isSuccess) accepted += 1
+            }
+            mainRegistered = true
+            MediaKeyDiagnostics.record(
+                appContext,
+                "SYU_IPC_STATE",
+                "mainCallbacksRegistered=$accepted codes=${SYU_MAIN_CALLBACK_CODES.contentToString()}",
+            )
+        }
+
+        private fun registerRadioCallbacks(module: SyuRemoteModule) {
+            if (radioRegistered) return
+            var accepted = 0
+            SYU_RADIO_CALLBACK_CODES.forEach { updateCode ->
+                if (runCatching { module.register(radioCallback, updateCode, 1) }.isSuccess) accepted += 1
+            }
+            radioRegistered = true
+            MediaKeyDiagnostics.record(
+                appContext,
+                "SYU_IPC_STATE",
+                "radioCallbacksRegistered=$accepted range=${SYU_RADIO_CALLBACK_CODES.first}..${SYU_RADIO_CALLBACK_CODES.last}",
+            )
+        }
+
+        private fun registerSteerCallbacks(module: SyuRemoteModule) {
+            if (steerRegistered) return
+            var accepted = 0
+            SYU_STEER_CALLBACK_CODES.forEach { updateCode ->
+                if (runCatching { module.register(steerCallback, updateCode, 1) }.isSuccess) accepted += 1
+            }
+            steerRegistered = true
+            MediaKeyDiagnostics.record(
+                appContext,
+                "SYU_IPC_STATE",
+                "steerCallbacksRegistered=$accepted range=${SYU_STEER_CALLBACK_CODES.first}..${SYU_STEER_CALLBACK_CODES.last}",
+            )
+        }
+
+        private fun onMainUpdate(
             updateCode: Int,
             ints: IntArray?,
             floats: FloatArray?,
             strings: Array<String>?,
         ) {
             if (released.get()) return
-            val keyCandidate = extractSyuMediaKeyCandidate(updateCode, ints, strings)
-            MediaKeyDiagnostics.record(
-                appContext,
-                "SYU_IPC_CALLBACK",
-                "update=$updateCode ints=${ints.compact()} floats=${floats.compact()} strings=${strings.compact()} " +
-                    "fmRequested=$fmRequested keyCandidate=${keyCandidate ?: "none"}",
-            )
-            if (keyCandidate != null) {
+            if (updateCode == SYU_MAIN_UPDATE_SOURCE_OWNER) {
+                val owner = strings?.firstOrNull().orEmpty()
+                sourceOwnerPackage = owner
+                sourceOwnedAt =
+                    if (owner == appContext.packageName) SystemClock.elapsedRealtime() else 0L
                 MediaKeyDiagnostics.record(
                     appContext,
-                    "SYU_IPC_KEY_CANDIDATE",
-                    "keyCode=$keyCandidate update=$updateCode decision=log_only_not_routed",
+                    "SYU_IPC_OWNER",
+                    "package=$owner ours=${owner == appContext.packageName} fmRequested=$fmRequested",
+                )
+            } else {
+                MediaKeyDiagnostics.record(
+                    appContext,
+                    "SYU_IPC_CALLBACK",
+                    "module=MAIN update=$updateCode ints=${ints.compact()} floats=${floats.compact()} " +
+                        "strings=${strings.compact()} fmRequested=$fmRequested",
                 )
             }
+        }
+
+        private fun onRadioUpdate(
+            updateCode: Int,
+            ints: IntArray?,
+            floats: FloatArray?,
+            strings: Array<String>?,
+        ) {
+            if (released.get()) return
+            val observed = extractSyuFmFrequency(ints, floats, strings) ?: return
+            val snapshot = FytPhysicalRadio.state.value
+            MediaKeyDiagnostics.record(
+                appContext,
+                "SYU_RADIO_FREQUENCY",
+                "update=$updateCode observed=$observed current=${snapshot.frequency} " +
+                    "ints=${ints.compact()} floats=${floats.compact()} strings=${strings.compact()}",
+            )
+            redirectExternalTune(observed, "RADIO:$updateCode")
+        }
+
+        private fun onSteerUpdate(
+            updateCode: Int,
+            ints: IntArray?,
+            floats: FloatArray?,
+            strings: Array<String>?,
+        ) {
+            if (released.get()) return
+            val direction = extractSyuSteeringDirection(updateCode, ints)
+            if (direction != null) {
+                // Diagnostic only. The Dudu7 firmware can still execute its own RADIO cmd 26;
+                // the frequency observer below performs the final deterministic redirect after
+                // that vendor tune has happened, avoiding a race and a double favourite jump.
+                MediaKeyDiagnostics.record(
+                    appContext,
+                    "SYU_STEER_CANDIDATE",
+                    "update=$updateCode direction=${if (direction) "NEXT" else "PREVIOUS"} " +
+                        "ints=${ints.compact()} decision=observe_radio_frequency",
+                )
+            } else if (ints?.isNotEmpty() == true || floats?.isNotEmpty() == true || strings?.isNotEmpty() == true) {
+                MediaKeyDiagnostics.record(
+                    appContext,
+                    "SYU_STEER_CALLBACK",
+                    "update=$updateCode ints=${ints.compact()} floats=${floats.compact()} strings=${strings.compact()}",
+                )
+            }
+        }
+
+        private fun redirectExternalTune(
+            observedFrequency: Float,
+            source: String,
+        ) {
+            val now = SystemClock.elapsedRealtime()
+            val snapshot = FytPhysicalRadio.state.value
+            val ignoreReason =
+                when {
+                    !fmRequested -> "fmNotRequested"
+                    sourceOwnerPackage != appContext.packageName -> "notSourceOwner:$sourceOwnerPackage"
+                    sourceOwnedAt <= 0L || now - sourceOwnedAt < SYU_REDIRECT_ARM_DELAY_MS -> "ownerGrace"
+                    !snapshot.isActive -> "fmInactive"
+                    snapshot.isBusy -> "metroListBusy"
+                    snapshot.isScanning -> "scanActive"
+                    snapshot.presets.size < 2 -> "notEnoughFavourites"
+                    abs(observedFrequency - snapshot.frequency) < SYU_FREQUENCY_TOLERANCE -> "matchesMetroList"
+                    !lastObservedFrequency.isNaN() &&
+                        abs(observedFrequency - lastObservedFrequency) < SYU_FREQUENCY_TOLERANCE &&
+                        now - lastObservedAt < SYU_EXTERNAL_DUPLICATE_WINDOW_MS -> "duplicateFrequency"
+                    else -> null
+                }
+
+            lastObservedFrequency = observedFrequency
+            lastObservedAt = now
+
+            if (ignoreReason != null) {
+                MediaKeyDiagnostics.record(
+                    appContext,
+                    "SYU_FM_REDIRECT",
+                    "source=$source observed=$observedFrequency current=${snapshot.frequency} " +
+                        "decision=ignore reason=$ignoreReason",
+                )
+                return
+            }
+
+            val next = inferExternalFmDirection(snapshot.frequency, observedFrequency)
+            if (next == null) {
+                MediaKeyDiagnostics.record(
+                    appContext,
+                    "SYU_FM_REDIRECT",
+                    "source=$source observed=$observedFrequency current=${snapshot.frequency} " +
+                        "decision=ignore reason=noDirection",
+                )
+                return
+            }
+
+            if (lastRedirectDirection == next && now - lastRedirectAt < SYU_REDIRECT_DEDUP_WINDOW_MS) {
+                MediaKeyDiagnostics.record(
+                    appContext,
+                    "SYU_FM_REDIRECT",
+                    "source=$source observed=$observedFrequency current=${snapshot.frequency} " +
+                        "direction=${if (next) "NEXT" else "PREVIOUS"} decision=duplicate",
+                )
+                return
+            }
+
+            val handled = PhysicalFmMediaKeyBridge.handleDirection(next)
+            if (handled) {
+                lastRedirectDirection = next
+                lastRedirectAt = now
+            }
+            MediaKeyDiagnostics.record(
+                appContext,
+                "SYU_FM_REDIRECT",
+                "source=$source observed=$observedFrequency current=${snapshot.frequency} " +
+                    "direction=${if (next) "NEXT" else "PREVIOUS"} handled=$handled",
+            )
         }
 
         private fun logFailure(
@@ -355,32 +512,110 @@ internal object Dudu7SyuRadioIpc {
 }
 
 internal const val SYU_MAIN_MODULE = 0
+internal const val SYU_RADIO_MODULE = 1
+internal const val SYU_STEER_MODULE = 10
 internal const val SYU_MAIN_COMMAND_SOURCE = 0
+internal const val SYU_MAIN_UPDATE_SOURCE_OWNER = 195
 internal val SYU_RADIO_SOURCE_PAYLOAD = intArrayOf(1)
-internal val SYU_MAIN_CALLBACK_CODES: IntRange = 0..255
-internal val SYU_KNOWN_MAIN_CALLBACKS = intArrayOf(0, 12, 174)
+internal val SYU_MAIN_CALLBACK_CODES = intArrayOf(SYU_MAIN_UPDATE_SOURCE_OWNER)
+internal val SYU_RADIO_CALLBACK_CODES: IntRange = 0..255
+internal val SYU_STEER_CALLBACK_CODES: IntRange = 0..255
 
-internal fun extractSyuMediaKeyCandidate(
-    updateCode: Int,
+/** Extracts a real FM frequency, never a media key, from vendor module payloads. */
+internal fun extractSyuFmFrequency(
     ints: IntArray?,
+    floats: FloatArray?,
     strings: Array<out String?>?,
-): Int? {
-    if (updateCode == 87 || updateCode == 88) return updateCode
-    ints?.firstOrNull { it == 87 || it == 88 }?.let { return it }
+): Float? {
+    ints?.asSequence()?.mapNotNull { decodeSyuFmFrequency(it.toFloat()) }?.firstOrNull()?.let { return it }
+    floats?.asSequence()?.mapNotNull(::decodeSyuFmFrequency)?.firstOrNull()?.let { return it }
     strings
         ?.asSequence()
         ?.filterNotNull()
-        ?.flatMap { value -> SYU_KEY_NUMBER.findAll(value).mapNotNull { it.value.toIntOrNull() } }
-        ?.firstOrNull { it == 87 || it == 88 }
-        ?.let { return it }
+        ?.forEach { value ->
+            SYU_FM_DECIMAL.findAll(value).forEach { match ->
+                val whole = match.groupValues[1].toIntOrNull() ?: return@forEach
+                val decimals = match.groupValues[2]
+                val fraction = decimals.toIntOrNull()?.toFloat()?.div(if (decimals.length == 1) 10f else 100f) ?: 0f
+                decodeSyuFmFrequency(whole + fraction)?.let { return it }
+            }
+            SYU_FM_INTEGER.findAll(value).forEach { match ->
+                decodeSyuFmFrequency(match.value.toFloatOrNull() ?: return@forEach)?.let { return it }
+            }
+        }
     return null
+}
+
+internal fun decodeSyuFmFrequency(raw: Float): Float? {
+    if (!raw.isFinite()) return null
+    val decoded =
+        when (raw) {
+            in 87.5f..108.0f -> raw
+            in 875f..1080f -> raw / 10f
+            in 8750f..10800f -> raw / 100f
+            in 87500f..108000f -> raw / 1000f
+            else -> return null
+        }
+    return (decoded * 10f).roundToInt() / 10f
+}
+
+/**
+ * Uses the shortest direction on the cyclic European FM band. true = next/up,
+ * false = previous/down.
+ */
+internal fun inferExternalFmDirection(
+    currentFrequency: Float,
+    observedFrequency: Float,
+): Boolean? {
+    val current = decodeSyuFmFrequency(currentFrequency) ?: return null
+    val observed = decodeSyuFmFrequency(observedFrequency) ?: return null
+    if (abs(current - observed) < SYU_FREQUENCY_TOLERANCE) return null
+
+    val upDistance =
+        if (observed > current) {
+            observed - current
+        } else {
+            (SYU_FM_MAX - current) + SYU_FM_STEP + (observed - SYU_FM_MIN)
+        }
+    val downDistance =
+        if (observed < current) {
+            current - observed
+        } else {
+            (current - SYU_FM_MIN) + SYU_FM_STEP + (SYU_FM_MAX - observed)
+        }
+    return upDistance <= downDistance
+}
+
+/**
+ * STEER callbacks are diagnostic until the subsequent RADIO frequency callback arrives.
+ * Initial callback slots 87/88 with payload [0] are deliberately rejected.
+ */
+internal fun extractSyuSteeringDirection(
+    updateCode: Int,
+    ints: IntArray?,
+): Boolean? {
+    ints?.firstOrNull { it == 87 || it == 88 }?.let { return it == 87 }
+    val pressed = ints?.firstOrNull() == 1
+    return when {
+        updateCode == 87 && pressed -> true
+        updateCode == 88 && pressed -> false
+        else -> null
+    }
 }
 
 private const val SYU_TOOLKIT_ACTION = "com.syu.ms.toolkit"
 private const val SYU_TOOLKIT_SERVICE = "app.ToolkitService"
 private const val SYU_RECONNECT_DELAY_MS = 1_500L
+private const val SYU_REDIRECT_ARM_DELAY_MS = 900L
+private const val SYU_EXTERNAL_DUPLICATE_WINDOW_MS = 700L
+private const val SYU_REDIRECT_DEDUP_WINDOW_MS = 450L
+private const val SYU_FREQUENCY_TOLERANCE = 0.05f
+private const val SYU_FM_MIN = 87.5f
+private const val SYU_FM_MAX = 108.0f
+private const val SYU_FM_STEP = 0.1f
 private val SYU_ENDPOINTS = arrayOf("com.syu.ms", "com.syu.ss")
-private val SYU_KEY_NUMBER = Regex("""(?<![\d.])(?:87|88)(?![\d.])""")
+private val SYU_FM_DECIMAL = Regex("""(?<!\d)(8[7-9]|9\d|10[0-8])[\.,](\d{1,2})(?!\d)""")
+private val SYU_FM_INTEGER = Regex("""(?<!\d)\d{4,6}(?!\d)""")
 
 private fun IntArray?.compact(): String =
     this?.joinToString(prefix = "[", postfix = "]", limit = 16, truncated = "…") ?: "null"
