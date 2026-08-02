@@ -52,12 +52,18 @@ class Dudu7SyuRadioIpcTest {
     }
 
     @Test
-    fun `external frequency direction follows cyclic fm band`() {
-        assertTrue(inferExternalFmDirection(99.1f, 107.5f) == true)
-        assertFalse(inferExternalFmDirection(104.6f, 91.9f)!!)
+    fun `external frequency direction handles clear direct and edge wrap moves`() {
+        assertTrue(inferExternalFmDirection(99.1f, 100.0f) == true)
+        assertFalse(inferExternalFmDirection(99.1f, 98.0f)!!)
         assertTrue(inferExternalFmDirection(107.9f, 87.7f) == true)
         assertFalse(inferExternalFmDirection(87.7f, 107.9f)!!)
         assertNull(inferExternalFmDirection(99.1f, 99.1f))
+    }
+
+    @Test
+    fun `ambiguous large jumps use shortest cyclic search direction`() {
+        assertTrue(inferExternalFmDirection(104.6f, 91.9f) == true)
+        assertFalse(inferExternalFmDirection(91.9f, 104.6f)!!)
     }
 
     @Test
