@@ -28,6 +28,7 @@ jobs:
             capture { sub(/^          /, ""); print }
           ' .github/workflows/issue58-syu-frequency-anchor.yml > /tmp/issue58_patch.py
           test -s /tmp/issue58_patch.py
+          nl -ba /tmp/issue58_patch.py | sed -n '1,80p'
           python3 /tmp/issue58_patch.py
 
       - name: Verify patch safety
