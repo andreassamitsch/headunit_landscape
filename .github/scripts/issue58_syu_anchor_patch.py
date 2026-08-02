@@ -21,6 +21,13 @@ text = replace_once(
         client?.setFmRequested(false)
     }
 
+    fun onMetroListTuneRequested(
+        reason: String,
+        targetFrequency: Float,
+    ) {
+        client?.onMetroListTuneRequested(reason, targetFrequency)
+    }
+
     fun resetFrequencyAnchor(
         reason: String,
         baselineFrequency: Float? = null,
@@ -29,7 +36,7 @@ text = replace_once(
     }
 
     fun release() {''',
-    "public reset API",
+    "public anchor API",
 )
 
 text = replace_once(
@@ -43,6 +50,7 @@ text = replace_once(
     '''        private var sourceOwnerPackage = ""
         private var sourceOwnedAt = 0L
         private val frequencyAnchor = SyuFmFrequencyAnchor()
+        private val redirectTuneGate = SyuFmRedirectTuneGate()
         private var lastRedirectDirection: Boolean? = null
         private var lastRedirectAt = 0L''',
     "anchor state",
@@ -76,6 +84,25 @@ text = replace_once(
             return immediate
         }
 
+        fun onMetroListTuneRequested(
+            reason: String,
+            targetFrequency: Float,
+        ) {
+            val now = SystemClock.elapsedRealtime()
+            val target = decodeSyuFmFrequency(targetFrequency) ?: return
+            val redirectTune = redirectTuneGate.consume(now)
+            if (redirectTune) {
+                MediaKeyDiagnostics.record(
+                    appContext,
+                    "SYU_FM_ANCHOR",
+                    "reason=$reason target=$target decision=preserveRedirect " +
+                        "anchor=${frequencyAnchor.current().frequency}",
+                )
+            } else {
+                resetFrequencyAnchorInternal(reason, target)
+            }
+        }
+
         fun resetFrequencyAnchor(
             reason: String,
             baselineFrequency: Float?,
@@ -84,7 +111,7 @@ text = replace_once(
         }
 
         fun release() {''',
-    "client reset API",
+    "client anchor API",
 )
 
 text = replace_once(
@@ -139,7 +166,7 @@ text = replace_once(
                     appContext,
                     "SYU_IPC_OWNER",
                     "package=$owner ours=$isOurs fmRequested=$fmRequested " +
-                        "anchor=${frequencyAnchor.currentFrequency()}",
+                        "anchor=${frequencyAnchor.current().frequency}",
                 )''',
     "owner reset",
 )
@@ -152,9 +179,7 @@ redirect = '''        private fun redirectExternalTune(
         ) {
             val now = SystemClock.elapsedRealtime()
             val snapshot = FytPhysicalRadio.state.value
-            val observation = frequencyAnchor.observe(observedFrequency, now)
-            val previousObserved = observation.previousFrequency
-            val previousObservedAt = observation.previousAt
+            val currentAnchor = frequencyAnchor.current()
 
             val hardIgnoreReason =
                 when {
@@ -169,7 +194,7 @@ redirect = '''        private fun redirectExternalTune(
                 MediaKeyDiagnostics.record(
                     appContext,
                     "SYU_FM_REDIRECT",
-                    "source=$source observed=$observedFrequency anchor=$previousObserved " +
+                    "source=$source observed=$observedFrequency anchor=${currentAnchor.frequency} " +
                         "current=${snapshot.frequency} decision=ignore reason=$hardIgnoreReason",
                 )
                 return
@@ -184,30 +209,35 @@ redirect = '''        private fun redirectExternalTune(
                     else -> null
                 }
             if (baselineReason != null) {
+                if (baselineReason == "ownerGrace" && currentAnchor.frequency.isNaN()) {
+                    frequencyAnchor.reset(observedFrequency, now)
+                }
                 lastRedirectDirection = null
                 lastRedirectAt = 0L
                 MediaKeyDiagnostics.record(
                     appContext,
                     "SYU_FM_REDIRECT",
-                    "source=$source observed=$observedFrequency anchor=$previousObserved " +
-                        "current=${snapshot.frequency} decision=baseline reason=$baselineReason",
+                    "source=$source observed=$observedFrequency anchor=${currentAnchor.frequency} " +
+                        "current=${snapshot.frequency} decision=ignore reason=$baselineReason",
                 )
                 return
             }
 
-            if (!previousObserved.isNaN() &&
-                abs(observedFrequency - previousObserved) < SYU_FREQUENCY_TOLERANCE &&
-                now - previousObservedAt < SYU_EXTERNAL_DUPLICATE_WINDOW_MS
+            if (!currentAnchor.frequency.isNaN() &&
+                abs(observedFrequency - currentAnchor.frequency) < SYU_FREQUENCY_TOLERANCE &&
+                now - currentAnchor.observedAt < SYU_EXTERNAL_DUPLICATE_WINDOW_MS
             ) {
                 MediaKeyDiagnostics.record(
                     appContext,
                     "SYU_FM_REDIRECT",
-                    "source=$source observed=$observedFrequency anchor=$previousObserved " +
+                    "source=$source observed=$observedFrequency anchor=${currentAnchor.frequency} " +
                         "current=${snapshot.frequency} decision=ignore reason=duplicateFrequency",
                 )
                 return
             }
 
+            val observation = frequencyAnchor.observe(observedFrequency, now)
+            val previousObserved = observation.previousFrequency
             if (previousObserved.isNaN()) {
                 MediaKeyDiagnostics.record(
                     appContext,
@@ -240,10 +270,13 @@ redirect = '''        private fun redirectExternalTune(
                 return
             }
 
+            redirectTuneGate.expect(now, SYU_REDIRECT_TUNE_EXPECTATION_MS)
             val handled = PhysicalFmMediaKeyBridge.handleDirection(next)
             if (handled) {
                 lastRedirectDirection = next
                 lastRedirectAt = now
+            } else {
+                redirectTuneGate.clear()
             }
             MediaKeyDiagnostics.record(
                 appContext,
@@ -260,6 +293,7 @@ redirect = '''        private fun redirectExternalTune(
         ) {
             val normalizedBaseline = baselineFrequency?.let(::decodeSyuFmFrequency)
             val previous = frequencyAnchor.reset(normalizedBaseline, SystemClock.elapsedRealtime())
+            redirectTuneGate.clear()
             lastRedirectDirection = null
             lastRedirectAt = 0L
             MediaKeyDiagnostics.record(
@@ -277,6 +311,11 @@ helper = '''internal class SyuFmFrequencyAnchor {
     data class Observation(
         val previousFrequency: Float,
         val previousAt: Long,
+    )
+
+    data class Current(
+        val frequency: Float,
+        val observedAt: Long,
     )
 
     private var frequency = Float.NaN
@@ -305,13 +344,46 @@ helper = '''internal class SyuFmFrequencyAnchor {
     }
 
     @Synchronized
-    fun currentFrequency(): Float = frequency
+    fun current(): Current = Current(frequency, observedAt)
+}
+
+internal class SyuFmRedirectTuneGate {
+    private var expectedUntil = 0L
+
+    @Synchronized
+    fun expect(
+        now: Long,
+        windowMs: Long,
+    ) {
+        expectedUntil = now + windowMs
+    }
+
+    @Synchronized
+    fun consume(now: Long): Boolean {
+        val expected = expectedUntil > 0L && now <= expectedUntil
+        expectedUntil = 0L
+        return expected
+    }
+
+    @Synchronized
+    fun clear() {
+        expectedUntil = 0L
+    }
 }
 
 '''
 if marker not in text:
     raise RuntimeError("Patch context not found: anchor helper marker")
 text = text.replace(marker, helper + marker, 1)
+text = replace_once(
+    text,
+    '''private const val SYU_REDIRECT_DEDUP_WINDOW_MS = 450L
+private const val SYU_FREQUENCY_TOLERANCE = 0.05f''',
+    '''private const val SYU_REDIRECT_DEDUP_WINDOW_MS = 450L
+private const val SYU_REDIRECT_TUNE_EXPECTATION_MS = 1_500L
+private const val SYU_FREQUENCY_TOLERANCE = 0.05f''',
+    "redirect tune expectation constant",
+)
 syu_path.write_text(text)
 
 radio_path = Path("app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt")
@@ -334,30 +406,19 @@ radio = replace_once(
         if (!_state.value.isActive) {''',
     '''    fun tune(frequency: Float) {
         val target = normalizeFrequency(frequency)
-        Dudu7SyuRadioIpc.resetFrequencyAnchor("tune:$target", target)
+        Dudu7SyuRadioIpc.onMetroListTuneRequested("tune:$target", target)
         if (!_state.value.isActive) {''',
-    "tune baseline",
+    "tune baseline gate",
 )
 
 radio = replace_once(
     radio,
-    '''    fun seek(up: Boolean) {
-        if (!_state.value.isActive) {
-            powerOn()
-            return
-        }
-        scope.launch {''',
-    '''    fun seek(up: Boolean) {
-        if (!_state.value.isActive) {
-            powerOn()
-            return
-        }
-        Dudu7SyuRadioIpc.resetFrequencyAnchor(
-            reason = "seek:${if (up) "up" else "down"}",
-            baselineFrequency = _state.value.frequency,
-        )
-        scope.launch {''',
-    "seek baseline",
+    '''            if (found != null) {
+                persistFrequency(found)''',
+    '''            if (found != null) {
+                Dudu7SyuRadioIpc.resetFrequencyAnchor("seekResult:$found", found)
+                persistFrequency(found)''',
+    "seek result baseline",
 )
 
 radio = replace_once(
@@ -367,9 +428,19 @@ radio = replace_once(
         scanJob?.cancel()''',
     '''    fun startAutoScan() {
         if (_state.value.isScanning) return
-        Dudu7SyuRadioIpc.resetFrequencyAnchor("autoScan", _state.value.frequency)
+        Dudu7SyuRadioIpc.resetFrequencyAnchor("autoScanStart", null)
         scanJob?.cancel()''',
-    "scan baseline",
+    "scan reset",
+)
+
+radio = replace_once(
+    radio,
+    '''                persistFrequency(originalFrequency)
+                _state.update {''',
+    '''                Dudu7SyuRadioIpc.resetFrequencyAnchor("autoScanComplete", originalFrequency)
+                persistFrequency(originalFrequency)
+                _state.update {''',
+    "scan completion baseline",
 )
 
 radio = replace_once(
@@ -387,10 +458,22 @@ radio = replace_once(
 
                 Dudu7SyuRadioIpc.resetFrequencyAnchor(
                     reason = "afCheck:${if (manual) "manual" else "automatic"}",
-                    baselineFrequency = before.frequency,
+                    baselineFrequency = null,
                 )
                 val preset = before.currentPreset''',
-    "AF baseline",
+    "AF reset",
+)
+
+radio = replace_once(
+    radio,
+    '''                } finally {
+                    runCatching { fm.setMute(before.isMuted) }
+                }''',
+    '''                } finally {
+                    Dudu7SyuRadioIpc.resetFrequencyAnchor("afComplete", _state.value.frequency)
+                    runCatching { fm.setMute(before.isMuted) }
+                }''',
+    "AF completion baseline",
 )
 radio_path.write_text(radio)
 
@@ -409,13 +492,35 @@ insert = '''
     }
 
     @Test
-    fun `intentional tune resets syu anchor to the known tuner target`() {
+    fun `redirect favourite tune preserves the vendor frequency anchor`() {
         val anchor = SyuFmFrequencyAnchor()
+        val gate = SyuFmRedirectTuneGate()
+        anchor.reset(92.4f, 1L)
+        gate.expect(now = 2L, windowMs = 1_500L)
+        assertTrue(gate.consume(3L))
+        val observation = anchor.observe(92.6f, 4L)
+        assertEquals(92.4f, observation.previousFrequency)
+        assertTrue(inferExternalFmDirection(observation.previousFrequency, 92.6f) == true)
+        assertFalse(gate.consume(5L))
+    }
+
+    @Test
+    fun `manual tune establishes a new known baseline`() {
+        val anchor = SyuFmFrequencyAnchor()
+        val gate = SyuFmRedirectTuneGate()
         anchor.observe(104.3f, 1L)
+        assertFalse(gate.consume(2L))
         assertEquals(104.3f, anchor.reset(87.6f, 2L))
         val observation = anchor.observe(89.5f, 3L)
         assertEquals(87.6f, observation.previousFrequency)
         assertTrue(inferExternalFmDirection(observation.previousFrequency, 89.5f) == true)
+    }
+
+    @Test
+    fun `expired redirect expectation cannot suppress a later manual tune`() {
+        val gate = SyuFmRedirectTuneGate()
+        gate.expect(now = 100L, windowMs = 50L)
+        assertFalse(gate.consume(151L))
     }
 
     @Test
