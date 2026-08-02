@@ -27,6 +27,15 @@ class Dudu7SyuRadioIpcTest {
     }
 
     @Test
+    fun `integer key codes cannot become fm frequencies`() {
+        assertNull(decodeSyuFmInteger(87))
+        assertNull(decodeSyuFmInteger(88))
+        assertNull(decodeSyuFmInteger(100))
+        assertEquals(88.0f, decodeSyuFmInteger(880))
+        assertEquals(107.5f, decodeSyuFmInteger(10750))
+    }
+
+    @Test
     fun `non fm telemetry is rejected`() {
         assertNull(extractSyuFmFrequency(intArrayOf(0, 87, 88, 471), floatArrayOf(471.05005f), arrayOf("keyCode=87")))
         assertNull(extractSyuFmFrequency(intArrayOf(2024, 65536), null, arrayOf("2024.01.24")))
