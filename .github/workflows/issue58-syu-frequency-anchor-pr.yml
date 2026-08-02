@@ -19,17 +19,8 @@ jobs:
           ref: agent/issue-58-syu-frequency-anchor
           fetch-depth: 0
 
-      - name: Extract and run confirmed patch
-        shell: bash
-        run: |
-          awk '
-            /python3 - <<'\''PY'\''/ { capture=1; next }
-            capture && /^          PY$/ { capture=0; exit }
-            capture { sub(/^          /, ""); print }
-          ' .github/workflows/issue58-syu-frequency-anchor.yml > /tmp/issue58_patch.py
-          test -s /tmp/issue58_patch.py
-          nl -ba /tmp/issue58_patch.py | sed -n '1,80p'
-          python3 /tmp/issue58_patch.py
+      - name: Apply confirmed Syu anchor correction
+        run: python3 .github/scripts/issue58_syu_anchor_patch.py
 
       - name: Verify patch safety
         shell: bash
