@@ -62,6 +62,7 @@ import com.metrolist.music.constants.DefaultOpenTabKey
 import com.metrolist.music.constants.DensityScale
 import com.metrolist.music.constants.DensityScaleKey
 import com.metrolist.music.constants.DynamicThemeKey
+import com.metrolist.music.constants.Dudu7FrostedIceKey
 import com.metrolist.music.constants.EnableDynamicIconKey
 import com.metrolist.music.constants.EnableHighRefreshRateKey
 import com.metrolist.music.constants.EnableLandscapeScalingKey
@@ -152,6 +153,11 @@ fun AppearanceSettings(
     val (enableLandscapeScaling, onEnableLandscapeScalingChange) =
         rememberPreference(
             EnableLandscapeScalingKey,
+            defaultValue = false,
+        )
+    val (dudu7FrostedIce, onDudu7FrostedIceChange) =
+        rememberPreference(
+            Dudu7FrostedIceKey,
             defaultValue = false,
         )
     val (selectedThemeColorInt) =
@@ -1011,6 +1017,29 @@ fun AppearanceSettings(
                                 )
                             },
                             onClick = { onEnableLandscapeScalingChange(!enableLandscapeScaling) },
+                        ),
+                    )
+                    add(
+                        Material3SettingsItem(
+                            icon = painterResource(R.drawable.palette),
+                            title = { Text("Frosted Ice (Dudu7)") },
+                            description = { Text("Cover-Hintergrund und transparente Oberfläche; standardmäßig aus") },
+                            trailingContent = {
+                                Switch(
+                                    checked = dudu7FrostedIce,
+                                    onCheckedChange = onDudu7FrostedIceChange,
+                                    thumbContent = {
+                                        Icon(
+                                            painter = painterResource(
+                                                id = if (dudu7FrostedIce) R.drawable.check else R.drawable.close,
+                                            ),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(SwitchDefaults.IconSize),
+                                        )
+                                    },
+                                )
+                            },
+                            onClick = { onDudu7FrostedIceChange(!dudu7FrostedIce) },
                         ),
                     )
                     // Only show dynamic theme option when using the default/dynamic color
