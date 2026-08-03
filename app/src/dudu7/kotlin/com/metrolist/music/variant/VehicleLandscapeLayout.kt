@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,12 +48,20 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -345,8 +355,45 @@ fun VehicleLandscapeLayout(
         }
     }
 
-    Row(
+    val glassShape = RoundedCornerShape(24.dp)
+
+    Box(
         modifier =
+            Modifier
+                .fillMaxSize()
+                .clipToBounds(),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = 1.24f
+                        scaleY = 1.24f
+                        alpha = 0.92f
+                    }.blur(42.dp)
+                    .clearAndSetSemantics {},
+            contentAlignment = Alignment.Center,
+        ) {
+            thumbnailContent()
+        }
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.Black.copy(alpha = 0.22f),
+                                Color.Black.copy(alpha = 0.48f),
+                                Color.Black.copy(alpha = 0.68f),
+                            ),
+                        ),
+                    ),
+        )
+
+        Row(
+            modifier =
             Modifier
                 .windowInsetsPadding(
                     WindowInsets.systemBars.only(WindowInsetsSides.Horizontal).add(verticalWindowInsets),
@@ -359,7 +406,15 @@ fun VehicleLandscapeLayout(
                 Modifier
                     .weight(safePlayerWeight)
                     .fillMaxSize()
-                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .padding(start = 8.dp, end = 6.dp)
+                    .shadow(10.dp, glassShape)
+                    .clip(glassShape)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.46f))
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.24f),
+                        shape = glassShape,
+                    ).padding(horizontal = 12.dp, vertical = 4.dp)
                     .nestedScroll(state.preUpPostDownNestedScrollConnection),
         ) {
             if (physicalRadioState.isActive) {
@@ -385,14 +440,14 @@ fun VehicleLandscapeLayout(
         }
 
         Surface(
-            shape = RoundedCornerShape(18.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.78f),
+            shape = glassShape,
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.52f),
             border = BorderStroke(
                 width = 1.dp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.24f),
             ),
-            tonalElevation = 2.dp,
-            shadowElevation = 6.dp,
+            tonalElevation = 1.dp,
+            shadowElevation = 10.dp,
             modifier =
                 Modifier
                     .weight(1f - safePlayerWeight)
@@ -592,5 +647,6 @@ fun VehicleLandscapeLayout(
                 }
             }
         }
+     }
     }
 }
