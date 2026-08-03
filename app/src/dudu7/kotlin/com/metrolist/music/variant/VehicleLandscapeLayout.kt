@@ -80,6 +80,7 @@ import com.metrolist.music.LocalNavController
 import com.metrolist.music.LocalPlayerAwareWindowInsets
 import com.metrolist.music.LocalPlayerConnection
 import com.metrolist.music.R
+import com.metrolist.music.constants.Dudu7FrostedIceKey
 import com.metrolist.music.extensions.move
 import com.metrolist.music.playback.Dudu7PlaybackSource
 import com.metrolist.music.playback.Dudu7SourcePlaybackCoordinator
@@ -92,6 +93,7 @@ import com.metrolist.music.ui.screens.navigationBuilder
 import com.metrolist.music.ui.screens.radio.PhysicalRadioScreen
 import com.metrolist.music.ui.screens.radio.WebRadioScreen
 import com.metrolist.music.utils.SearchRoutes
+import com.metrolist.music.utils.rememberPreference
 import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -355,66 +357,69 @@ fun VehicleLandscapeLayout(
         }
     }
 
+    val (frostedIceEnabled) = rememberPreference(
+        Dudu7FrostedIceKey,
+        defaultValue = false,
+    )
     val glassShape = RoundedCornerShape(24.dp)
 
     Box(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .clipToBounds(),
+        modifier = Modifier.fillMaxSize().clipToBounds(),
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        scaleX = 1.24f
-                        scaleY = 1.24f
-                        alpha = 0.92f
-                    }.blur(42.dp)
-                    .clearAndSetSemantics {},
-            contentAlignment = Alignment.Center,
-        ) {
-            thumbnailContent()
-        }
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                Color.Black.copy(alpha = 0.22f),
-                                Color.Black.copy(alpha = 0.48f),
-                                Color.Black.copy(alpha = 0.68f),
+        if (frostedIceEnabled) {
+            // Full artwork remains visible without distortion. Blur and the gradient extend it
+            // naturally into the widescreen side areas without stretching the cover itself.
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .blur(34.dp)
+                        .graphicsLayer { alpha = 0.88f }
+                        .clearAndSetSemantics {},
+                contentAlignment = Alignment.Center,
+            ) {
+                thumbnailContent()
+            }
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
+                                    Color.Transparent,
+                                    Color.Transparent,
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
+                                ),
+                            ),
+                        ).background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color.Black.copy(alpha = 0.16f),
+                                    Color.Black.copy(alpha = 0.38f),
+                                    Color.Black.copy(alpha = 0.58f),
+                                ),
                             ),
                         ),
-                    ),
-        )
+            )
+        }
 
         Row(
             modifier =
-            Modifier
-                .windowInsetsPadding(
-                    WindowInsets.systemBars.only(WindowInsetsSides.Horizontal).add(verticalWindowInsets),
-                ).padding(bottom = 8.dp)
-                .fillMaxSize(),
-    ) {
+                Modifier
+                    .windowInsetsPadding(
+                        WindowInsets.systemBars.only(WindowInsetsSides.Horizontal).add(verticalWindowInsets),
+                    ).padding(bottom = 8.dp)
+                    .fillMaxSize(),
+        ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier =
                 Modifier
                     .weight(safePlayerWeight)
                     .fillMaxSize()
-                    .padding(start = 8.dp, end = 6.dp)
-                    .shadow(10.dp, glassShape)
-                    .clip(glassShape)
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.46f))
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.24f),
-                        shape = glassShape,
-                    ).padding(horizontal = 12.dp, vertical = 4.dp)
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
                     .nestedScroll(state.preUpPostDownNestedScrollConnection),
         ) {
             if (physicalRadioState.isActive) {
@@ -440,19 +445,21 @@ fun VehicleLandscapeLayout(
         }
 
         Surface(
-            shape = glassShape,
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.52f),
-            border = BorderStroke(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.24f),
-            ),
-            tonalElevation = 1.dp,
-            shadowElevation = 10.dp,
+            shape = if (frostedIceEnabled) RoundedCornerShape(0.dp) else RoundedCornerShape(12.dp),
+            color =
+                if (frostedIceEnabled) {
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.18f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainer
+                },
+            border = null,
+            tonalElevation = if (frostedIceEnabled) 0.dp else 2.dp,
+            shadowElevation = if (frostedIceEnabled) 0.dp else 0.dp,
             modifier =
                 Modifier
                     .weight(1f - safePlayerWeight)
                     .fillMaxSize()
-                    .padding(start = 6.dp, end = 8.dp),
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
         ) {
             Column(Modifier.fillMaxSize()) {
                 LazyRow(
