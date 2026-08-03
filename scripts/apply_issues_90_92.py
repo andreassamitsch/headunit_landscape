@@ -1,119 +1,150 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import urllib.request
-
-UPSTREAM_COMMIT = "42306e421475bcf150a4099b248f20aadfb61e24"
-UPSTREAM = f"https://raw.githubusercontent.com/MetrolistGroup/Metrolist/{UPSTREAM_COMMIT}"
-
-COPIES = {
-    "app/src/main/assets/player_configs.json": "app/src/main/assets/player_configs.json",
-    "app/src/main/kotlin/com/metrolist/music/utils/cipher/PlayerConfigStore.kt":
-        "app/src/main/kotlin/com/metrolist/music/utils/cipher/PlayerConfigStore.kt",
-    "app/src/main/kotlin/com/metrolist/music/utils/cipher/PlayerDatesStore.kt":
-        "app/src/main/kotlin/com/metrolist/music/utils/cipher/PlayerDatesStore.kt",
-}
-
-for remote, local in COPIES.items():
-    request = urllib.request.Request(
-        f"{UPSTREAM}/{remote}",
-        headers={"User-Agent": "MetrolistHU-CI"},
-    )
-    data = urllib.request.urlopen(request, timeout=30).read()
-    path = Path(local)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(data)
 
 build = Path("app/build.gradle.kts")
-build_text = build.read_text()
-build_text = build_text.replace("versionCode = 1370056", "versionCode = 1370058")
-build_text = build_text.replace('versionName = "13.7.47"', 'versionName = "13.7.49"')
-build.write_text(build_text)
+text = build.read_text()
+text = text.replace("versionCode = 1370058", "versionCode = 1370059")
+text = text.replace('versionName = "13.7.49"', 'versionName = "13.7.50"')
+build.write_text(text)
+
+prefs = Path("app/src/main/kotlin/com/metrolist/music/constants/PreferenceKeys.kt")
+text = prefs.read_text()
+needle = 'val Dudu7AutoCenterQueueKey = booleanPreferencesKey("dudu7AutoCenterQueue")\n'
+if 'Dudu7FrostedIceKey' not in text:
+    text = text.replace(needle, needle + 'val Dudu7FrostedIceKey = booleanPreferencesKey("dudu7FrostedIce")\n')
+prefs.write_text(text)
+
+appearance = Path("app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AppearanceSettings.kt")
+text = appearance.read_text()
+if 'Dudu7FrostedIceKey' not in text:
+    text = text.replace(
+        'import com.metrolist.music.constants.DynamicThemeKey\n',
+        'import com.metrolist.music.constants.DynamicThemeKey\nimport com.metrolist.music.constants.Dudu7FrostedIceKey\n',
+        1,
+    )
+    marker = '''    val (enableLandscapeScaling, onEnableLandscapeScalingChange) =
+        rememberPreference(
+            EnableLandscapeScalingKey,
+            defaultValue = false,
+        )
+'''
+    replacement = marker + '''    val (dudu7FrostedIce, onDudu7FrostedIceChange) =
+        rememberPreference(
+            Dudu7FrostedIceKey,
+            defaultValue = false,
+        )
+'''
+    text = text.replace(marker, replacement, 1)
+    item_marker = '''                    // Only show dynamic theme option when using the default/dynamic color
+'''
+    item = '''                    add(
+                        Material3SettingsItem(
+                            icon = painterResource(R.drawable.palette),
+                            title = { Text("Frosted Ice (Dudu7)") },
+                            description = { Text("Cover-Hintergrund und transparente Oberfläche; standardmäßig aus") },
+                            trailingContent = {
+                                Switch(
+                                    checked = dudu7FrostedIce,
+                                    onCheckedChange = onDudu7FrostedIceChange,
+                                    thumbContent = {
+                                        Icon(
+                                            painter = painterResource(
+                                                id = if (dudu7FrostedIce) R.drawable.check else R.drawable.close,
+                                            ),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(SwitchDefaults.IconSize),
+                                        )
+                                    },
+                                )
+                            },
+                            onClick = { onDudu7FrostedIceChange(!dudu7FrostedIce) },
+                        ),
+                    )
+'''
+    text = text.replace(item_marker, item + item_marker, 1)
+appearance.write_text(text)
 
 layout = Path("app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt")
 text = layout.read_text()
-if ".blur(42.dp)" not in text:
+if 'Dudu7FrostedIceKey' not in text:
     text = text.replace(
-        "import androidx.compose.foundation.BorderStroke\n",
-        "import androidx.compose.foundation.BorderStroke\n"
-        "import androidx.compose.foundation.background\n"
-        "import androidx.compose.foundation.border\n",
+        'import com.metrolist.music.R\n',
+        'import com.metrolist.music.R\nimport com.metrolist.music.constants.Dudu7FrostedIceKey\n',
         1,
     )
     text = text.replace(
-        "import androidx.compose.ui.geometry.Offset\n",
-        "import androidx.compose.ui.draw.blur\n"
-        "import androidx.compose.ui.draw.clip\n"
-        "import androidx.compose.ui.draw.clipToBounds\n"
-        "import androidx.compose.ui.draw.shadow\n"
-        "import androidx.compose.ui.geometry.Offset\n",
-        1,
-    )
-    text = text.replace(
-        "import androidx.compose.ui.hapticfeedback.HapticFeedbackType\n",
-        "import androidx.compose.ui.graphics.Brush\n"
-        "import androidx.compose.ui.graphics.Color\n"
-        "import androidx.compose.ui.graphics.graphicsLayer\n"
-        "import androidx.compose.ui.hapticfeedback.HapticFeedbackType\n",
-        1,
-    )
-    text = text.replace(
-        "import androidx.compose.ui.layout.onGloballyPositioned\n",
-        "import androidx.compose.ui.layout.onGloballyPositioned\n"
-        "import androidx.compose.ui.semantics.clearAndSetSemantics\n",
+        'import com.metrolist.music.utils.SearchRoutes\n',
+        'import com.metrolist.music.utils.SearchRoutes\nimport com.metrolist.music.utils.rememberPreference\n',
         1,
     )
 
-    marker = "    Row(\n        modifier =\n"
-    if marker not in text:
-        raise RuntimeError("Vehicle Row marker not found")
-    backdrop = '''    val glassShape = RoundedCornerShape(24.dp)
+start = text.index('    val glassShape = RoundedCornerShape(24.dp)\n')
+row_start = text.index('        Row(\n            modifier =\n', start)
+column_start = text.index('        Column(\n', row_start)
+column_end = text.index('\n\n        Surface(\n', column_start)
+surface_start = column_end + 2
+surface_body_start = text.index('            modifier =\n', surface_start)
+# Keep the complete right-pane body; only replace its Surface header.
+new_prefix = '''    val (frostedIceEnabled) = rememberPreference(
+        Dudu7FrostedIceKey,
+        defaultValue = false,
+    )
+    val glassShape = RoundedCornerShape(24.dp)
 
     Box(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .clipToBounds(),
+        modifier = Modifier.fillMaxSize().clipToBounds(),
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        scaleX = 1.24f
-                        scaleY = 1.24f
-                        alpha = 0.92f
-                    }.blur(42.dp)
-                    .clearAndSetSemantics {},
-            contentAlignment = Alignment.Center,
-        ) {
-            thumbnailContent()
-        }
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                Color.Black.copy(alpha = 0.22f),
-                                Color.Black.copy(alpha = 0.48f),
-                                Color.Black.copy(alpha = 0.68f),
+        if (frostedIceEnabled) {
+            // Full artwork remains visible without distortion. Blur and the gradient extend it
+            // naturally into the widescreen side areas without stretching the cover itself.
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .blur(34.dp)
+                        .graphicsLayer { alpha = 0.88f }
+                        .clearAndSetSemantics {},
+                contentAlignment = Alignment.Center,
+            ) {
+                thumbnailContent()
+            }
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
+                                    Color.Transparent,
+                                    Color.Transparent,
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
+                                ),
+                            ),
+                        ).background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color.Black.copy(alpha = 0.16f),
+                                    Color.Black.copy(alpha = 0.38f),
+                                    Color.Black.copy(alpha = 0.58f),
+                                ),
                             ),
                         ),
-                    ),
-        )
+            )
+        }
 
         Row(
             modifier =
+                Modifier
+                    .windowInsetsPadding(
+                        WindowInsets.systemBars.only(WindowInsetsSides.Horizontal).add(verticalWindowInsets),
+                    ).padding(bottom = 8.dp)
+                    .fillMaxSize(),
+        ) {
 '''
-    text = text.replace(marker, backdrop, 1)
+text = text[:start] + new_prefix + text[column_start:]
 
-    old_column = '''                Modifier
-                    .weight(safePlayerWeight)
-                    .fillMaxSize()
-                    .padding(horizontal = 12.dp, vertical = 4.dp)
-                    .nestedScroll(state.preUpPostDownNestedScrollConnection),'''
-    new_column = '''                Modifier
+old_column_modifier = '''                Modifier
                     .weight(safePlayerWeight)
                     .fillMaxSize()
                     .padding(start = 8.dp, end = 6.dp)
@@ -126,33 +157,40 @@ if ".blur(42.dp)" not in text:
                         shape = glassShape,
                     ).padding(horizontal = 12.dp, vertical = 4.dp)
                     .nestedScroll(state.preUpPostDownNestedScrollConnection),'''
-    if old_column not in text:
-        raise RuntimeError("Player column marker not found")
-    text = text.replace(old_column, new_column, 1)
+new_column_modifier = '''                Modifier
+                    .weight(safePlayerWeight)
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .nestedScroll(state.preUpPostDownNestedScrollConnection),'''
+text = text.replace(old_column_modifier, new_column_modifier, 1)
 
-    text = text.replace("shape = RoundedCornerShape(18.dp),", "shape = glassShape,", 1)
-    text = text.replace(
-        "color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.78f),",
-        "color = MaterialTheme.colorScheme.surface.copy(alpha = 0.52f),",
-        1,
-    )
-    text = text.replace(
-        "color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f),",
-        "color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.24f),",
-        1,
-    )
-    text = text.replace("tonalElevation = 2.dp,", "tonalElevation = 1.dp,", 1)
-    text = text.replace("shadowElevation = 6.dp,", "shadowElevation = 10.dp,", 1)
+old_surface = '''        Surface(
+            shape = glassShape,
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.52f),
+            border = BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.24f),
+            ),
+            tonalElevation = 1.dp,
+            shadowElevation = 10.dp,'''
+new_surface = '''        Surface(
+            shape = if (frostedIceEnabled) RoundedCornerShape(0.dp) else RoundedCornerShape(12.dp),
+            color =
+                if (frostedIceEnabled) {
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.18f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainer
+                },
+            border = null,
+            tonalElevation = if (frostedIceEnabled) 0.dp else 2.dp,
+            shadowElevation = if (frostedIceEnabled) 0.dp else 0.dp,'''
+text = text.replace(old_surface, new_surface, 1)
+# Restore the exact former standard spacing; Frosted mode uses the same simple pane split.
+text = text.replace('.padding(start = 6.dp, end = 8.dp),', '.padding(horizontal = 8.dp, vertical = 4.dp),', 1)
+layout.write_text(text)
 
-    if not text.endswith("    }\n}\n"):
-        raise RuntimeError("Unexpected VehicleLandscapeLayout ending")
-    text = text[:-7] + "    }\n    }\n}\n"
-    layout.write_text(text)
-
-assert '"c954e338"' in Path("app/src/main/assets/player_configs.json").read_text()
-assert "REMOTE_URL" in Path(
-    "app/src/main/kotlin/com/metrolist/music/utils/cipher/PlayerDatesStore.kt"
-).read_text()
-assert "versionCode = 1370058" in build.read_text()
-assert 'versionName = "13.7.49"' in build.read_text()
-assert ".blur(42.dp)" in layout.read_text()
+assert 'Dudu7FrostedIceKey' in prefs.read_text()
+assert 'defaultValue = false' in appearance.read_text()
+assert 'frostedIceEnabled' in layout.read_text()
+assert 'scaleX = 1.24f' not in layout.read_text()
+assert 'versionCode = 1370059' in build.read_text()
