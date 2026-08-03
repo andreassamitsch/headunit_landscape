@@ -361,10 +361,6 @@ fun VehicleLandscapeLayout(
         Dudu7FrostedIceKey,
         defaultValue = false,
     )
-    val (frostedIceEnabled) = rememberPreference(
-        Dudu7FrostedIceKey,
-        defaultValue = false,
-    )
     val glassShape = RoundedCornerShape(24.dp)
 
     Box(
