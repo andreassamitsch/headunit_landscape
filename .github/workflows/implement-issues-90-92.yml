@@ -1,0 +1,160 @@
+name: Implement issues 90 and 92
+
+on:
+  pull_request:
+    branches: [agent/issue-90-ice-glass-lite]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  implement-test-build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-cleanup: on-success
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Apply current upstream playback data and frosted glass
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import urllib.request
+
+          upstream = "https://raw.githubusercontent.com/MetrolistGroup/Metrolist/42306e421475bcf150a4099b248f20aadfb61e24"
+          copies = {
+              "app/src/main/assets/player_configs.json": "app/src/main/assets/player_configs.json",
+              "app/src/main/assets/player_dates.json": "app/src/main/assets/player_dates.json",
+              "app/src/main/kotlin/com/metrolist/music/utils/YTPlayerUtils.kt": "app/src/main/kotlin/com/metrolist/music/utils/YTPlayerUtils.kt",
+              "app/src/main/kotlin/com/metrolist/music/ui/screens/login/LoginScreen.kt": "app/src/main/kotlin/com/metrolist/music/ui/screens/login/LoginScreen.kt",
+          }
+          for remote, local in copies.items():
+              data = urllib.request.urlopen(f"{upstream}/{remote}", timeout=30).read()
+              path = Path(local)
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_bytes(data)
+
+          build = Path("app/build.gradle.kts")
+          text = build.read_text()
+          text = text.replace("versionCode = 1370056", "versionCode = 1370058")
+          text = text.replace('versionName = "13.7.47"', 'versionName = "13.7.49"')
+          build.write_text(text)
+
+          path = Path("app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt")
+          text = path.read_text()
+          imports = {
+              "import androidx.compose.foundation.BorderStroke\n": "import androidx.compose.foundation.BorderStroke\nimport androidx.compose.foundation.background\nimport androidx.compose.foundation.border\n",
+              "import androidx.compose.ui.geometry.Offset\n": "import androidx.compose.ui.draw.blur\nimport androidx.compose.ui.draw.clip\nimport androidx.compose.ui.draw.clipToBounds\nimport androidx.compose.ui.draw.shadow\nimport androidx.compose.ui.geometry.Offset\n",
+              "import androidx.compose.ui.graphics.Offset\n": "import androidx.compose.ui.graphics.Offset\n",
+              "import androidx.compose.ui.hapticfeedback.HapticFeedbackType\n": "import androidx.compose.ui.graphics.Brush\nimport androidx.compose.ui.graphics.Color\nimport androidx.compose.ui.graphics.graphicsLayer\nimport androidx.compose.ui.hapticfeedback.HapticFeedbackType\n",
+              "import androidx.compose.ui.layout.onGloballyPositioned\n": "import androidx.compose.ui.layout.onGloballyPositioned\nimport androidx.compose.ui.semantics.clearAndSetSemantics\n",
+          }
+          for old, new in imports.items():
+              if old in text and new not in text:
+                  text = text.replace(old, new, 1)
+
+          marker = "    Row(\n        modifier =\n"
+          if marker not in text:
+              raise SystemExit("Vehicle Row marker not found")
+          backdrop = '''    val glassShape = RoundedCornerShape(24.dp)\n\n    Box(\n        modifier =\n            Modifier\n                .fillMaxSize()\n                .clipToBounds(),\n    ) {\n        Box(\n            modifier =\n                Modifier\n                    .fillMaxSize()\n                    .graphicsLayer {\n                        scaleX = 1.24f\n                        scaleY = 1.24f\n                        alpha = 0.92f\n                    }.blur(42.dp)\n                    .clearAndSetSemantics {},\n            contentAlignment = Alignment.Center,\n        ) {\n            thumbnailContent()\n        }\n        Box(\n            modifier =\n                Modifier\n                    .fillMaxSize()\n                    .background(\n                        Brush.verticalGradient(\n                            listOf(\n                                Color.Black.copy(alpha = 0.22f),\n                                Color.Black.copy(alpha = 0.48f),\n                                Color.Black.copy(alpha = 0.68f),\n                            ),\n                        ),\n                    ),\n        )\n\n    Row(\n        modifier =\n'''
+          text = text.replace(marker, backdrop, 1)
+
+          old_column = '''                Modifier\n                    .weight(safePlayerWeight)\n                    .fillMaxSize()\n                    .padding(horizontal = 12.dp, vertical = 4.dp)\n                    .nestedScroll(state.preUpPostDownNestedScrollConnection),'''
+          new_column = '''                Modifier\n                    .weight(safePlayerWeight)\n                    .fillMaxSize()\n                    .padding(start = 8.dp, end = 6.dp)\n                    .shadow(10.dp, glassShape)\n                    .clip(glassShape)\n                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.46f))\n                    .border(\n                        width = 1.dp,\n                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.24f),\n                        shape = glassShape,\n                    ).padding(horizontal = 12.dp, vertical = 4.dp)\n                    .nestedScroll(state.preUpPostDownNestedScrollConnection),'''
+          if old_column not in text:
+              raise SystemExit("Player column marker not found")
+          text = text.replace(old_column, new_column, 1)
+
+          text = text.replace("shape = RoundedCornerShape(18.dp),", "shape = glassShape,", 1)
+          text = text.replace("color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.78f),", "color = MaterialTheme.colorScheme.surface.copy(alpha = 0.52f),", 1)
+          text = text.replace("color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f),", "color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.24f),", 1)
+          text = text.replace("tonalElevation = 2.dp,", "tonalElevation = 1.dp,", 1)
+          text = text.replace("shadowElevation = 6.dp,", "shadowElevation = 10.dp,", 1)
+
+          if not text.endswith("    }\n}\n"):
+              raise SystemExit("Unexpected VehicleLandscapeLayout ending")
+          text = text[:-7] + "    }\n    }\n}\n"
+          path.write_text(text)
+          PY
+
+          git diff --check
+          grep -q '"c954e338"' app/src/main/assets/player_configs.json
+          grep -q 'versionCode = 1370058' app/build.gradle.kts
+          grep -q 'versionName = "13.7.49"' app/build.gradle.kts
+          grep -q '.blur(42.dp)' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+          grep -q 'thumbnailContent()' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add app/build.gradle.kts app/src/main/assets/player_configs.json app/src/main/assets/player_dates.json \
+              app/src/main/kotlin/com/metrolist/music/utils/YTPlayerUtils.kt \
+              app/src/main/kotlin/com/metrolist/music/ui/screens/login/LoginScreen.kt \
+              app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+            git commit -m "Sync upstream playback and add cover frosted glass"
+            git push origin HEAD:${{ github.head_ref || github.ref_name }}
+          fi
+
+      - name: Unit tests
+        run: |
+          chmod +x gradlew
+          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+
+      - name: Build and verify APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace | tee artifacts/build.log
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          cp "$APK" artifacts/Metrolist-dudu7-13.7.49.apk
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$BUILD_TOOLS/aapt" dump badging artifacts/Metrolist-dudu7-13.7.49.apk > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs artifacts/Metrolist-dudu7-13.7.49.apk > artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370058'" artifacts/apk-badging.txt
+          grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
+          unzip -l artifacts/Metrolist-dudu7-13.7.49.apk > artifacts/apk-contents.txt
+          grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
+          grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
+          sha256sum artifacts/Metrolist-dudu7-13.7.49.apk > artifacts/Metrolist-dudu7-13.7.49.apk.sha256
+
+      - name: Render actual app screenshot in landscape emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            adb install -r artifacts/Metrolist-dudu7-13.7.49.apk
+            adb shell settings put system accelerometer_rotation 0
+            adb shell settings put system user_rotation 1
+            adb shell wm size 1600x900
+            adb shell wm density 160
+            adb shell monkey -p com.metrolist.music.dudu7.debug -c android.intent.category.LAUNCHER 1
+            sleep 12
+            adb exec-out screencap -p > artifacts/frosted-glass-emulator.png
+            adb shell dumpsys activity activities > artifacts/activity-state.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.49-frosted-glass
+          path: artifacts/
+          retention-days: 14
