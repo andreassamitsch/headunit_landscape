@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -384,8 +385,14 @@ fun VehicleLandscapeLayout(
         }
 
         Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.96f),
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.78f),
+            border = BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f),
+            ),
+            tonalElevation = 2.dp,
+            shadowElevation = 6.dp,
             modifier =
                 Modifier
                     .weight(1f - safePlayerWeight)
