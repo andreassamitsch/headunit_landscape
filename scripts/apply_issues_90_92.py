@@ -78,18 +78,18 @@ if 'Dudu7FrostedIceKey' not in text:
         1,
     )
 
-start = text.index('    val glassShape = RoundedCornerShape(24.dp)\n')
-row_start = text.index('        Row(\n            modifier =\n', start)
-column_start = text.index('        Column(\n', row_start)
-column_end = text.index('\n\n        Surface(\n', column_start)
-surface_start = column_end + 2
-surface_body_start = text.index('            modifier =\n', surface_start)
-# Keep the complete right-pane body; only replace its Surface header.
-new_prefix = '''    val (frostedIceEnabled) = rememberPreference(
+preference_block = '''    val (frostedIceEnabled) = rememberPreference(
         Dudu7FrostedIceKey,
         defaultValue = false,
     )
-    val glassShape = RoundedCornerShape(24.dp)
+'''
+# The script is run repeatedly by CI. Remove any existing generated declaration first,
+# then insert exactly one declaration with the generated layout block.
+text = text.replace(preference_block, '')
+start = text.index('    val glassShape = RoundedCornerShape(24.dp)\n')
+row_start = text.index('        Row(\n            modifier =\n', start)
+column_start = text.index('        Column(\n', row_start)
+new_prefix = preference_block + '''    val glassShape = RoundedCornerShape(24.dp)
 
     Box(
         modifier = Modifier.fillMaxSize().clipToBounds(),
@@ -183,14 +183,13 @@ new_surface = '''        Surface(
                 },
             border = null,
             tonalElevation = if (frostedIceEnabled) 0.dp else 2.dp,
-            shadowElevation = if (frostedIceEnabled) 0.dp else 0.dp,'''
+            shadowElevation = 0.dp,'''
 text = text.replace(old_surface, new_surface, 1)
-# Restore the exact former standard spacing; Frosted mode uses the same simple pane split.
 text = text.replace('.padding(start = 6.dp, end = 8.dp),', '.padding(horizontal = 8.dp, vertical = 4.dp),', 1)
 layout.write_text(text)
 
+assert layout.read_text().count(preference_block) == 1
 assert 'Dudu7FrostedIceKey' in prefs.read_text()
 assert 'defaultValue = false' in appearance.read_text()
-assert 'frostedIceEnabled' in layout.read_text()
 assert 'scaleX = 1.24f' not in layout.read_text()
 assert 'versionCode = 1370059' in build.read_text()
