@@ -70,6 +70,19 @@ jobs:
           grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
           sha256sum artifacts/Metrolist-dudu7-13.7.49.apk > artifacts/Metrolist-dudu7-13.7.49.apk.sha256
 
+      - name: Upload verified APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.49-apk
+          path: |
+            artifacts/Metrolist-dudu7-13.7.49.apk
+            artifacts/Metrolist-dudu7-13.7.49.apk.sha256
+            artifacts/apk-badging.txt
+            artifacts/apk-signature.txt
+            artifacts/apk-contents.txt
+            artifacts/build.log
+          retention-days: 14
+
       - name: Render actual app screenshot in landscape emulator
         continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
@@ -90,9 +103,13 @@ jobs:
             adb exec-out screencap -p > artifacts/frosted-glass-emulator.png
             adb shell dumpsys activity activities > artifacts/activity-state.txt
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload optional emulator diagnostics
         if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: Metrolist-dudu7-13.7.49-frosted-glass
-          path: artifacts/
+          name: Metrolist-dudu7-13.7.49-emulator
+          path: |
+            artifacts/frosted-glass-emulator.png
+            artifacts/activity-state.txt
+          if-no-files-found: ignore
           retention-days: 14
