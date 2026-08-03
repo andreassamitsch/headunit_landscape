@@ -79,6 +79,7 @@ val Dudu7PlayerPaneWeightKey = floatPreferencesKey("dudu7PlayerPaneWeight")
 val Dudu7StartWithLyricsKey = booleanPreferencesKey("dudu7StartWithLyrics")
 val Dudu7SwipeToRemoveQueueKey = booleanPreferencesKey("dudu7SwipeToRemoveQueue")
 val Dudu7AutoCenterQueueKey = booleanPreferencesKey("dudu7AutoCenterQueue")
+val Dudu7FrostedIceKey = booleanPreferencesKey("dudu7FrostedIce")
 
 enum class SliderStyle {
     DEFAULT,

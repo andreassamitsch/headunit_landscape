@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,12 +48,20 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -70,6 +80,7 @@ import com.metrolist.music.LocalNavController
 import com.metrolist.music.LocalPlayerAwareWindowInsets
 import com.metrolist.music.LocalPlayerConnection
 import com.metrolist.music.R
+import com.metrolist.music.constants.Dudu7FrostedIceKey
 import com.metrolist.music.extensions.move
 import com.metrolist.music.playback.Dudu7PlaybackSource
 import com.metrolist.music.playback.Dudu7SourcePlaybackCoordinator
@@ -82,6 +93,7 @@ import com.metrolist.music.ui.screens.navigationBuilder
 import com.metrolist.music.ui.screens.radio.PhysicalRadioScreen
 import com.metrolist.music.ui.screens.radio.WebRadioScreen
 import com.metrolist.music.utils.SearchRoutes
+import com.metrolist.music.utils.rememberPreference
 import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -345,14 +357,62 @@ fun VehicleLandscapeLayout(
         }
     }
 
-    Row(
-        modifier =
-            Modifier
-                .windowInsetsPadding(
-                    WindowInsets.systemBars.only(WindowInsetsSides.Horizontal).add(verticalWindowInsets),
-                ).padding(bottom = 8.dp)
-                .fillMaxSize(),
+    val (frostedIceEnabled) = rememberPreference(
+        Dudu7FrostedIceKey,
+        defaultValue = false,
+    )
+    val glassShape = RoundedCornerShape(24.dp)
+
+    Box(
+        modifier = Modifier.fillMaxSize().clipToBounds(),
     ) {
+        if (frostedIceEnabled) {
+            // Full artwork remains visible without distortion. Blur and the gradient extend it
+            // naturally into the widescreen side areas without stretching the cover itself.
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .blur(34.dp)
+                        .graphicsLayer { alpha = 0.88f }
+                        .clearAndSetSemantics {},
+                contentAlignment = Alignment.Center,
+            ) {
+                thumbnailContent()
+            }
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
+                                    Color.Transparent,
+                                    Color.Transparent,
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
+                                ),
+                            ),
+                        ).background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color.Black.copy(alpha = 0.16f),
+                                    Color.Black.copy(alpha = 0.38f),
+                                    Color.Black.copy(alpha = 0.58f),
+                                ),
+                            ),
+                        ),
+            )
+        }
+
+        Row(
+            modifier =
+                Modifier
+                    .windowInsetsPadding(
+                        WindowInsets.systemBars.only(WindowInsetsSides.Horizontal).add(verticalWindowInsets),
+                    ).padding(bottom = 8.dp)
+                    .fillMaxSize(),
+        ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier =
@@ -385,19 +445,21 @@ fun VehicleLandscapeLayout(
         }
 
         Surface(
-            shape = RoundedCornerShape(18.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.78f),
-            border = BorderStroke(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f),
-            ),
-            tonalElevation = 2.dp,
-            shadowElevation = 6.dp,
+            shape = if (frostedIceEnabled) RoundedCornerShape(0.dp) else RoundedCornerShape(12.dp),
+            color =
+                if (frostedIceEnabled) {
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.18f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainer
+                },
+            border = null,
+            tonalElevation = if (frostedIceEnabled) 0.dp else 2.dp,
+            shadowElevation = if (frostedIceEnabled) 0.dp else 0.dp,
             modifier =
                 Modifier
                     .weight(1f - safePlayerWeight)
                     .fillMaxSize()
-                    .padding(start = 6.dp, end = 8.dp),
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
         ) {
             Column(Modifier.fillMaxSize()) {
                 LazyRow(
@@ -592,5 +654,6 @@ fun VehicleLandscapeLayout(
                 }
             }
         }
+     }
     }
 }
