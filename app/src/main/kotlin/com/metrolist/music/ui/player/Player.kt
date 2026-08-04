@@ -218,6 +218,12 @@ import com.metrolist.music.constants.SleepTimerFadeOutKey
 import com.metrolist.music.constants.SleepTimerStopAfterCurrentSongKey
 
 
+private data class Dudu7FmVisualSnapshot(
+    val active: Boolean = false,
+    val identity: String = "",
+    val artworkUrl: String? = null,
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BottomSheetPlayer(
@@ -344,6 +350,19 @@ fun BottomSheetPlayer(
 
     val playbackState by playerConnection.playbackState.collectAsState()
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
+    var dudu7FmVisual by remember { mutableStateOf(Dudu7FmVisualSnapshot()) }
+    val effectiveVisualId =
+        if (VehicleVariantConfig.isDudu7 && dudu7FmVisual.active) {
+            "fm:${dudu7FmVisual.identity}"
+        } else {
+            mediaMetadata?.id
+        }
+    val effectiveArtworkUrl =
+        if (VehicleVariantConfig.isDudu7 && dudu7FmVisual.active) {
+            dudu7FmVisual.artworkUrl
+        } else {
+            mediaMetadata?.thumbnailUrl
+        }
     val radioStationStore = remember(context) { RadioStationStore.get(context) }
     val savedRadioStations by radioStationStore.stations.collectAsStateWithLifecycle()
     val isWebRadio = isRadioMediaId(mediaMetadata?.id)
@@ -449,60 +468,93 @@ fun BottomSheetPlayer(
     val defaultGradientColors = listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant)
     val fallbackColor = MaterialTheme.colorScheme.surface.toArgb()
 
-    LaunchedEffect(mediaMetadata?.id, mediaMetadata?.thumbnailUrl, playerBackground) {
-        if (playerBackground == PlayerBackgroundStyle.GRADIENT) {
-            val currentMetadata = mediaMetadata
-            if (currentMetadata != null && currentMetadata.thumbnailUrl != null) {
-                val artworkCacheKey = "${currentMetadata.id}|${currentMetadata.thumbnailUrl}"
-                val cachedColors = gradientColorsCache[artworkCacheKey]
-                if (cachedColors != null) {
-                    gradientColors = cachedColors
-                    return@LaunchedEffect
-                }
-                withContext(Dispatchers.IO) {
-                    val request =
-                        ImageRequest
-                            .Builder(context)
-                            .data(currentMetadata.thumbnailUrl)
-                            .size(100, 100)
-                            .allowHardware(false)
-                            .memoryCacheKey("gradient_${artworkCacheKey.hashCode()}")
-                            .build()
+    val visualArtworkKey = "${effectiveVisualId.orEmpty()}|${effectiveArtworkUrl.orEmpty()}"
+    val latestVisualArtworkKey by rememberUpdatedState(visualArtworkKey)
 
-                    val result = runCatching { context.imageLoader.execute(request) }.getOrNull()
-                    if (result != null) {
-                        val bitmap = result.image?.toBitmap()
-                        if (bitmap != null) {
-                            val palette =
-                                withContext(Dispatchers.Default) {
-                                    Palette
-                                        .from(bitmap)
-                                        .maximumColorCount(8)
-                                        .resizeBitmapArea(100 * 100)
-                                        .generate()
-                                }
-                            val extractedColors =
-                                PlayerColorExtractor.extractGradientColors(
-                                    palette = palette,
-                                    fallbackColor = fallbackColor,
-                                )
-                            gradientColorsCache[artworkCacheKey] = extractedColors
-                            withContext(Dispatchers.Main) { gradientColors = extractedColors }
-                        }
+    LaunchedEffect(visualArtworkKey, playerBackground) {
+        val needsArtworkPalette =
+            playerBackground == PlayerBackgroundStyle.GRADIENT ||
+                (VehicleVariantConfig.isDudu7 && playerBackground == PlayerBackgroundStyle.BLUR)
+        val artworkUrl = effectiveArtworkUrl?.takeIf { it.isNotBlank() }
+        if (!needsArtworkPalette || artworkUrl == null) {
+            gradientColors = emptyList()
+            return@LaunchedEffect
+        }
+
+        val artworkCacheKey = visualArtworkKey
+        val cachedColors = gradientColorsCache[artworkCacheKey]
+        if (cachedColors != null) {
+            gradientColors = cachedColors
+            return@LaunchedEffect
+        }
+        withContext(Dispatchers.IO) {
+            val request =
+                ImageRequest
+                    .Builder(context)
+                    .data(artworkUrl)
+                    .size(100, 100)
+                    .allowHardware(false)
+                    .memoryCacheKey("gradient_${artworkCacheKey.hashCode()}")
+                    .build()
+
+            val result = runCatching { context.imageLoader.execute(request) }.getOrNull()
+            val bitmap = result?.image?.toBitmap()
+            if (bitmap != null) {
+                val palette =
+                    withContext(Dispatchers.Default) {
+                        Palette
+                            .from(bitmap)
+                            .maximumColorCount(8)
+                            .resizeBitmapArea(100 * 100)
+                            .generate()
+                    }
+                val extractedColors =
+                    PlayerColorExtractor.extractGradientColors(
+                        palette = palette,
+                        fallbackColor = fallbackColor,
+                    )
+                gradientColorsCache[artworkCacheKey] = extractedColors
+                withContext(Dispatchers.Main) {
+                    if (latestVisualArtworkKey == artworkCacheKey) {
+                        gradientColors = extractedColors
+                    }
+                }
+            } else {
+                withContext(Dispatchers.Main) {
+                    if (latestVisualArtworkKey == artworkCacheKey) {
+                        gradientColors = emptyList()
                     }
                 }
             }
-        } else {
-            gradientColors = emptyList()
         }
     }
+
+    val visualBackdropColor =
+        when {
+            playerBackground == PlayerBackgroundStyle.DEFAULT -> MaterialTheme.colorScheme.surfaceContainer
+            gradientColors.isNotEmpty() -> gradientColors.first()
+            else -> MaterialTheme.colorScheme.surface
+        }
+    val visualBackdropLuminance =
+        when (playerBackground) {
+            PlayerBackgroundStyle.BLUR -> visualBackdropColor.luminance() * 0.70f
+            PlayerBackgroundStyle.GRADIENT -> visualBackdropColor.luminance() * 0.80f
+            PlayerBackgroundStyle.DEFAULT -> visualBackdropColor.luminance()
+        }
+    val adaptiveVisualContentColor =
+        if (visualBackdropLuminance >= 0.52f) {
+            Color.Black.copy(alpha = 0.90f)
+        } else {
+            Color.White.copy(alpha = 0.96f)
+        }
+    val inverseAdaptiveVisualContentColor =
+        if (adaptiveVisualContentColor.luminance() > 0.5f) Color.Black else Color.White
 
     val TextBackgroundColor by animateColorAsState(
         targetValue =
             when (playerBackground) {
                 PlayerBackgroundStyle.DEFAULT -> MaterialTheme.colorScheme.onBackground
-                PlayerBackgroundStyle.BLUR -> Color.White
-                PlayerBackgroundStyle.GRADIENT -> Color.White
+                PlayerBackgroundStyle.BLUR, PlayerBackgroundStyle.GRADIENT -> adaptiveVisualContentColor
             },
         label = "TextBackgroundColor",
     )
@@ -511,8 +563,7 @@ fun BottomSheetPlayer(
         targetValue =
             when (playerBackground) {
                 PlayerBackgroundStyle.DEFAULT -> MaterialTheme.colorScheme.surface
-                PlayerBackgroundStyle.BLUR -> Color.Black
-                PlayerBackgroundStyle.GRADIENT -> Color.Black
+                PlayerBackgroundStyle.BLUR, PlayerBackgroundStyle.GRADIENT -> inverseAdaptiveVisualContentColor
             },
         label = "icBackgroundColor",
     )
@@ -523,7 +574,7 @@ fun BottomSheetPlayer(
                 playerBackground == PlayerBackgroundStyle.GRADIENT -> {
                 when (playerButtonsStyle) {
                     PlayerButtonsStyle.DEFAULT -> {
-                        Pair(Color.White, Color.Black)
+                        Pair(adaptiveVisualContentColor, inverseAdaptiveVisualContentColor)
                     }
 
                     PlayerButtonsStyle.PRIMARY -> {
@@ -577,8 +628,8 @@ fun BottomSheetPlayer(
                 when (playerButtonsStyle) {
                     PlayerButtonsStyle.DEFAULT -> {
                         Pair(
-                            Color.White.copy(alpha = 0.2f),
-                            Color.White,
+                            adaptiveVisualContentColor.copy(alpha = 0.20f),
+                            adaptiveVisualContentColor,
                         )
                     }
 
@@ -936,7 +987,7 @@ fun BottomSheetPlayer(
                 when (playerBackground) {
                     PlayerBackgroundStyle.BLUR -> {
                         AnimatedContent(
-                            targetState = mediaMetadata?.thumbnailUrl,
+                            targetState = effectiveArtworkUrl,
                             transitionSpec = {
                                 fadeIn(tween(800)).togetherWith(fadeOut(tween(800)))
                             },
@@ -1928,25 +1979,15 @@ fun BottomSheetPlayer(
 
         when (LocalConfiguration.current.orientation) {
             Configuration.ORIENTATION_LANDSCAPE -> {
-                val tabBackdropColor =
-                    when {
-                        playerBackground == PlayerBackgroundStyle.GRADIENT && gradientColors.isNotEmpty() ->
-                            gradientColors.first()
-                        playerBackground == PlayerBackgroundStyle.DEFAULT ->
-                            MaterialTheme.colorScheme.surfaceContainer
-                        else ->
-                            MaterialTheme.colorScheme.surface
-                    }
-                val tabBackdropIsLight = tabBackdropColor.luminance() >= 0.52f
                 val tabContentColor =
-                    if (tabBackdropIsLight) {
-                        Color.Black.copy(alpha = 0.88f)
+                    if (playerBackground == PlayerBackgroundStyle.DEFAULT) {
+                        MaterialTheme.colorScheme.onSurface
                     } else {
-                        Color.White.copy(alpha = 0.94f)
+                        adaptiveVisualContentColor
                     }
                 val tabGlassColor =
-                    Color.White.copy(
-                        alpha = if (tabBackdropIsLight) 0.24f else 0.13f,
+                    tabContentColor.copy(
+                        alpha = if (tabContentColor.luminance() > 0.5f) 0.13f else 0.18f,
                     )
                 VehicleLandscapeLayout(
                     state = state,
@@ -1955,6 +1996,10 @@ fun BottomSheetPlayer(
                     onToggleLyrics = { if (!isWebRadio) showInlineLyrics = !showInlineLyrics },
                     tabContentColor = tabContentColor,
                     tabGlassColor = tabGlassColor,
+                    onPhysicalRadioVisualChanged = { active, identity, artworkUrl ->
+                        val next = Dudu7FmVisualSnapshot(active, identity, artworkUrl)
+                        if (dudu7FmVisual != next) dudu7FmVisual = next
+                    },
                     thumbnailContent = {
                         val currentSliderPosition by rememberUpdatedState(sliderPosition)
                         val sliderPositionProvider = remember { { currentSliderPosition } }
