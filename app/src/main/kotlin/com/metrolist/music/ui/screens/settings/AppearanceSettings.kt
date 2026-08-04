@@ -63,6 +63,8 @@ import com.metrolist.music.constants.DensityScale
 import com.metrolist.music.constants.DensityScaleKey
 import com.metrolist.music.constants.DynamicThemeKey
 import com.metrolist.music.constants.Dudu7FrostedIceKey
+import com.metrolist.music.constants.Dudu7FrostedGlassStrengthKey
+import com.metrolist.music.constants.Dudu7FrostedBlurStrengthKey
 import com.metrolist.music.constants.EnableDynamicIconKey
 import com.metrolist.music.constants.EnableHighRefreshRateKey
 import com.metrolist.music.constants.EnableLandscapeScalingKey
@@ -159,6 +161,16 @@ fun AppearanceSettings(
         rememberPreference(
             Dudu7FrostedIceKey,
             defaultValue = false,
+        )
+    val (dudu7FrostedGlassStrength, onDudu7FrostedGlassStrengthChange) =
+        rememberPreference(
+            Dudu7FrostedGlassStrengthKey,
+            defaultValue = 55,
+        )
+    val (dudu7FrostedBlurStrength, onDudu7FrostedBlurStrengthChange) =
+        rememberPreference(
+            Dudu7FrostedBlurStrengthKey,
+            defaultValue = 12,
         )
     val (selectedThemeColorInt) =
         rememberPreference(
@@ -1042,6 +1054,42 @@ fun AppearanceSettings(
                             onClick = { onDudu7FrostedIceChange(!dudu7FrostedIce) },
                         ),
                     )
+                    if (dudu7FrostedIce) {
+                        add(
+                            Material3SettingsItem(
+                                icon = painterResource(R.drawable.opacity),
+                                title = { Text("Glasstärke") },
+                                description = { Text("${dudu7FrostedGlassStrength}% Deckkraft") },
+                                trailingContent = {
+                                    Slider(
+                                        value = dudu7FrostedGlassStrength.toFloat(),
+                                        onValueChange = { onDudu7FrostedGlassStrengthChange(it.roundToInt()) },
+                                        valueRange = 15f..90f,
+                                        steps = 14,
+                                        modifier = Modifier.fillMaxWidth(0.42f),
+                                    )
+                                },
+                                onClick = {},
+                            ),
+                        )
+                        add(
+                            Material3SettingsItem(
+                                icon = painterResource(R.drawable.blur_on),
+                                title = { Text("Glas-Unschärfe") },
+                                description = { Text("${dudu7FrostedBlurStrength} dp") },
+                                trailingContent = {
+                                    Slider(
+                                        value = dudu7FrostedBlurStrength.toFloat(),
+                                        onValueChange = { onDudu7FrostedBlurStrengthChange(it.roundToInt()) },
+                                        valueRange = 0f..24f,
+                                        steps = 11,
+                                        modifier = Modifier.fillMaxWidth(0.42f),
+                                    )
+                                },
+                                onClick = {},
+                            ),
+                        )
+                    }
                     // Only show dynamic theme option when using the default/dynamic color
                     // When a custom color is selected, dynamic theme is automatically disabled
                     if (!isUsingCustomColor) {

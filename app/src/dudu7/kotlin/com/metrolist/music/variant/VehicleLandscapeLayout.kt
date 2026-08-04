@@ -53,15 +53,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -81,6 +77,8 @@ import com.metrolist.music.LocalPlayerAwareWindowInsets
 import com.metrolist.music.LocalPlayerConnection
 import com.metrolist.music.R
 import com.metrolist.music.constants.Dudu7FrostedIceKey
+import com.metrolist.music.constants.Dudu7FrostedGlassStrengthKey
+import com.metrolist.music.constants.Dudu7FrostedBlurStrengthKey
 import com.metrolist.music.extensions.move
 import com.metrolist.music.playback.Dudu7PlaybackSource
 import com.metrolist.music.playback.Dudu7SourcePlaybackCoordinator
@@ -361,50 +359,36 @@ fun VehicleLandscapeLayout(
         Dudu7FrostedIceKey,
         defaultValue = false,
     )
+    val (frostedGlassStrength) = rememberPreference(
+        Dudu7FrostedGlassStrengthKey,
+        defaultValue = 55,
+    )
+    val (frostedBlurStrength) = rememberPreference(
+        Dudu7FrostedBlurStrengthKey,
+        defaultValue = 12,
+    )
+    val glassAlpha = (frostedGlassStrength.coerceIn(15, 90) / 100f)
+    val glassBlur = frostedBlurStrength.coerceIn(0, 24).dp
+    val baseColors = MaterialTheme.colorScheme
+    val frostedColors =
+        if (frostedIceEnabled) {
+            baseColors.copy(
+                surface = baseColors.surface.copy(alpha = glassAlpha),
+                surfaceVariant = baseColors.surfaceVariant.copy(alpha = glassAlpha),
+                surfaceContainerLowest = baseColors.surfaceContainerLowest.copy(alpha = glassAlpha * 0.72f),
+                surfaceContainerLow = baseColors.surfaceContainerLow.copy(alpha = glassAlpha * 0.78f),
+                surfaceContainer = baseColors.surfaceContainer.copy(alpha = glassAlpha * 0.84f),
+                surfaceContainerHigh = baseColors.surfaceContainerHigh.copy(alpha = glassAlpha * 0.90f),
+                surfaceContainerHighest = baseColors.surfaceContainerHighest.copy(alpha = glassAlpha),
+            )
+        } else {
+            baseColors
+        }
     val glassShape = RoundedCornerShape(24.dp)
 
     Box(
         modifier = Modifier.fillMaxSize().clipToBounds(),
     ) {
-        if (frostedIceEnabled) {
-            // Full artwork remains visible without distortion. Blur and the gradient extend it
-            // naturally into the widescreen side areas without stretching the cover itself.
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .blur(34.dp)
-                        .graphicsLayer { alpha = 0.88f }
-                        .clearAndSetSemantics {},
-                contentAlignment = Alignment.Center,
-            ) {
-                thumbnailContent()
-            }
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
-                                    Color.Transparent,
-                                    Color.Transparent,
-                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
-                                ),
-                            ),
-                        ).background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    Color.Black.copy(alpha = 0.16f),
-                                    Color.Black.copy(alpha = 0.38f),
-                                    Color.Black.copy(alpha = 0.58f),
-                                ),
-                            ),
-                        ),
-            )
-        }
-
         Row(
             modifier =
                 Modifier
@@ -445,13 +429,8 @@ fun VehicleLandscapeLayout(
         }
 
         Surface(
-            shape = if (frostedIceEnabled) RoundedCornerShape(0.dp) else RoundedCornerShape(12.dp),
-            color =
-                if (frostedIceEnabled) {
-                    MaterialTheme.colorScheme.surface.copy(alpha = 0.18f)
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainer
-                },
+            shape = if (frostedIceEnabled) glassShape else RoundedCornerShape(12.dp),
+            color = if (frostedIceEnabled) frostedColors.surfaceContainer else baseColors.surfaceContainer,
             border = null,
             tonalElevation = if (frostedIceEnabled) 0.dp else 2.dp,
             shadowElevation = if (frostedIceEnabled) 0.dp else 0.dp,
@@ -461,6 +440,16 @@ fun VehicleLandscapeLayout(
                     .fillMaxSize()
                     .padding(horizontal = 8.dp, vertical = 4.dp),
         ) {
+            if (frostedIceEnabled && frostedBlurStrength > 0) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .clip(glassShape)
+                        .background(frostedColors.surface.copy(alpha = glassAlpha * 0.45f))
+                        .blur(glassBlur),
+                )
+            }
+            MaterialTheme(colorScheme = frostedColors) {
             Column(Modifier.fillMaxSize()) {
                 LazyRow(
                     state = tabListState,
@@ -654,6 +643,7 @@ fun VehicleLandscapeLayout(
                 }
             }
         }
-     }
+                 }
+}
     }
 }
