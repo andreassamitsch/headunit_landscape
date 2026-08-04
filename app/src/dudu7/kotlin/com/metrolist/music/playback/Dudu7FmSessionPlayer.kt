@@ -1,6 +1,7 @@
 package com.metrolist.music.playback
 
 import android.content.Context
+import android.net.Uri
 import android.os.Looper
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -12,11 +13,14 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.metrolist.music.radio.fyt.FmFavouriteModel
 import com.metrolist.music.radio.fyt.FmFavouriteRef
+import com.metrolist.music.radio.fyt.FmNowPlayingResolver
 import com.metrolist.music.radio.fyt.FmPresetOrderStore
 import com.metrolist.music.radio.fyt.FytPhysicalRadio
+import com.metrolist.music.radio.fyt.ReliableFmStationLogoResolver
 import com.metrolist.music.radio.fyt.rememberFmFavouriteSelection
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -59,12 +63,27 @@ internal class Dudu7FmSessionPlayer(
     private var activeFavouriteId: String? = null
     private var currentIndex: Int = C.INDEX_UNSET
     private var released = false
+    private var nowPlayingSnapshot = FmNowPlayingResolver.state.value
+    private var stationArtworkUri: String? = null
+    private var stationArtworkKey: String = ""
+    private var artworkJob: Job? = null
 
     init {
         syncFromRadio(snapshot)
         scope.launch {
             radio.state.collect { state ->
                 syncFromRadio(state)
+            }
+        }
+        scope.launch {
+            FmNowPlayingResolver.state.collect { nowPlaying ->
+                nowPlayingSnapshot = nowPlaying
+                invalidateState()
+            }
+        }
+        scope.launch {
+            ReliableFmStationLogoResolver.revisions.collect {
+                refreshStationArtwork(snapshot)
             }
         }
         scope.launch {
@@ -211,7 +230,15 @@ internal class Dudu7FmSessionPlayer(
     }
 
     private fun syncFromRadio(state: FytPhysicalRadio.State) {
+        val previousArtworkKey = stationArtworkKey
         snapshot = state
+        val newArtworkKey = artworkIdentity(state)
+        if (newArtworkKey != previousArtworkKey) {
+            stationArtworkKey = newArtworkKey
+            nowPlayingSnapshot = FmNowPlayingResolver.NowPlaying()
+            stationArtworkUri = cachedStationArtwork(state)
+            refreshStationArtwork(state)
+        }
         favourites = FmPresetOrderStore.ordered(appContext, state.presets)
         val validIds = favourites.mapNotNull { it.id.takeIf(String::isNotBlank) }.toSet()
         val detectedId = state.currentPreset?.id?.takeIf { it in validIds }
@@ -262,6 +289,7 @@ internal class Dudu7FmSessionPlayer(
                 title = snapshot.displayStation.ifBlank { "FM ${formatFrequency(snapshot.frequency)}" },
                 frequency = snapshot.frequency,
                 radioText = snapshot.rt,
+                artworkUri = currentArtworkUri(),
             )
             val item = MediaItem.Builder()
                 .setMediaId("fm:live:${formatFrequency(snapshot.frequency)}")
@@ -289,6 +317,7 @@ internal class Dudu7FmSessionPlayer(
                 title = title,
                 frequency = frequency,
                 radioText = snapshot.rt.takeIf { isCurrent && snapshot.isActive }.orEmpty(),
+                artworkUri = if (isCurrent) currentArtworkUri() else presetArtworkUri(preset),
             )
             val id = preset.id.ifBlank { "frequency:${formatFrequency(preset.frequency)}" }
             val item = MediaItem.Builder()
@@ -308,6 +337,7 @@ internal class Dudu7FmSessionPlayer(
         title: String,
         frequency: Float,
         radioText: String,
+        artworkUri: Uri?,
     ): MediaMetadata {
         val subtitle = buildString {
             append(formatFrequency(frequency))
@@ -321,9 +351,66 @@ internal class Dudu7FmSessionPlayer(
             .setTitle(title.ifBlank { "FM-Radio" })
             .setArtist(subtitle)
             .setAlbumTitle("FM-Radio")
+            .setArtworkUri(artworkUri)
             .setIsPlayable(true)
             .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
             .build()
+    }
+
+
+    private fun currentArtworkUri(): Uri? {
+        val recognizedCover =
+            nowPlayingSnapshot.coverUrl?.takeIf {
+                it.isNotBlank() && nowPlayingSnapshot.stationName.equals(snapshot.displayStation, ignoreCase = true)
+            }
+        return (recognizedCover ?: stationArtworkUri)
+            ?.takeIf(String::isNotBlank)
+            ?.let { runCatching { Uri.parse(it) }.getOrNull() }
+    }
+
+    private fun presetArtworkUri(preset: FytPhysicalRadio.Preset): Uri? =
+        ReliableFmStationLogoResolver.cachedLogo(
+            context = appContext,
+            stationName = preset.name,
+            frequency = preset.frequency,
+            pi = preset.pi,
+            ecc = preset.ecc,
+            allFrequencies = FytPhysicalRadio.presetFrequencies(preset),
+        )?.let { runCatching { Uri.parse(it) }.getOrNull() }
+
+    private fun artworkIdentity(state: FytPhysicalRadio.State): String =
+        "${state.displayStation}|${formatFrequency(state.frequency)}|${state.pi and 0xffff}|${state.ecc}"
+
+    private fun cachedStationArtwork(state: FytPhysicalRadio.State): String? =
+        ReliableFmStationLogoResolver.cachedLogo(
+            context = appContext,
+            stationName = state.displayStation,
+            frequency = state.frequency,
+            pi = state.pi,
+            ecc = state.ecc,
+            allFrequencies = listOf(state.frequency) + state.alternativeFrequencies,
+        )
+
+    private fun refreshStationArtwork(state: FytPhysicalRadio.State) {
+        if (!state.isActive && !sessionClaimed) return
+        val requestKey = artworkIdentity(state)
+        artworkJob?.cancel()
+        artworkJob =
+            scope.launch {
+                val resolved =
+                    ReliableFmStationLogoResolver.resolve(
+                        context = appContext,
+                        stationName = state.displayStation,
+                        frequency = state.frequency,
+                        pi = state.pi,
+                        ecc = state.ecc,
+                        allFrequencies = listOf(state.frequency) + state.alternativeFrequencies,
+                    )
+                if (stationArtworkKey == requestKey && resolved != stationArtworkUri) {
+                    stationArtworkUri = resolved
+                    invalidateState()
+                }
+            }
     }
 
     private fun availableCommands(hasItems: Boolean): Player.Commands =

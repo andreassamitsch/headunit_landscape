@@ -77,6 +77,7 @@ fun PhysicalRadioPlayerPane(
     val scope = rememberCoroutineScope()
     var recognitionRequested by remember { mutableStateOf(false) }
     var recognitionFrequency by remember { mutableStateOf<Float?>(null) }
+    var lastFmIdentity by remember { mutableStateOf("") }
     val recognitionInProgress =
         recognitionRequested &&
             (recognitionStatus is RecognitionStatus.Listening || recognitionStatus is RecognitionStatus.Processing)
@@ -141,10 +142,16 @@ fun PhysicalRadioPlayerPane(
         }
     val isStationFavourite = currentPreset != null
 
-    LaunchedEffect(state.isActive, state.displayStation, state.rt) {
+    LaunchedEffect(state.isActive, state.frequency, state.pi, state.displayStation, state.rt) {
         if (state.isActive) {
+            val identity = "${state.displayStation}|${state.frequency}|${state.pi}|${state.ecc}"
+            if (identity != lastFmIdentity) {
+                FmNowPlayingResolver.clear()
+                lastFmIdentity = identity
+            }
             FmNowPlayingResolver.resolve(state.displayStation, state.rt)
         } else {
+            lastFmIdentity = ""
             FmNowPlayingResolver.clear()
         }
     }
