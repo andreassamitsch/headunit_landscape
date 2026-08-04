@@ -1,8 +1,8 @@
 name: Inspect issues 94 96 97
 
 on:
-  push:
-    branches: [agent/issues-94-96-97-frosted-fm-artwork]
+  pull_request:
+    branches: [agent/issue-94-frosted-ice-global-controls]
   workflow_dispatch:
 
 permissions:
