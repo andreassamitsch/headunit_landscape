@@ -1,10 +1,6 @@
 name: Inspect Issue 104 FM Glass
 
 on:
-  pull_request:
-    branches: [agent/issues-68-96-101-queue-frost-tabs]
-  push:
-    branches: [agent/issue-104-fm-glass-consistency]
   workflow_dispatch:
 
 permissions:
