@@ -1,4 +1,4 @@
-name: Implement issues 90 and 92
+name: Implement Frosted Ice refinements
 
 on:
   pull_request:
@@ -30,11 +30,12 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
-      - name: Apply optional Frosted Ice refinement
+      - name: Apply Frosted Ice refinements
         shell: bash
         run: |
           set -euxo pipefail
           python3 scripts/apply_issues_90_92.py
+          python3 scripts/apply_issue_94.py
           git diff --check
           if ! git diff --quiet; then
             git config user.name "github-actions[bot]"
@@ -43,7 +44,7 @@ jobs:
               app/src/main/kotlin/com/metrolist/music/constants/PreferenceKeys.kt \
               app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AppearanceSettings.kt \
               app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
-            git commit -m "Make Frosted Ice optional and simplify layout [skip ci]"
+            git commit -m "Apply global Frosted Ice controls [skip ci]"
             git pull --rebase origin ${{ github.head_ref || github.ref_name }}
             git push origin HEAD:${{ github.head_ref || github.ref_name }}
           fi
@@ -60,24 +61,24 @@ jobs:
           mkdir -p artifacts
           ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace | tee artifacts/build.log
           APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
-          cp "$APK" artifacts/Metrolist-dudu7-13.7.50.apk
+          cp "$APK" artifacts/Metrolist-dudu7-13.7.51.apk
           BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
-          "$BUILD_TOOLS/aapt" dump badging artifacts/Metrolist-dudu7-13.7.50.apk > artifacts/apk-badging.txt
-          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs artifacts/Metrolist-dudu7-13.7.50.apk > artifacts/apk-signature.txt
-          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370059'" artifacts/apk-badging.txt
+          "$BUILD_TOOLS/aapt" dump badging artifacts/Metrolist-dudu7-13.7.51.apk > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs artifacts/Metrolist-dudu7-13.7.51.apk > artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370060'" artifacts/apk-badging.txt
           grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
-          unzip -l artifacts/Metrolist-dudu7-13.7.50.apk > artifacts/apk-contents.txt
+          unzip -l artifacts/Metrolist-dudu7-13.7.51.apk > artifacts/apk-contents.txt
           grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
           grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
-          sha256sum artifacts/Metrolist-dudu7-13.7.50.apk > artifacts/Metrolist-dudu7-13.7.50.apk.sha256
+          sha256sum artifacts/Metrolist-dudu7-13.7.51.apk > artifacts/Metrolist-dudu7-13.7.51.apk.sha256
 
       - name: Upload verified APK
         uses: actions/upload-artifact@v4
         with:
-          name: Metrolist-dudu7-13.7.50-apk
+          name: Metrolist-dudu7-13.7.51-apk
           path: |
-            artifacts/Metrolist-dudu7-13.7.50.apk
-            artifacts/Metrolist-dudu7-13.7.50.apk.sha256
+            artifacts/Metrolist-dudu7-13.7.51.apk
+            artifacts/Metrolist-dudu7-13.7.51.apk.sha256
             artifacts/apk-badging.txt
             artifacts/apk-signature.txt
             artifacts/apk-contents.txt
