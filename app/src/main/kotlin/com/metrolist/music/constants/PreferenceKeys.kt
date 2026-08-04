@@ -82,6 +82,8 @@ val Dudu7AutoCenterQueueKey = booleanPreferencesKey("dudu7AutoCenterQueue")
 val Dudu7FrostedIceKey = booleanPreferencesKey("dudu7FrostedIce")
 val Dudu7FrostedGlassStrengthKey = intPreferencesKey("dudu7FrostedGlassStrength")
 val Dudu7FrostedBlurStrengthKey = intPreferencesKey("dudu7FrostedBlurStrength")
+val Dudu7FrostTextureEnabledKey = booleanPreferencesKey("dudu7FrostTextureEnabled")
+val Dudu7FrostTextureStrengthKey = intPreferencesKey("dudu7FrostTextureStrength")
 
 enum class SliderStyle {
     DEFAULT,

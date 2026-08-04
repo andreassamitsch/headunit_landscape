@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -53,6 +54,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -79,6 +82,8 @@ import com.metrolist.music.R
 import com.metrolist.music.constants.Dudu7FrostedIceKey
 import com.metrolist.music.constants.Dudu7FrostedGlassStrengthKey
 import com.metrolist.music.constants.Dudu7FrostedBlurStrengthKey
+import com.metrolist.music.constants.Dudu7FrostTextureEnabledKey
+import com.metrolist.music.constants.Dudu7FrostTextureStrengthKey
 import com.metrolist.music.extensions.move
 import com.metrolist.music.playback.Dudu7PlaybackSource
 import com.metrolist.music.playback.Dudu7SourcePlaybackCoordinator
@@ -149,6 +154,56 @@ private tailrec fun Context.findActivity(): Activity? =
         is ContextWrapper -> baseContext.findActivity()
         else -> null
     }
+
+
+@Composable
+private fun FrostTextureOverlay(
+    strength: Int,
+    modifier: Modifier = Modifier,
+) {
+    val normalized = strength.coerceIn(0, 100) / 100f
+    if (normalized <= 0f) return
+    Canvas(modifier = modifier) {
+        val spacing = 52.dp.toPx()
+        val lightAlpha = 0.20f * normalized
+        val darkAlpha = 0.08f * normalized
+        var x = -size.height
+        while (x < size.width + size.height) {
+            drawLine(
+                color = Color.White.copy(alpha = lightAlpha),
+                start = Offset(x, 0f),
+                end = Offset(x + size.height, size.height),
+                strokeWidth = 1.2.dp.toPx(),
+                blendMode = BlendMode.Screen,
+            )
+            drawLine(
+                color = Color.Black.copy(alpha = darkAlpha),
+                start = Offset(x + spacing * 0.34f, 0f),
+                end = Offset(x + size.height + spacing * 0.34f, size.height),
+                strokeWidth = 0.7.dp.toPx(),
+                blendMode = BlendMode.Multiply,
+            )
+            x += spacing
+        }
+        val dotSpacing = 68.dp.toPx()
+        var row = 0
+        var y = dotSpacing * 0.45f
+        while (y < size.height) {
+            var dotX = if (row % 2 == 0) dotSpacing * 0.35f else dotSpacing * 0.85f
+            while (dotX < size.width) {
+                drawCircle(
+                    color = Color.White.copy(alpha = lightAlpha * 0.55f),
+                    radius = 1.15.dp.toPx(),
+                    center = Offset(dotX, y),
+                    blendMode = BlendMode.Screen,
+                )
+                dotX += dotSpacing
+            }
+            y += dotSpacing
+            row++
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -367,19 +422,34 @@ fun VehicleLandscapeLayout(
         Dudu7FrostedBlurStrengthKey,
         defaultValue = 12,
     )
-    val glassAlpha = (frostedGlassStrength.coerceIn(15, 90) / 100f)
+    val (frostTextureEnabled) = rememberPreference(
+        Dudu7FrostTextureEnabledKey,
+        defaultValue = false,
+    )
+    val (frostTextureStrength) = rememberPreference(
+        Dudu7FrostTextureStrengthKey,
+        defaultValue = 35,
+    )
+    val glassAlpha = frostedGlassStrength.coerceIn(0, 100) / 100f
     val glassBlur = frostedBlurStrength.coerceIn(0, 24).dp
     val baseColors = MaterialTheme.colorScheme
     val frostedColors =
         if (frostedIceEnabled) {
             baseColors.copy(
+                background = baseColors.background.copy(alpha = glassAlpha),
                 surface = baseColors.surface.copy(alpha = glassAlpha),
+                surfaceDim = baseColors.surfaceDim.copy(alpha = glassAlpha),
+                surfaceBright = baseColors.surfaceBright.copy(alpha = glassAlpha),
                 surfaceVariant = baseColors.surfaceVariant.copy(alpha = glassAlpha),
-                surfaceContainerLowest = baseColors.surfaceContainerLowest.copy(alpha = glassAlpha * 0.72f),
-                surfaceContainerLow = baseColors.surfaceContainerLow.copy(alpha = glassAlpha * 0.78f),
-                surfaceContainer = baseColors.surfaceContainer.copy(alpha = glassAlpha * 0.84f),
-                surfaceContainerHigh = baseColors.surfaceContainerHigh.copy(alpha = glassAlpha * 0.90f),
+                surfaceContainerLowest = baseColors.surfaceContainerLowest.copy(alpha = glassAlpha),
+                surfaceContainerLow = baseColors.surfaceContainerLow.copy(alpha = glassAlpha),
+                surfaceContainer = baseColors.surfaceContainer.copy(alpha = glassAlpha),
+                surfaceContainerHigh = baseColors.surfaceContainerHigh.copy(alpha = glassAlpha),
                 surfaceContainerHighest = baseColors.surfaceContainerHighest.copy(alpha = glassAlpha),
+                primaryContainer = baseColors.primaryContainer.copy(alpha = glassAlpha),
+                secondaryContainer = baseColors.secondaryContainer.copy(alpha = glassAlpha),
+                tertiaryContainer = baseColors.tertiaryContainer.copy(alpha = glassAlpha),
+                errorContainer = baseColors.errorContainer.copy(alpha = glassAlpha),
             )
         } else {
             baseColors
@@ -428,58 +498,35 @@ fun VehicleLandscapeLayout(
             }
         }
 
-        Surface(
-            shape = if (frostedIceEnabled) glassShape else RoundedCornerShape(12.dp),
-            color = if (frostedIceEnabled) frostedColors.surfaceContainer else baseColors.surfaceContainer,
-            border = null,
-            tonalElevation = if (frostedIceEnabled) 0.dp else 2.dp,
-            shadowElevation = if (frostedIceEnabled) 0.dp else 0.dp,
-            modifier =
-                Modifier
-                    .weight(1f - safePlayerWeight)
-                    .fillMaxSize()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-        ) {
-            if (frostedIceEnabled && frostedBlurStrength > 0) {
-                Box(
+            Surface(
+                shape = if (frostedIceEnabled) glassShape else RoundedCornerShape(12.dp),
+                color = if (frostedIceEnabled) frostedColors.surfaceContainer else baseColors.surfaceContainer,
+                border = null,
+                tonalElevation = if (frostedIceEnabled) 0.dp else 2.dp,
+                shadowElevation = 0.dp,
+                modifier =
                     Modifier
+                        .weight(1f - safePlayerWeight)
                         .fillMaxSize()
-                        .clip(glassShape)
-                        .background(frostedColors.surface.copy(alpha = glassAlpha * 0.45f))
-                        .blur(glassBlur),
-                )
-            }
-            MaterialTheme(colorScheme = frostedColors) {
-            if (frostedIceEnabled && frostedBlurStrength > 0) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .clip(glassShape)
-                        .background(frostedColors.surface.copy(alpha = glassAlpha * 0.45f))
-                        .blur(glassBlur),
-                )
-            }
-            MaterialTheme(colorScheme = frostedColors) {
-            if (frostedIceEnabled && frostedBlurStrength > 0) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .clip(glassShape)
-                        .background(frostedColors.surface.copy(alpha = glassAlpha * 0.45f))
-                        .blur(glassBlur),
-                )
-            }
-            MaterialTheme(colorScheme = frostedColors) {
-            if (frostedIceEnabled && frostedBlurStrength > 0) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .clip(glassShape)
-                        .background(frostedColors.surface.copy(alpha = glassAlpha * 0.45f))
-                        .blur(glassBlur),
-                )
-            }
-            MaterialTheme(colorScheme = frostedColors) {
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                Box(Modifier.fillMaxSize()) {
+                    if (frostedIceEnabled && frostedBlurStrength > 0 && glassAlpha > 0f) {
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .clip(glassShape)
+                                .background(baseColors.surface.copy(alpha = glassAlpha * 0.45f))
+                                .blur(glassBlur),
+                        )
+                    }
+                    if (frostedIceEnabled && frostTextureEnabled && frostTextureStrength > 0) {
+                        FrostTextureOverlay(
+                            strength = frostTextureStrength,
+                            modifier = Modifier.fillMaxSize().clip(glassShape),
+                        )
+                    }
+                    MaterialTheme(colorScheme = frostedColors) {
             Column(Modifier.fillMaxSize()) {
                 LazyRow(
                     state = tabListState,
@@ -672,11 +719,9 @@ fun VehicleLandscapeLayout(
                     }
                 }
             }
+                    }
+                }
+            }
         }
-                 }
-            }
-            }
-            }
-}
     }
 }

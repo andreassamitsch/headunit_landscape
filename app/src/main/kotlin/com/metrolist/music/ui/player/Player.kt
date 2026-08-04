@@ -448,11 +448,12 @@ fun BottomSheetPlayer(
     val defaultGradientColors = listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant)
     val fallbackColor = MaterialTheme.colorScheme.surface.toArgb()
 
-    LaunchedEffect(mediaMetadata?.id, playerBackground) {
+    LaunchedEffect(mediaMetadata?.id, mediaMetadata?.thumbnailUrl, playerBackground) {
         if (playerBackground == PlayerBackgroundStyle.GRADIENT) {
             val currentMetadata = mediaMetadata
             if (currentMetadata != null && currentMetadata.thumbnailUrl != null) {
-                val cachedColors = gradientColorsCache[currentMetadata.id]
+                val artworkCacheKey = "${currentMetadata.id}|${currentMetadata.thumbnailUrl}"
+                val cachedColors = gradientColorsCache[artworkCacheKey]
                 if (cachedColors != null) {
                     gradientColors = cachedColors
                     return@LaunchedEffect
@@ -464,7 +465,7 @@ fun BottomSheetPlayer(
                             .data(currentMetadata.thumbnailUrl)
                             .size(100, 100)
                             .allowHardware(false)
-                            .memoryCacheKey("gradient_${currentMetadata.id}")
+                            .memoryCacheKey("gradient_${artworkCacheKey.hashCode()}")
                             .build()
 
                     val result = runCatching { context.imageLoader.execute(request) }.getOrNull()
@@ -484,7 +485,7 @@ fun BottomSheetPlayer(
                                     palette = palette,
                                     fallbackColor = fallbackColor,
                                 )
-                            gradientColorsCache[currentMetadata.id] = extractedColors
+                            gradientColorsCache[artworkCacheKey] = extractedColors
                             withContext(Dispatchers.Main) { gradientColors = extractedColors }
                         }
                     }

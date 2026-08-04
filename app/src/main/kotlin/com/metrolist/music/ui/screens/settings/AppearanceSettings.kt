@@ -65,6 +65,8 @@ import com.metrolist.music.constants.DynamicThemeKey
 import com.metrolist.music.constants.Dudu7FrostedIceKey
 import com.metrolist.music.constants.Dudu7FrostedGlassStrengthKey
 import com.metrolist.music.constants.Dudu7FrostedBlurStrengthKey
+import com.metrolist.music.constants.Dudu7FrostTextureEnabledKey
+import com.metrolist.music.constants.Dudu7FrostTextureStrengthKey
 import com.metrolist.music.constants.EnableDynamicIconKey
 import com.metrolist.music.constants.EnableHighRefreshRateKey
 import com.metrolist.music.constants.EnableLandscapeScalingKey
@@ -171,6 +173,16 @@ fun AppearanceSettings(
         rememberPreference(
             Dudu7FrostedBlurStrengthKey,
             defaultValue = 12,
+        )
+    val (dudu7FrostTextureEnabled, onDudu7FrostTextureEnabledChange) =
+        rememberPreference(
+            Dudu7FrostTextureEnabledKey,
+            defaultValue = false,
+        )
+    val (dudu7FrostTextureStrength, onDudu7FrostTextureStrengthChange) =
+        rememberPreference(
+            Dudu7FrostTextureStrengthKey,
+            defaultValue = 35,
         )
     val (selectedThemeColorInt) =
         rememberPreference(
@@ -1035,7 +1047,7 @@ fun AppearanceSettings(
                         Material3SettingsItem(
                             icon = painterResource(R.drawable.palette),
                             title = { Text("Frosted Ice (Dudu7)") },
-                            description = { Text("Cover-Hintergrund und transparente Oberfläche; standardmäßig aus") },
+                            description = { Text("Transparente Dudu7-Oberflächen; standardmäßig aus") },
                             trailingContent = {
                                 Switch(
                                     checked = dudu7FrostedIce,
@@ -1064,8 +1076,8 @@ fun AppearanceSettings(
                                     Slider(
                                         value = dudu7FrostedGlassStrength.toFloat(),
                                         onValueChange = { onDudu7FrostedGlassStrengthChange(it.roundToInt()) },
-                                        valueRange = 15f..90f,
-                                        steps = 14,
+                                        valueRange = 0f..100f,
+                                        steps = 19,
                                         modifier = Modifier.fillMaxWidth(0.42f),
                                     )
                                 },
@@ -1089,6 +1101,48 @@ fun AppearanceSettings(
                                 onClick = {},
                             ),
                         )
+                        add(
+                            Material3SettingsItem(
+                                icon = painterResource(R.drawable.palette),
+                                title = { Text("Froststruktur anzeigen") },
+                                description = { Text("Feine Eisstruktur über den Glasflächen") },
+                                trailingContent = {
+                                    Switch(
+                                        checked = dudu7FrostTextureEnabled,
+                                        onCheckedChange = onDudu7FrostTextureEnabledChange,
+                                        thumbContent = {
+                                            Icon(
+                                                painter = painterResource(
+                                                    id = if (dudu7FrostTextureEnabled) R.drawable.check else R.drawable.close,
+                                                ),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(SwitchDefaults.IconSize),
+                                            )
+                                        },
+                                    )
+                                },
+                                onClick = { onDudu7FrostTextureEnabledChange(!dudu7FrostTextureEnabled) },
+                            ),
+                        )
+                        if (dudu7FrostTextureEnabled) {
+                            add(
+                                Material3SettingsItem(
+                                    icon = painterResource(R.drawable.palette),
+                                    title = { Text("Froststruktur-Stärke") },
+                                    description = { Text("${dudu7FrostTextureStrength}%") },
+                                    trailingContent = {
+                                        Slider(
+                                            value = dudu7FrostTextureStrength.toFloat(),
+                                            onValueChange = { onDudu7FrostTextureStrengthChange(it.roundToInt()) },
+                                            valueRange = 0f..100f,
+                                            steps = 19,
+                                            modifier = Modifier.fillMaxWidth(0.42f),
+                                        )
+                                    },
+                                    onClick = {},
+                                ),
+                            )
+                        }
                     }
                     // Only show dynamic theme option when using the default/dynamic color
                     // When a custom color is selected, dynamic theme is automatically disabled
