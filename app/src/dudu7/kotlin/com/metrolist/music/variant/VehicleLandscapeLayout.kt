@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -171,7 +172,7 @@ private fun FrostTextureOverlay(
         contentScale = ContentScale.Crop,
         modifier =
             modifier.graphicsLayer {
-                alpha = normalized * 0.68f
+                alpha = normalized * 0.46f
                 compositingStrategy = CompositingStrategy.Offscreen
             },
     )
@@ -185,7 +186,7 @@ fun VehicleLandscapeLayout(
     playerPaneWeight: Float,
     onToggleLyrics: () -> Unit,
     tabContentColor: Color,
-    tabScrimColor: Color,
+    tabGlassColor: Color,
     thumbnailContent: @Composable () -> Unit,
     controlsContent: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
     queueContent: @Composable () -> Unit,
@@ -502,12 +503,16 @@ fun VehicleLandscapeLayout(
                     }
                     MaterialTheme(colorScheme = frostedColors) {
             Column(Modifier.fillMaxSize()) {
-                Surface(
-                    color = tabScrimColor,
-                    shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomStart = 14.dp, bottomEnd = 14.dp),
-                    tonalElevation = 0.dp,
-                    shadowElevation = 0.dp,
-                    modifier = Modifier.fillMaxWidth().height(64.dp),
+                val effectiveTabContentColor =
+                    if (frostedIceEnabled) tabContentColor else baseColors.onSurface
+                val effectiveTabGlassColor =
+                    if (frostedIceEnabled) tabGlassColor else baseColors.surfaceContainerHigh
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(64.dp)
+                            .background(effectiveTabGlassColor),
                 ) {
                     LazyRow(
                         state = tabListState,
@@ -520,49 +525,79 @@ fun VehicleLandscapeLayout(
                         ) { _, tab ->
                             ReorderableItem(tabReorderState, key = tab.name) { isDragging ->
                                 val isSelected = selectedTab == tab
-                                val itemColor = if (isSelected) tabContentColor else tabContentColor.copy(alpha = 0.78f)
-                                Tab(
-                                    selected = isSelected,
-                                onClick = {
-                                    if (!isDragging) {
-                                        if (selectedTab != tab || currentPaneRoute != tab.route) {
-                                            selectedTab = tab
-                                            val restoredExistingTab =
-                                                paneNavController.popBackStack(tab.route, inclusive = false)
-                                            if (!restoredExistingTab) {
-                                                paneNavController.popBackStack(VEHICLE_QUEUE_ROUTE, inclusive = false)
-                                                if (tab != VehicleRightPaneTab.QUEUE) {
+                                val itemColor =
+                                    if (isSelected) {
+                                        effectiveTabContentColor
+                                    } else {
+                                        effectiveTabContentColor.copy(alpha = 0.76f)
+                                    }
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .height(64.dp)
+                                            .longPressDraggableHandle(
+                                                onDragStarted = {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                },
+                                            ),
+                                ) {
+                                    Tab(
+                                        selected = isSelected,
+                                        selectedContentColor = itemColor,
+                                        unselectedContentColor = itemColor,
+                                        onClick = {
+                                            if (!isDragging && (selectedTab != tab || currentPaneRoute != tab.route)) {
+                                                selectedTab = tab
+                                                val restoredExistingTab =
+                                                    paneNavController.popBackStack(tab.route, inclusive = false)
+                                                if (!restoredExistingTab) {
                                                     paneNavController.navigate(tab.route) {
                                                         launchSingleTop = true
+                                                        restoreState = false
                                                     }
                                                 }
                                             }
-                                        }
-                                    }
-                                },
-                                icon = {
-                                    Icon(
-                                        painter = painterResource(tab.icon),
-                                        contentDescription = tab.title,
-                                        tint = itemColor,
+                                        },
+                                        icon = {
+                                            Icon(
+                                                painter = painterResource(tab.icon),
+                                                contentDescription = tab.title,
+                                                tint = itemColor,
+                                            )
+                                        },
+                                        text = {
+                                            Text(
+                                                text = tab.title,
+                                                maxLines = 1,
+                                                color = itemColor,
+                                            )
+                                        },
+                                        modifier = Modifier.fillMaxSize(),
                                     )
-                                },
-                                text = { Text(tab.title, maxLines = 1, color = itemColor) },
-                                modifier =
-                                    Modifier
-                                        .padding(horizontal = 2.dp, vertical = 5.dp)
-                                        .height(54.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(if (isSelected) tabContentColor.copy(alpha = 0.14f) else Color.Transparent)
-                                        .longPressDraggableHandle(
-                                            onDragStarted = {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            },
-                                        ),
-                            )
+                                    if (isSelected) {
+                                        Box(
+                                            modifier =
+                                                Modifier
+                                                    .align(Alignment.BottomCenter)
+                                                    .padding(bottom = 4.dp)
+                                                    .width(30.dp)
+                                                    .height(3.dp)
+                                                    .clip(RoundedCornerShape(50))
+                                                    .background(effectiveTabContentColor.copy(alpha = 0.88f)),
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
+                    Box(
+                        modifier =
+                            Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(effectiveTabContentColor.copy(alpha = 0.10f)),
+                    )
                 }
 
                 CompositionLocalProvider(

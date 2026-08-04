@@ -1928,20 +1928,33 @@ fun BottomSheetPlayer(
 
         when (LocalConfiguration.current.orientation) {
             Configuration.ORIENTATION_LANDSCAPE -> {
-                val tabContentColor = TextBackgroundColor
-                val tabScrimColor =
-                    if (tabContentColor.luminance() > 0.5f) {
-                        Color.Black.copy(alpha = 0.46f)
-                    } else {
-                        Color.White.copy(alpha = 0.62f)
+                val tabBackdropColor =
+                    when {
+                        playerBackground == PlayerBackgroundStyle.GRADIENT && gradientColors.isNotEmpty() ->
+                            gradientColors.first()
+                        playerBackground == PlayerBackgroundStyle.DEFAULT ->
+                            MaterialTheme.colorScheme.surfaceContainer
+                        else ->
+                            MaterialTheme.colorScheme.surface
                     }
+                val tabBackdropIsLight = tabBackdropColor.luminance() >= 0.52f
+                val tabContentColor =
+                    if (tabBackdropIsLight) {
+                        Color.Black.copy(alpha = 0.88f)
+                    } else {
+                        Color.White.copy(alpha = 0.94f)
+                    }
+                val tabGlassColor =
+                    Color.White.copy(
+                        alpha = if (tabBackdropIsLight) 0.24f else 0.13f,
+                    )
                 VehicleLandscapeLayout(
                     state = state,
                     showInlineLyrics = showInlineLyrics,
                     playerPaneWeight = dudu7PlayerPaneWeight,
                     onToggleLyrics = { if (!isWebRadio) showInlineLyrics = !showInlineLyrics },
                     tabContentColor = tabContentColor,
-                    tabScrimColor = tabScrimColor,
+                    tabGlassColor = tabGlassColor,
                     thumbnailContent = {
                         val currentSliderPosition by rememberUpdatedState(sliderPosition)
                         val sliderPositionProvider = remember { { currentSliderPosition } }
