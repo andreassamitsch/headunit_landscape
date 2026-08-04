@@ -20,7 +20,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p inspection
+          mkdir -p inspection/source
           {
             echo '=== FILES: history / recently / fm / artwork / vehicle ==='
             find app/src -type f | grep -Ei '(history|recent|fm|radio|artwork|vehicle|appearance|preference)' | sort
@@ -30,38 +30,26 @@ jobs:
             echo
             echo '=== FM ARTWORK REFERENCES ==='
             grep -RInE 'fm.*(artwork|thumbnail|logo)|artwork.*fm|thumbnail.*fm|logo.*fm|recognized.*(artwork|thumbnail)|songRecognition|shazam' app/src --include='*.kt' || true
-            echo
-            echo '=== DUDU7 LAYOUT REFERENCES ==='
-            grep -RInE 'VehicleLandscapeLayout|thumbnailContent|backgroundContent|Frosted|surfaceContainer|MaterialTheme\(colorScheme' app/src/dudu7 app/src/main --include='*.kt' || true
           } > inspection/report.txt
-          python3 - <<'PY'
-          from pathlib import Path
-          roots = [Path('app/src/main/kotlin'), Path('app/src/dudu7/kotlin')]
-          terms = ['HistoryScreen', 'History', 'Hörverlauf', 'FmRadio', 'FMRadio', 'artwork', 'thumbnail', 'recognized']
-          out = []
-          seen = set()
-          for root in roots:
-              for p in root.rglob('*.kt'):
-                  text = p.read_text(errors='ignore')
-                  if any(t.lower() in text.lower() for t in terms):
-                      if p in seen: continue
-                      seen.add(p)
-                      lines = text.splitlines()
-                      hits = [i for i,l in enumerate(lines) if any(t.lower() in l.lower() for t in terms)]
-                      if not hits: continue
-                      out.append(f'\n===== {p} =====')
-                      ranges=[]
-                      for i in hits:
-                          a=max(0,i-12); b=min(len(lines),i+18)
-                          if ranges and a <= ranges[-1][1]+2: ranges[-1]=(ranges[-1][0], max(ranges[-1][1],b))
-                          else: ranges.append((a,b))
-                      for a,b in ranges[:12]:
-                          out.append(f'--- lines {a+1}-{b} ---')
-                          out.extend(f'{j+1:05d}: {lines[j]}' for j in range(a,b))
-          Path('inspection/snippets.txt').write_text('\n'.join(out))
-          PY
+          files=(
+            app/build.gradle.kts
+            app/src/main/kotlin/com/metrolist/music/constants/PreferenceKeys.kt
+            app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AppearanceSettings.kt
+            app/src/main/kotlin/com/metrolist/music/ui/screens/HistoryScreen.kt
+            app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt
+            app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+            app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
+            app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt
+            app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmStationArtwork.kt
+            app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmNowPlayingResolver.kt
+            app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+          )
+          for f in "${files[@]}"; do
+            mkdir -p "inspection/source/$(dirname "$f")"
+            cp "$f" "inspection/source/$f"
+          done
       - uses: actions/upload-artifact@v4
         with:
-          name: issues-94-96-97-inspection
+          name: issues-94-96-97-source
           path: inspection/
           retention-days: 2
