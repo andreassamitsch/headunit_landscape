@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -54,12 +54,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
@@ -163,46 +165,16 @@ private fun FrostTextureOverlay(
 ) {
     val normalized = strength.coerceIn(0, 100) / 100f
     if (normalized <= 0f) return
-    Canvas(modifier = modifier) {
-        val spacing = 52.dp.toPx()
-        val lightAlpha = 0.20f * normalized
-        val darkAlpha = 0.08f * normalized
-        var x = -size.height
-        while (x < size.width + size.height) {
-            drawLine(
-                color = Color.White.copy(alpha = lightAlpha),
-                start = Offset(x, 0f),
-                end = Offset(x + size.height, size.height),
-                strokeWidth = 1.2.dp.toPx(),
-                blendMode = BlendMode.Screen,
-            )
-            drawLine(
-                color = Color.Black.copy(alpha = darkAlpha),
-                start = Offset(x + spacing * 0.34f, 0f),
-                end = Offset(x + size.height + spacing * 0.34f, size.height),
-                strokeWidth = 0.7.dp.toPx(),
-                blendMode = BlendMode.Multiply,
-            )
-            x += spacing
-        }
-        val dotSpacing = 68.dp.toPx()
-        var row = 0
-        var y = dotSpacing * 0.45f
-        while (y < size.height) {
-            var dotX = if (row % 2 == 0) dotSpacing * 0.35f else dotSpacing * 0.85f
-            while (dotX < size.width) {
-                drawCircle(
-                    color = Color.White.copy(alpha = lightAlpha * 0.55f),
-                    radius = 1.15.dp.toPx(),
-                    center = Offset(dotX, y),
-                    blendMode = BlendMode.Screen,
-                )
-                dotX += dotSpacing
-            }
-            y += dotSpacing
-            row++
-        }
-    }
+    Image(
+        painter = painterResource(R.drawable.dudu7_frost_texture),
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier =
+            modifier.graphicsLayer {
+                alpha = normalized * 0.68f
+                compositingStrategy = CompositingStrategy.Offscreen
+            },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -212,6 +184,8 @@ fun VehicleLandscapeLayout(
     showInlineLyrics: Boolean,
     playerPaneWeight: Float,
     onToggleLyrics: () -> Unit,
+    tabContentColor: Color,
+    tabScrimColor: Color,
     thumbnailContent: @Composable () -> Unit,
     controlsContent: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
     queueContent: @Composable () -> Unit,
@@ -528,21 +502,27 @@ fun VehicleLandscapeLayout(
                     }
                     MaterialTheme(colorScheme = frostedColors) {
             Column(Modifier.fillMaxSize()) {
-                LazyRow(
-                    state = tabListState,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(64.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                Surface(
+                    color = tabScrimColor,
+                    shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomStart = 14.dp, bottomEnd = 14.dp),
+                    tonalElevation = 0.dp,
+                    shadowElevation = 0.dp,
+                    modifier = Modifier.fillMaxWidth().height(64.dp),
                 ) {
-                    itemsIndexed(
-                        items = orderedTabs,
-                        key = { _, tab -> tab.name },
-                    ) { _, tab ->
-                        ReorderableItem(tabReorderState, key = tab.name) { isDragging ->
-                            Tab(
-                                selected = selectedTab == tab,
+                    LazyRow(
+                        state = tabListState,
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        itemsIndexed(
+                            items = orderedTabs,
+                            key = { _, tab -> tab.name },
+                        ) { _, tab ->
+                            ReorderableItem(tabReorderState, key = tab.name) { isDragging ->
+                                val isSelected = selectedTab == tab
+                                val itemColor = if (isSelected) tabContentColor else tabContentColor.copy(alpha = 0.78f)
+                                Tab(
+                                    selected = isSelected,
                                 onClick = {
                                     if (!isDragging) {
                                         if (selectedTab != tab || currentPaneRoute != tab.route) {
@@ -564,18 +544,23 @@ fun VehicleLandscapeLayout(
                                     Icon(
                                         painter = painterResource(tab.icon),
                                         contentDescription = tab.title,
+                                        tint = itemColor,
                                     )
                                 },
-                                text = { Text(tab.title, maxLines = 1) },
+                                text = { Text(tab.title, maxLines = 1, color = itemColor) },
                                 modifier =
                                     Modifier
-                                        .height(64.dp)
+                                        .padding(horizontal = 2.dp, vertical = 5.dp)
+                                        .height(54.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(if (isSelected) tabContentColor.copy(alpha = 0.14f) else Color.Transparent)
                                         .longPressDraggableHandle(
                                             onDragStarted = {
                                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                             },
                                         ),
                             )
+                            }
                         }
                     }
                 }
