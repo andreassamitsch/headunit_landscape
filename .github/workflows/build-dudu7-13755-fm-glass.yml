@@ -1,0 +1,105 @@
+name: Build Dudu7 13.7.55 FM Glass
+
+on:
+  pull_request:
+    branches: [agent/issues-68-96-101-queue-frost-tabs]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  implement-test-build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-cleanup: on-success
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Apply issue 104
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if grep -q 'versionCode = 1370064' app/build.gradle.kts \
+            && ! grep -q 'surfaceVariant.copy(alpha = 0.55f)' app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt \
+            && ! grep -q 'surfaceVariant.copy(alpha = 0.45f)' app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt; then
+            echo 'Issue #104 product patch already applied.'
+          else
+            python3 scripts/apply_issue_104_fm_glass.py
+          fi
+          git diff --check
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add app/build.gradle.kts app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt
+            git commit -m "Align FM entries with central Frosted Ice glass [skip ci]"
+            BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+            git pull --rebase origin "$BRANCH"
+            git push origin HEAD:"$BRANCH"
+          fi
+
+      - name: Verify implementation invariants
+        shell: bash
+        run: |
+          set -euxo pipefail
+          FILE=app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt
+          grep -q 'versionCode = 1370064' app/build.gradle.kts
+          grep -q 'versionName = "13.7.55"' app/build.gradle.kts
+          ! grep -q 'copy(alpha = 0.55f)' "$FILE"
+          ! grep -q 'copy(alpha = 0.45f)' "$FILE"
+          grep -q 'MaterialTheme.colorScheme.primaryContainer' "$FILE"
+          test "$(grep -c 'MaterialTheme.colorScheme.surfaceContainer' "$FILE")" -ge 4
+          ! grep -q 'FrostTextureOverlay' "$FILE"
+          ! grep -q 'dudu7_frost_texture' "$FILE"
+
+      - name: Unit tests
+        run: |
+          chmod +x gradlew
+          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+
+      - name: Build and verify APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace | tee artifacts/build.log
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          cp "$APK" artifacts/Metrolist-dudu7-13.7.55.apk
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$BUILD_TOOLS/aapt" dump badging artifacts/Metrolist-dudu7-13.7.55.apk > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs artifacts/Metrolist-dudu7-13.7.55.apk > artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370064'" artifacts/apk-badging.txt
+          grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
+          unzip -l artifacts/Metrolist-dudu7-13.7.55.apk > artifacts/apk-contents.txt
+          grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
+          grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
+          stat -c '%s' artifacts/Metrolist-dudu7-13.7.55.apk > artifacts/apk-size.txt
+          sha256sum artifacts/Metrolist-dudu7-13.7.55.apk > artifacts/Metrolist-dudu7-13.7.55.apk.sha256
+
+      - name: Upload verified APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.55-apk
+          path: |
+            artifacts/Metrolist-dudu7-13.7.55.apk
+            artifacts/Metrolist-dudu7-13.7.55.apk.sha256
+            artifacts/apk-size.txt
+            artifacts/apk-badging.txt
+            artifacts/apk-signature.txt
+            artifacts/apk-contents.txt
+            artifacts/build.log
+          retention-days: 14
