@@ -398,9 +398,9 @@ private fun FmFavouriteRow(
                 .clip(RoundedCornerShape(12.dp))
                 .background(
                     if (isActive) {
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+                        MaterialTheme.colorScheme.primaryContainer
                     } else {
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                        MaterialTheme.colorScheme.surfaceContainer
                     },
                 ).combinedClickable(
                     onClick = onPlay,
@@ -691,7 +691,7 @@ private fun FmScanResultRow(
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+                .background(MaterialTheme.colorScheme.surfaceContainer)
                 .combinedClickable(onClick = onPreview, onLongClick = { onCheckedChange(!checked) })
                 .padding(horizontal = 8.dp, vertical = 8.dp),
     ) {
@@ -976,7 +976,7 @@ private fun PhysicalRadioSettingsPanel(radio: FytPhysicalRadio) {
                     Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
                         .padding(horizontal = 12.dp, vertical = 10.dp),
             ) {
                 Text(
@@ -1069,7 +1069,7 @@ private fun RadioSettingRow(
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                .background(MaterialTheme.colorScheme.surfaceContainer)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         Column(Modifier.weight(1f)) {
