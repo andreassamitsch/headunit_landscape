@@ -55,7 +55,7 @@ if 'Dudu7FrostedGlassStrengthKey' not in text:
     sliders = item_end + '''                    if (dudu7FrostedIce) {
                         add(
                             Material3SettingsItem(
-                                icon = painterResource(R.drawable.opacity),
+                                icon = painterResource(R.drawable.palette),
                                 title = { Text("Glasstärke") },
                                 description = { Text("${dudu7FrostedGlassStrength}% Deckkraft") },
                                 trailingContent = {
@@ -72,7 +72,7 @@ if 'Dudu7FrostedGlassStrengthKey' not in text:
                         )
                         add(
                             Material3SettingsItem(
-                                icon = painterResource(R.drawable.blur_on),
+                                icon = painterResource(R.drawable.palette),
                                 title = { Text("Glas-Unschärfe") },
                                 description = { Text("${dudu7FrostedBlurStrength} dp") },
                                 trailingContent = {
@@ -90,6 +90,9 @@ if 'Dudu7FrostedGlassStrengthKey' not in text:
                     }
 '''
     text = text.replace(item_end, sliders, 1)
+# Repair already-applied revisions that referenced drawables not present in MetroList.
+text = text.replace('R.drawable.opacity', 'R.drawable.palette')
+text = text.replace('R.drawable.blur_on', 'R.drawable.palette')
 appearance.write_text(text)
 
 layout = Path("app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt")
@@ -199,5 +202,7 @@ assert 'Full artwork remains visible' not in layout.read_text()
 assert 'thumbnailContent()\n            }\n            Box(' not in layout.read_text()
 assert 'Dudu7FrostedGlassStrengthKey' in prefs.read_text()
 assert 'Glasstärke' in appearance.read_text()
+assert 'R.drawable.opacity' not in appearance.read_text()
+assert 'R.drawable.blur_on' not in appearance.read_text()
 assert 'MaterialTheme(colorScheme = frostedColors)' in layout.read_text()
 assert 'versionCode = 1370060' in build.read_text()
