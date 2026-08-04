@@ -1057,7 +1057,7 @@ fun AppearanceSettings(
                     if (dudu7FrostedIce) {
                         add(
                             Material3SettingsItem(
-                                icon = painterResource(R.drawable.opacity),
+                                icon = painterResource(R.drawable.palette),
                                 title = { Text("Glasstärke") },
                                 description = { Text("${dudu7FrostedGlassStrength}% Deckkraft") },
                                 trailingContent = {
@@ -1074,7 +1074,7 @@ fun AppearanceSettings(
                         )
                         add(
                             Material3SettingsItem(
-                                icon = painterResource(R.drawable.blur_on),
+                                icon = painterResource(R.drawable.palette),
                                 title = { Text("Glas-Unschärfe") },
                                 description = { Text("${dudu7FrostedBlurStrength} dp") },
                                 trailingContent = {
