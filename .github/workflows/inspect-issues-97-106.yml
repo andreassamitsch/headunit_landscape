@@ -1,6 +1,8 @@
 name: Inspect Issues 97 106 Visual State
 
 on:
+  pull_request:
+    branches: [agent/issue-104-fm-glass-consistency]
   push:
     branches: [agent/issues-97-106-fm-visual-contrast]
   workflow_dispatch:
