@@ -460,6 +460,16 @@ fun VehicleLandscapeLayout(
                 )
             }
             MaterialTheme(colorScheme = frostedColors) {
+            if (frostedIceEnabled && frostedBlurStrength > 0) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .clip(glassShape)
+                        .background(frostedColors.surface.copy(alpha = glassAlpha * 0.45f))
+                        .blur(glassBlur),
+                )
+            }
+            MaterialTheme(colorScheme = frostedColors) {
             Column(Modifier.fillMaxSize()) {
                 LazyRow(
                     state = tabListState,
@@ -654,6 +664,7 @@ fun VehicleLandscapeLayout(
             }
         }
                  }
+            }
             }
 }
     }
