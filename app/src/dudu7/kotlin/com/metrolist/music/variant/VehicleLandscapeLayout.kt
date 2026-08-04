@@ -58,6 +58,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -90,7 +91,9 @@ import com.metrolist.music.constants.Dudu7FrostTextureStrengthKey
 import com.metrolist.music.extensions.move
 import com.metrolist.music.playback.Dudu7PlaybackSource
 import com.metrolist.music.playback.Dudu7SourcePlaybackCoordinator
+import com.metrolist.music.radio.fyt.FmNowPlayingResolver
 import com.metrolist.music.radio.fyt.FytPhysicalRadio
+import com.metrolist.music.radio.fyt.ReliableFmStationLogoResolver
 import com.metrolist.music.ui.component.BottomSheetState
 import com.metrolist.music.ui.component.LocalRightPaneScrollBridge
 import com.metrolist.music.ui.component.RightPaneScrollBridge
@@ -187,6 +190,7 @@ fun VehicleLandscapeLayout(
     onToggleLyrics: () -> Unit,
     tabContentColor: Color,
     tabGlassColor: Color,
+    onPhysicalRadioVisualChanged: (Boolean, String, String?) -> Unit,
     thumbnailContent: @Composable () -> Unit,
     controlsContent: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
     queueContent: @Composable () -> Unit,
@@ -221,6 +225,8 @@ fun VehicleLandscapeLayout(
     val playerConnection = LocalPlayerConnection.current
     val physicalRadio = remember(context) { FytPhysicalRadio.get(context) }
     val physicalRadioState by physicalRadio.state.collectAsStateWithLifecycle()
+    val fmNowPlaying by FmNowPlayingResolver.state.collectAsStateWithLifecycle()
+    val fmLogoRevision by ReliableFmStationLogoResolver.revisions.collectAsStateWithLifecycle()
     val androidIsPlayingState =
         playerConnection?.isEffectivelyPlaying?.collectAsStateWithLifecycle()
             ?: remember { mutableStateOf(false) }
@@ -228,6 +234,61 @@ fun VehicleLandscapeLayout(
     val rightPaneScope = rememberCoroutineScope()
     val rightPaneScrollBridge = remember { RightPaneScrollBridge() }
     var rightPaneOriginInRoot by remember { mutableStateOf(Offset.Zero) }
+
+    LaunchedEffect(
+        physicalRadioState.isActive,
+        physicalRadioState.displayStation,
+        physicalRadioState.frequency,
+        physicalRadioState.pi,
+        physicalRadioState.ecc,
+        fmNowPlaying.key,
+        fmNowPlaying.coverUrl,
+        fmLogoRevision,
+    ) {
+        if (!physicalRadioState.isActive) {
+            onPhysicalRadioVisualChanged(false, "", null)
+            return@LaunchedEffect
+        }
+
+        val identity =
+            "${physicalRadioState.displayStation}|${FytPhysicalRadio.formatFrequency(physicalRadioState.frequency)}|" +
+                "${physicalRadioState.pi and 0xffff}|${physicalRadioState.ecc}"
+        val recognizedCover =
+            fmNowPlaying.coverUrl?.takeIf {
+                it.isNotBlank() &&
+                    fmNowPlaying.stationName.equals(physicalRadioState.displayStation, ignoreCase = true)
+            }
+        val cachedStationLogo =
+            ReliableFmStationLogoResolver.cachedLogo(
+                context = context,
+                stationName = physicalRadioState.displayStation,
+                frequency = physicalRadioState.frequency,
+                pi = physicalRadioState.pi,
+                ecc = physicalRadioState.ecc,
+                allFrequencies =
+                    listOf(physicalRadioState.frequency) + physicalRadioState.alternativeFrequencies,
+            )
+        onPhysicalRadioVisualChanged(true, identity, recognizedCover ?: cachedStationLogo)
+        if (recognizedCover != null) return@LaunchedEffect
+
+        val resolvedStationLogo =
+            ReliableFmStationLogoResolver.resolve(
+                context = context,
+                stationName = physicalRadioState.displayStation,
+                frequency = physicalRadioState.frequency,
+                pi = physicalRadioState.pi,
+                ecc = physicalRadioState.ecc,
+                allFrequencies =
+                    listOf(physicalRadioState.frequency) + physicalRadioState.alternativeFrequencies,
+            )
+        val latestState = physicalRadio.state.value
+        val latestIdentity =
+            "${latestState.displayStation}|${FytPhysicalRadio.formatFrequency(latestState.frequency)}|" +
+                "${latestState.pi and 0xffff}|${latestState.ecc}"
+        if (latestState.isActive && latestIdentity == identity) {
+            onPhysicalRadioVisualChanged(true, identity, resolvedStationLogo)
+        }
+    }
 
     val orderedTabs =
         remember(context) {
@@ -408,6 +469,11 @@ fun VehicleLandscapeLayout(
     val glassAlpha = frostedGlassStrength.coerceIn(0, 100) / 100f
     val glassBlur = frostedBlurStrength.coerceIn(0, 24).dp
     val baseColors = MaterialTheme.colorScheme
+    val adaptiveContentColor = tabContentColor
+    val adaptiveSecondaryContentColor = adaptiveContentColor.copy(alpha = 0.76f)
+    val adaptiveDisabledContentColor = adaptiveContentColor.copy(alpha = 0.46f)
+    val inverseAdaptiveContentColor =
+        if (adaptiveContentColor.luminance() > 0.5f) Color.Black else Color.White
     val frostedColors =
         if (frostedIceEnabled) {
             baseColors.copy(
@@ -421,10 +487,26 @@ fun VehicleLandscapeLayout(
                 surfaceContainer = baseColors.surfaceContainer.copy(alpha = glassAlpha),
                 surfaceContainerHigh = baseColors.surfaceContainerHigh.copy(alpha = glassAlpha),
                 surfaceContainerHighest = baseColors.surfaceContainerHighest.copy(alpha = glassAlpha),
+                primary = adaptiveContentColor,
+                onPrimary = inverseAdaptiveContentColor,
+                secondary = adaptiveContentColor.copy(alpha = 0.88f),
+                onSecondary = inverseAdaptiveContentColor,
+                tertiary = adaptiveContentColor.copy(alpha = 0.88f),
+                onTertiary = inverseAdaptiveContentColor,
                 primaryContainer = baseColors.primaryContainer.copy(alpha = glassAlpha),
                 secondaryContainer = baseColors.secondaryContainer.copy(alpha = glassAlpha),
                 tertiaryContainer = baseColors.tertiaryContainer.copy(alpha = glassAlpha),
                 errorContainer = baseColors.errorContainer.copy(alpha = glassAlpha),
+                onBackground = adaptiveContentColor,
+                onSurface = adaptiveContentColor,
+                onSurfaceVariant = adaptiveSecondaryContentColor,
+                onPrimaryContainer = adaptiveContentColor,
+                onSecondaryContainer = adaptiveContentColor,
+                onTertiaryContainer = adaptiveContentColor,
+                onErrorContainer = adaptiveContentColor,
+                outline = adaptiveContentColor.copy(alpha = 0.62f),
+                outlineVariant = adaptiveDisabledContentColor,
+                surfaceTint = Color.Transparent,
             )
         } else {
             baseColors
