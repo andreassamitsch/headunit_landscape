@@ -1,8 +1,8 @@
 name: Build Dudu7 13.7.54 Queue Frost Tabs
 
 on:
-  push:
-    branches: [agent/issues-68-96-101-queue-frost-tabs]
+  pull_request:
+    branches: [agent/issues-96-99-100-101-frost-webradio-tabs]
   workflow_dispatch:
 
 permissions:
