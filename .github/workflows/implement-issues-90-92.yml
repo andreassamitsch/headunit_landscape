@@ -34,7 +34,6 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          python3 scripts/apply_issues_90_92.py
           python3 scripts/apply_issue_94.py
           git diff --check
           if ! git diff --quiet; then
