@@ -648,7 +648,7 @@ private fun RadioStationRow(
                 .fillMaxWidth()
                 .padding(horizontal = 6.dp, vertical = 2.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.48f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+                .background(if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer)
                 .combinedClickable(onClick = onPlay, onLongClick = onLongClick)
                 .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
@@ -688,9 +688,9 @@ private fun RadioStationCard(
                 .clip(RoundedCornerShape(14.dp))
                 .background(
                     if (isActive) {
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.58f)
+                        MaterialTheme.colorScheme.primaryContainer
                     } else {
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                        MaterialTheme.colorScheme.surfaceContainer
                     },
                 ).combinedClickable(onClick = onPlay, onLongClick = onLongClick),
     ) {

@@ -94,6 +94,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -1927,11 +1928,20 @@ fun BottomSheetPlayer(
 
         when (LocalConfiguration.current.orientation) {
             Configuration.ORIENTATION_LANDSCAPE -> {
+                val tabContentColor = TextBackgroundColor
+                val tabScrimColor =
+                    if (tabContentColor.luminance() > 0.5f) {
+                        Color.Black.copy(alpha = 0.46f)
+                    } else {
+                        Color.White.copy(alpha = 0.62f)
+                    }
                 VehicleLandscapeLayout(
                     state = state,
                     showInlineLyrics = showInlineLyrics,
                     playerPaneWeight = dudu7PlayerPaneWeight,
                     onToggleLyrics = { if (!isWebRadio) showInlineLyrics = !showInlineLyrics },
+                    tabContentColor = tabContentColor,
+                    tabScrimColor = tabScrimColor,
                     thumbnailContent = {
                         val currentSliderPosition by rememberUpdatedState(sliderPosition)
                         val sliderPositionProvider = remember { { currentSliderPosition } }

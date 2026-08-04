@@ -108,13 +108,27 @@ class PlayerConnection(
     private fun withStoredRadioArtwork(
         metadata: com.metrolist.music.models.MediaMetadata?,
     ): com.metrolist.music.models.MediaMetadata? {
-        if (metadata == null || !isRadioMediaId(metadata.id) || !metadata.thumbnailUrl.isNullOrBlank()) return metadata
+        if (metadata == null || !isRadioMediaId(metadata.id)) return metadata
         val storedArtwork =
             radioStationStore.stations.value
                 .firstOrNull { it.mediaId == metadata.id }
                 ?.favicon
                 ?.takeIf { it.isNotBlank() }
-        return if (storedArtwork == null) metadata else metadata.copy(thumbnailUrl = storedArtwork)
+                ?: return metadata
+        val itemArtwork =
+            getPlayerOrNull()
+                ?.currentMediaItem
+                ?.mediaMetadata
+                ?.extras
+                ?.getString("radio_favicon")
+                ?.takeIf { it.isNotBlank() }
+        val currentArtwork = metadata.thumbnailUrl
+        val mayFollowStationArtwork = currentArtwork.isNullOrBlank() || currentArtwork == itemArtwork
+        return if (mayFollowStationArtwork && currentArtwork != storedArtwork) {
+            metadata.copy(thumbnailUrl = storedArtwork)
+        } else {
+            metadata
+        }
     }
 
     val player: ExoPlayer
