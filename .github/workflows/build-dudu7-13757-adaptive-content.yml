@@ -28,7 +28,13 @@ jobs:
         with:
           cache-cleanup: on-success
 
-      - uses: android-actions/setup-android@v3
+      - name: Verify preinstalled Android SDK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          test -n "${ANDROID_HOME:-}"
+          test -d "$ANDROID_HOME/platform-tools"
+          test -d "$ANDROID_HOME/build-tools"
 
       - name: Apply issue 106 complete content colors
         shell: bash
