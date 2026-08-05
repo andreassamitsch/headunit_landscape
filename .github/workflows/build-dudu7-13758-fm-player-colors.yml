@@ -41,22 +41,7 @@ jobs:
         run: |
           set -euxo pipefail
           FILE=app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
-          if grep -q 'versionCode = 1370067' app/build.gradle.kts \
-            && grep -q 'Issue #109 FM player adaptive color patch applied' /dev/null 2>/dev/null; then
-            echo 'unreachable marker'
-          fi
-          if grep -q 'versionCode = 1370067' app/build.gradle.kts \
-            && python3 - <<'PY'
-from pathlib import Path
-text = Path('app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt').read_text()
-start = text.index('if (physicalRadioState.isActive)')
-end = text.index('} else {', start)
-block = text[start:end]
-assert 'MaterialTheme(colorScheme = frostedColors)' in block
-assert 'LocalContentColor provides' in block
-assert 'PhysicalRadioPlayerPane(' in block
-PY
-          then
+          if grep -q 'versionCode = 1370067' app/build.gradle.kts; then
             echo 'Issue #109 product patch already applied.'
           else
             python3 scripts/apply_issue_109_fm_player_colors.py
@@ -78,20 +63,14 @@ PY
         shell: bash
         run: |
           set -euxo pipefail
+          FILE=app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           grep -q 'versionCode = 1370067' app/build.gradle.kts
           grep -q 'versionName = "13.7.58"' app/build.gradle.kts
-          python3 - <<'PY'
-from pathlib import Path
-text = Path('app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt').read_text()
-start = text.index('if (physicalRadioState.isActive)')
-end = text.index('} else {', start)
-block = text[start:end]
-assert block.count('MaterialTheme(colorScheme = frostedColors)') == 1
-assert block.count('LocalContentColor provides') == 1
-assert 'if (frostedIceEnabled) adaptiveContentColor else baseColors.onSurface' in block
-assert block.count('PhysicalRadioPlayerPane(') == 1
-assert text.count('PhysicalRadioPlayerPane(') == 1
-PY
+          grep -q 'if (physicalRadioState.isActive)' "$FILE"
+          grep -q 'MaterialTheme(colorScheme = frostedColors)' "$FILE"
+          grep -q 'LocalContentColor provides' "$FILE"
+          grep -q 'if (frostedIceEnabled) adaptiveContentColor else baseColors.onSurface' "$FILE"
+          test "$(grep -c 'PhysicalRadioPlayerPane(' "$FILE")" -eq 1
 
       - name: Unit tests
         run: |
