@@ -535,10 +535,17 @@ fun VehicleLandscapeLayout(
                     .nestedScroll(state.preUpPostDownNestedScrollConnection),
         ) {
             if (physicalRadioState.isActive) {
-                PhysicalRadioPlayerPane(
-                    radio = physicalRadio,
-                    playerConnection = playerConnection,
-                )
+                MaterialTheme(colorScheme = frostedColors) {
+                    CompositionLocalProvider(
+                        LocalContentColor provides
+                            if (frostedIceEnabled) adaptiveContentColor else baseColors.onSurface,
+                    ) {
+                        PhysicalRadioPlayerPane(
+                            radio = physicalRadio,
+                            playerConnection = playerConnection,
+                        )
+                    }
+                }
             } else {
                 Box(
                     contentAlignment = Alignment.Center,
