@@ -1,6 +1,8 @@
 name: Inspect Issue 106 Content Colors
 
 on:
+  pull_request:
+    branches: [agent/issues-97-106-fm-visual-contrast]
   push:
     branches: [agent/issue-106-adaptive-content-complete]
   workflow_dispatch:
