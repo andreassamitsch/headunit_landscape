@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -558,6 +559,7 @@ fun VehicleLandscapeLayout(
             Surface(
                 shape = if (frostedIceEnabled) glassShape else RoundedCornerShape(12.dp),
                 color = if (frostedIceEnabled) frostedColors.surfaceContainer else baseColors.surfaceContainer,
+                contentColor = if (frostedIceEnabled) adaptiveContentColor else baseColors.onSurface,
                 border = null,
                 tonalElevation = if (frostedIceEnabled) 0.dp else 2.dp,
                 shadowElevation = 0.dp,
@@ -683,6 +685,8 @@ fun VehicleLandscapeLayout(
                 }
 
                 CompositionLocalProvider(
+                    LocalContentColor provides
+                        if (frostedIceEnabled) adaptiveContentColor else baseColors.onSurface,
                     LocalNavController provides paneNavController,
                     LocalRightPaneScrollBridge provides rightPaneScrollBridge,
                     LocalPlayerAwareWindowInsets provides
