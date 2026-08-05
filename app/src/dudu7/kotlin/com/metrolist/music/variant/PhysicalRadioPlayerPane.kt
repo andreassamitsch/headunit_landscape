@@ -35,6 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -68,6 +69,12 @@ import kotlin.math.abs
 fun PhysicalRadioPlayerPane(
     radio: FytPhysicalRadio,
     playerConnection: PlayerConnection?,
+    titleColor: Color,
+    secondaryTextColor: Color,
+    playButtonContainerColor: Color,
+    playButtonContentColor: Color,
+    sideButtonContentColor: Color,
+    actionColor: Color,
 ) {
     val context = LocalContext.current
     val syncUtils = LocalSyncUtils.current
@@ -216,6 +223,7 @@ fun PhysicalRadioPlayerPane(
             }
             if (nowPlaying.resolving) {
                 CircularProgressIndicator(
+                    color = actionColor,
                     strokeWidth = 2.dp,
                     modifier = Modifier.align(Alignment.BottomEnd).size(24.dp),
                 )
@@ -227,6 +235,7 @@ fun PhysicalRadioPlayerPane(
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
+            color = titleColor,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier =
@@ -243,7 +252,7 @@ fun PhysicalRadioPlayerPane(
             text = displayArtist,
             style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = secondaryTextColor,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier =
@@ -275,6 +284,7 @@ fun PhysicalRadioPlayerPane(
                 Icon(
                     painterResource(R.drawable.skip_previous),
                     contentDescription = "Vorheriger FM-Favorit",
+                    tint = sideButtonContentColor,
                     modifier = Modifier.size(34.dp),
                 )
             }
@@ -291,8 +301,8 @@ fun PhysicalRadioPlayerPane(
                 shape = CircleShape,
                 colors =
                     IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        containerColor = playButtonContainerColor,
+                        contentColor = playButtonContentColor,
                     ),
                 enabled = !state.isBusy,
                 modifier = Modifier.size(76.dp),
@@ -315,6 +325,7 @@ fun PhysicalRadioPlayerPane(
                 Icon(
                     painterResource(R.drawable.skip_next),
                     contentDescription = "Nächster FM-Favorit",
+                    tint = sideButtonContentColor,
                     modifier = Modifier.size(34.dp),
                 )
             }
@@ -350,9 +361,9 @@ fun PhysicalRadioPlayerPane(
                         },
                     tint =
                         if (isStationFavourite) {
-                            MaterialTheme.colorScheme.primary
+                            actionColor
                         } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                            sideButtonContentColor
                         },
                 )
             }
@@ -364,7 +375,7 @@ fun PhysicalRadioPlayerPane(
                     if (state.ta && state.taEnabled) {
                         MaterialTheme.colorScheme.error
                     } else {
-                        MaterialTheme.colorScheme.primary
+                        actionColor
                     },
             )
             IconButton(
@@ -380,11 +391,12 @@ fun PhysicalRadioPlayerPane(
                 enabled = state.isActive && !recognitionInProgress,
             ) {
                 if (recognitionInProgress) {
-                    CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+                    CircularProgressIndicator(color = actionColor, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
                 } else {
                     Icon(
                         painter = painterResource(R.drawable.search),
                         contentDescription = "FM-Musik erkennen",
+                        tint = sideButtonContentColor,
                     )
                 }
             }
@@ -412,9 +424,9 @@ fun PhysicalRadioPlayerPane(
                     contentDescription = if (isSongLiked) "Song-Like entfernen" else "Song auf YouTube Music liken",
                     tint =
                         if (isSongLiked) {
-                            MaterialTheme.colorScheme.primary
+                            actionColor
                         } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                            sideButtonContentColor
                         },
                 )
             }
@@ -433,7 +445,7 @@ fun PhysicalRadioPlayerPane(
                     if (state.ta && state.taEnabled) append(" • TA")
                 },
             style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = secondaryTextColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
