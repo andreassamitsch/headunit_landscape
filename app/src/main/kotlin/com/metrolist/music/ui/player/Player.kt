@@ -1996,6 +1996,11 @@ fun BottomSheetPlayer(
                     onToggleLyrics = { if (!isWebRadio) showInlineLyrics = !showInlineLyrics },
                     tabContentColor = tabContentColor,
                     tabGlassColor = tabGlassColor,
+                    playerTextColor = TextBackgroundColor,
+                    playerSecondaryTextColor = TextBackgroundColor.copy(alpha = 0.76f),
+                    playerPlayButtonContainerColor = textButtonColor,
+                    playerPlayButtonContentColor = iconButtonColor,
+                    playerSideButtonContentColor = sideButtonContentColor,
                     onPhysicalRadioVisualChanged = { active, identity, artworkUrl ->
                         val next = Dudu7FmVisualSnapshot(active, identity, artworkUrl)
                         if (dudu7FmVisual != next) dudu7FmVisual = next

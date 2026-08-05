@@ -191,6 +191,11 @@ fun VehicleLandscapeLayout(
     onToggleLyrics: () -> Unit,
     tabContentColor: Color,
     tabGlassColor: Color,
+    playerTextColor: Color,
+    playerSecondaryTextColor: Color,
+    playerPlayButtonContainerColor: Color,
+    playerPlayButtonContentColor: Color,
+    playerSideButtonContentColor: Color,
     onPhysicalRadioVisualChanged: (Boolean, String, String?) -> Unit,
     thumbnailContent: @Composable () -> Unit,
     controlsContent: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
@@ -535,10 +540,27 @@ fun VehicleLandscapeLayout(
                     .nestedScroll(state.preUpPostDownNestedScrollConnection),
         ) {
             if (physicalRadioState.isActive) {
-                PhysicalRadioPlayerPane(
-                    radio = physicalRadio,
-                    playerConnection = playerConnection,
-                )
+                MaterialTheme(colorScheme = frostedColors) {
+                    CompositionLocalProvider(
+                        LocalContentColor provides
+                            if (frostedIceEnabled) adaptiveContentColor else baseColors.onSurface,
+                    ) {
+                        PhysicalRadioPlayerPane(
+                            radio = physicalRadio,
+                            playerConnection = playerConnection,
+                            titleColor = if (frostedIceEnabled) playerTextColor else baseColors.onSurface,
+                            secondaryTextColor =
+                                if (frostedIceEnabled) playerSecondaryTextColor else baseColors.onSurfaceVariant,
+                            playButtonContainerColor =
+                                if (frostedIceEnabled) playerPlayButtonContainerColor else baseColors.primary,
+                            playButtonContentColor =
+                                if (frostedIceEnabled) playerPlayButtonContentColor else baseColors.onPrimary,
+                            sideButtonContentColor =
+                                if (frostedIceEnabled) playerSideButtonContentColor else baseColors.onSurfaceVariant,
+                            actionColor = if (frostedIceEnabled) playerTextColor else baseColors.primary,
+                        )
+                    }
+                }
             } else {
                 Box(
                     contentAlignment = Alignment.Center,
