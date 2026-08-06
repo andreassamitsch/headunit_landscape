@@ -43,6 +43,7 @@ jobs:
           if grep -q 'versionCode = 1370070' app/build.gradle.kts; then
             echo 'Product patch already applied.'
           else
+            python3 scripts/repair_issues_114_116_118_119_patch.py
             python3 scripts/apply_issues_114_116_118_119.py
           fi
           git diff --check
@@ -50,6 +51,7 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add \
+              scripts/apply_issues_114_116_118_119.py \
               app/build.gradle.kts \
               app/src/main/kotlin/com/metrolist/music/constants/PreferenceKeys.kt \
               app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AppearanceSettings.kt \
@@ -74,7 +76,6 @@ jobs:
           PLAYER=app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt
           LAYOUT=app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
           CONNECTION=app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt
-          THUMB=app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt
           WEB=app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
           FM=app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt
           SETTINGS=app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AppearanceSettings.kt
