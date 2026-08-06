@@ -1082,7 +1082,7 @@ fun AppearanceSettings(
                                     value = dudu7BackgroundBlurStrength.toFloat(),
                                     onValueChange = { onDudu7BackgroundBlurStrengthChange(it.roundToInt()) },
                                     valueRange = 0f..200f,
-                                    steps = 19,
+                                    steps = 199,
                                     modifier = Modifier.fillMaxWidth(0.42f),
                                 )
                             },
@@ -1117,7 +1117,7 @@ fun AppearanceSettings(
                                         value = dudu7FrostedBlurStrength.toFloat(),
                                         onValueChange = { onDudu7FrostedBlurStrengthChange(it.roundToInt()) },
                                         valueRange = 0f..24f,
-                                        steps = 11,
+                                        steps = 23,
                                         modifier = Modifier.fillMaxWidth(0.42f),
                                     )
                                 },

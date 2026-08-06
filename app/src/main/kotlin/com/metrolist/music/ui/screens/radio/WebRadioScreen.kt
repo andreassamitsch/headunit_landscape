@@ -687,11 +687,7 @@ private fun RadioStationCard(
         ) {
             Box(contentAlignment = Alignment.TopEnd) {
                 RadioStationArtwork(station, 88, Modifier, onLogoResolved)
-                if (isSaved) {
-                    Box(modifier = Modifier.align(Alignment.TopEnd)) {
-                        RadioStationActionMenu(onEdit = onEdit, onDelete = onDelete)
-                    }
-                } else {
+                if (!isSaved) {
                     IconButton(onClick = onSave, modifier = Modifier.align(Alignment.TopEnd).size(34.dp)) {
                         Icon(painterResource(R.drawable.add_circle), contentDescription = "Speichern")
                     }
@@ -717,6 +713,14 @@ private fun RadioStationCard(
             }
         }
         if (isSaved) {
+            Box(
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 2.dp, bottom = 2.dp),
+            ) {
+                RadioStationActionMenu(onEdit = onEdit, onDelete = onDelete)
+            }
             Box(
                 modifier =
                     Modifier

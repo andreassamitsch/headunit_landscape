@@ -225,6 +225,19 @@ private data class Dudu7FmVisualSnapshot(
     val artworkUrl: String? = null,
 )
 
+private fun dudu7HighResolutionArtworkUrl(value: String?): String? {
+    val url = value?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    if (url.startsWith("file:", ignoreCase = true) || url.startsWith("content:", ignoreCase = true)) return url
+    return when {
+        "googleusercontent.com" in url || "ytimg.com" in url ->
+            url
+                .replace(Regex("=w\\d+-h\\d+[^?]*"), "=w1600-h1600-l90-rj")
+                .replace(Regex("=s\\d+[^?]*"), "=s1600-c-k-c0x00ffffff-no-rj")
+        "mzstatic.com" in url -> url.replace(Regex("/\\d+x\\d+bb\\."), "/1600x1600bb.")
+        else -> url
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BottomSheetPlayer(
@@ -377,10 +390,15 @@ fun BottomSheetPlayer(
         } else {
             null
         }
+    val effectiveBackgroundArtworkUrl =
+        if (VehicleVariantConfig.isDudu7) dudu7HighResolutionArtworkUrl(effectiveArtworkUrl) else effectiveArtworkUrl
+    val effectiveBackgroundFallbackUrl =
+        if (VehicleVariantConfig.isDudu7) dudu7HighResolutionArtworkUrl(effectiveArtworkFallbackUrl) else effectiveArtworkFallbackUrl
     val currentSong by playerConnection.currentSong.collectAsStateWithLifecycle(initialValue = null)
     val resolvedRadioSong by playerConnection.radioResolvedSong.collectAsStateWithLifecycle()
     val resolvedRadioLibrarySong by playerConnection.resolvedRadioLibrarySong.collectAsStateWithLifecycle()
     val radioHasTrackMetadata by playerConnection.radioHasTrackMetadata.collectAsStateWithLifecycle()
+    val radioHasTrackArtwork by playerConnection.radioHasTrackArtwork.collectAsStateWithLifecycle()
     val recognitionStatus by MusicRecognitionService.recognitionStatus.collectAsStateWithLifecycle()
     val automix by playerConnection.service.automixItems.collectAsStateWithLifecycle()
     val repeatMode by playerConnection.repeatMode.collectAsStateWithLifecycle()
@@ -484,14 +502,19 @@ fun BottomSheetPlayer(
     val defaultGradientColors = listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant)
     val fallbackColor = MaterialTheme.colorScheme.surface.toArgb()
 
-    val visualArtworkKey = "${effectiveVisualId.orEmpty()}|${effectiveArtworkUrl.orEmpty()}|${effectiveArtworkFallbackUrl.orEmpty()}"
+    val visualArtworkKey =
+        "${effectiveVisualId.orEmpty()}|${effectiveBackgroundArtworkUrl.orEmpty()}|${effectiveBackgroundFallbackUrl.orEmpty()}"
     val latestVisualArtworkKey by rememberUpdatedState(visualArtworkKey)
 
     LaunchedEffect(visualArtworkKey, playerBackground) {
         val needsArtworkPalette =
             playerBackground == PlayerBackgroundStyle.GRADIENT ||
                 (VehicleVariantConfig.isDudu7 && playerBackground == PlayerBackgroundStyle.BLUR)
-        val artworkCandidates = listOfNotNull(effectiveArtworkUrl?.takeIf { it.isNotBlank() }, effectiveArtworkFallbackUrl).distinct()
+        val artworkCandidates =
+            listOfNotNull(
+                effectiveBackgroundArtworkUrl?.takeIf { it.isNotBlank() },
+                effectiveBackgroundFallbackUrl?.takeIf { it.isNotBlank() },
+            ).distinct()
         if (!needsArtworkPalette || artworkCandidates.isEmpty()) {
             gradientColors = emptyList()
             return@LaunchedEffect
@@ -1004,7 +1027,7 @@ fun BottomSheetPlayer(
                 when (playerBackground) {
                     PlayerBackgroundStyle.BLUR -> {
                         AnimatedContent(
-                            targetState = effectiveArtworkUrl to effectiveArtworkFallbackUrl,
+                            targetState = effectiveBackgroundArtworkUrl to effectiveBackgroundFallbackUrl,
                             transitionSpec = {
                                 fadeIn(tween(800)).togetherWith(fadeOut(tween(800)))
                             },
@@ -1018,7 +1041,6 @@ fun BottomSheetPlayer(
                                                 ImageRequest
                                                     .Builder(context)
                                                     .data(fallbackUrl)
-                                                    .size(100, 100)
                                                     .allowHardware(false)
                                                     .build(),
                                             contentDescription = null,
@@ -1032,7 +1054,6 @@ fun BottomSheetPlayer(
                                                 ImageRequest
                                                     .Builder(context)
                                                     .data(thumbnailUrl)
-                                                    .size(100, 100)
                                                     .allowHardware(false)
                                                     .build(),
                                             contentDescription = null,
@@ -2031,6 +2052,11 @@ fun BottomSheetPlayer(
                     playerPlayButtonContainerColor = textButtonColor,
                     playerPlayButtonContentColor = iconButtonColor,
                     playerSideButtonContentColor = sideButtonContentColor,
+                    backdropArtworkUrl = effectiveBackgroundArtworkUrl,
+                    backdropFallbackUrl = effectiveBackgroundFallbackUrl,
+                    backdropUsesArtwork = playerBackground == PlayerBackgroundStyle.BLUR,
+                    backdropUsesGradient = playerBackground == PlayerBackgroundStyle.GRADIENT,
+                    backdropGradientColors = gradientColors,
                     onPhysicalRadioVisualChanged = { active, identity, artworkUrl ->
                         val next = Dudu7FmVisualSnapshot(active, identity, artworkUrl)
                         if (dudu7FmVisual != next) dudu7FmVisual = next
@@ -2058,6 +2084,7 @@ fun BottomSheetPlayer(
                                     isLandscape = true,
                                     landscapeHorizontalPadding = 2.dp,
                                     isListenTogetherGuest = isListenTogetherGuest,
+                                    showRadioStationLogoOverlay = isWebRadio && radioHasTrackArtwork,
                                 )
                             }
                         }

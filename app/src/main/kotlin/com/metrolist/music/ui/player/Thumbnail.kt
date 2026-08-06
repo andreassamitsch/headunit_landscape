@@ -204,6 +204,7 @@ fun Thumbnail(
     isLandscape: Boolean = false,
     landscapeHorizontalPadding: Dp = PlayerHorizontalPadding,
     isListenTogetherGuest: Boolean = false,
+    showRadioStationLogoOverlay: Boolean = false,
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
     val context = LocalContext.current
@@ -407,7 +408,8 @@ fun Thumbnail(
                                 landscapeHorizontalPadding = landscapeHorizontalPadding,
                                 isListenTogetherGuest = isListenTogetherGuest,
                                 currentMediaId = mediaMetadata?.id,
-                                currentMediaThumbnail = mediaMetadata?.thumbnailUrl
+                                currentMediaThumbnail = mediaMetadata?.thumbnailUrl,
+                                showRadioStationLogoOverlay = showRadioStationLogoOverlay,
                             )
                         }
                     }
@@ -506,6 +508,7 @@ private fun ThumbnailItem(
     isListenTogetherGuest: Boolean = false,
     currentMediaId: String? = null,
     currentMediaThumbnail: String? = null,
+    showRadioStationLogoOverlay: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val incrementalSeekSkipEnabled by rememberPreference(SeekExtraSeconds, defaultValue = false)
@@ -595,13 +598,13 @@ private fun ThumbnailItem(
                 )
 
                 val showStationLogoOverlay =
-                    VehicleVariantConfig.isDudu7 &&
+                    showRadioStationLogoOverlay &&
+                        VehicleVariantConfig.isDudu7 &&
                         isLandscape &&
                         com.metrolist.music.radio.isRadioMediaId(item.mediaId) &&
                         item.mediaId == currentMediaId &&
                         !currentMediaThumbnail.isNullOrBlank() &&
-                        !stableRadioArtwork.isNullOrBlank() &&
-                        currentMediaThumbnail != stableRadioArtwork
+                        !stableRadioArtwork.isNullOrBlank()
                 if (showStationLogoOverlay) {
                     AsyncImage(
                         model = stableRadioArtwork,
