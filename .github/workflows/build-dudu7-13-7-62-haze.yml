@@ -54,12 +54,24 @@ jobs:
           else
             python3 scripts/apply_issue_119_haze.py
           fi
+          python3 - <<'PYIMPORT'
+          from pathlib import Path
+          path = Path('app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt')
+          text = path.read_text()
+          required_import = 'import androidx.compose.ui.layout.positionInRoot\n'
+          if '.positionInRoot()' in text and required_import not in text:
+              marker = 'import androidx.compose.ui.layout.onGloballyPositioned\n'
+              if marker not in text:
+                  raise RuntimeError('Unable to restore positionInRoot import')
+              text = text.replace(marker, marker + required_import, 1)
+              path.write_text(text)
+          PYIMPORT
           git diff --check
           if ! git diff --quiet; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add app gradle/libs.versions.toml scripts/apply_issue_119_haze.py
-            git commit -m "Replace Dudu7 manual backdrop copy with Haze [skip ci]"
+            git commit -m "Complete Dudu7 Haze backdrop integration [skip ci]"
             BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
             git push origin HEAD:"$BRANCH"
           fi
@@ -84,6 +96,7 @@ jobs:
           grep -q 'HazeInputScale.Auto' "$DUDU7_HAZE"
           grep -q 'noiseFactor = 0f' "$DUDU7_HAZE"
           grep -q 'vehicleHazeEffect(' "$DUDU7_LAYOUT"
+          grep -q 'import androidx.compose.ui.layout.positionInRoot' "$DUDU7_LAYOUT"
           test -s "$STANDARD_HAZE"
           ! grep -q 'GlassBackdropLayer' "$DUDU7_LAYOUT"
           ! grep -q 'requiredSize(' "$DUDU7_LAYOUT"
