@@ -1,0 +1,51 @@
+name: Inspect Dudu7 blur artwork and radio cards
+
+on:
+  pull_request:
+    branches: [agent/issues-111-116-radio-ui-unification]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: false
+
+      - name: Collect relevant source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inspection
+          paths=(
+            app/build.gradle.kts
+            app/src/main/kotlin/com/metrolist/music/constants/PreferenceKeys.kt
+            app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AppearanceSettings.kt
+            app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt
+            app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt
+            app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+            app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
+            app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt
+            app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
+            app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt
+            app/src/main/kotlin/com/metrolist/music/radio/RadioStationLogoCache.kt
+          )
+          for path in "${paths[@]}"; do
+            if [ -f "$path" ]; then
+              mkdir -p "inspection/$(dirname "$path")"
+              cp "$path" "inspection/$path"
+            fi
+          done
+          grep -RInE 'Dudu7BackgroundBlurStrengthKey|Dudu7FrostedBlurStrengthKey|artworkBackgroundBlur|fallbackArtworkUri|showStationLogoOverlay|DropdownMenu|more_vert|grid|Grid|blur\(|RenderEffect|thumbnailUrl|favicon|artwork' \
+            app/src/main app/src/dudu7 --include='*.kt' > inspection/report.txt || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: issues-114-116-118-119-source
+          path: inspection
+          retention-days: 3
