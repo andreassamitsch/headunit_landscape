@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -24,6 +25,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -70,11 +75,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
 import com.metrolist.music.LocalPlayerConnection
 import com.metrolist.music.R
+import com.metrolist.music.constants.FmRadioViewTypeKey
+import com.metrolist.music.constants.LibraryViewType
 import com.metrolist.music.extensions.move
 import com.metrolist.music.radio.fyt.FmPresetOrderStore
 import com.metrolist.music.radio.fyt.FmStationArtwork
 import com.metrolist.music.radio.fyt.FytPhysicalRadio
+import com.metrolist.music.utils.rememberEnumPreference
 import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyGridState
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import kotlin.math.roundToInt
 
@@ -95,6 +104,7 @@ fun PhysicalRadioScreen() {
     val state by radio.state.collectAsStateWithLifecycle()
 
     var section by remember { mutableStateOf(PhysicalRadioSection.FAVOURITES) }
+    var viewType by rememberEnumPreference(FmRadioViewTypeKey, LibraryViewType.LIST)
     var frequencyInput by remember { mutableStateOf(FytPhysicalRadio.formatFrequency(state.frequency)) }
     var editingPreset by remember { mutableStateOf<FytPhysicalRadio.Preset?>(null) }
     var deletingPreset by remember { mutableStateOf<FytPhysicalRadio.Preset?>(null) }
@@ -102,13 +112,20 @@ fun PhysicalRadioScreen() {
 
     val orderedPresets = remember { mutableStateListOf<FytPhysicalRadio.Preset>() }
     val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
     val reorderState =
         rememberReorderableLazyListState(listState) { from, to ->
             if (from.index in orderedPresets.indices && to.index in orderedPresets.indices) {
                 orderedPresets.move(from.index, to.index)
             }
         }
-    val isDragging = reorderState.isAnyItemDragging
+    val gridReorderState =
+        rememberReorderableLazyGridState(gridState) { from, to ->
+            if (from.index in orderedPresets.indices && to.index in orderedPresets.indices) {
+                orderedPresets.move(from.index, to.index)
+            }
+        }
+    val isDragging = reorderState.isAnyItemDragging || gridReorderState.isAnyItemDragging
     var wasDragging by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.frequency) {
@@ -177,6 +194,20 @@ fun PhysicalRadioScreen() {
                     label = { Text("Radiofunktionen") },
                 )
             }
+            if (section == PhysicalRadioSection.FAVOURITES) {
+                item {
+                    IconButton(onClick = { viewType = viewType.toggle() }) {
+                        Icon(
+                            painter =
+                                painterResource(
+                                    if (viewType == LibraryViewType.LIST) R.drawable.grid_view else R.drawable.list,
+                                ),
+                            contentDescription =
+                                if (viewType == LibraryViewType.LIST) "Kachelansicht" else "Listenansicht",
+                        )
+                    }
+                }
+            }
             if (state.isBusy && !state.isScanning) {
                 item { CircularProgressIndicator(Modifier.size(28.dp)) }
             }
@@ -186,11 +217,10 @@ fun PhysicalRadioScreen() {
             PhysicalRadioSection.FAVOURITES -> {
                 if (orderedPresets.isEmpty()) {
                     EmptyFmFavourites(onOpenSearch = { section = PhysicalRadioSection.SCAN })
-                } else {
+                } else if (viewType == LibraryViewType.LIST) {
                     LazyColumn(
                         state = listState,
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(5.dp),
                         modifier = Modifier.fillMaxSize(),
                     ) {
                         itemsIndexed(
@@ -228,10 +258,66 @@ fun PhysicalRadioScreen() {
                                                         onDragStarted = {
                                                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                         },
-                                                    ).size(44.dp),
+                                                    ),
                                         ) {
                                             Icon(
                                                 painter = painterResource(R.drawable.drag_handle),
+                                                contentDescription = "Sender verschieben",
+                                            )
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        state = gridState,
+                        columns = GridCells.Adaptive(142.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        gridItemsIndexed(
+                            items = orderedPresets,
+                            key = { _, preset -> FytPhysicalRadio.stablePresetKey(preset) },
+                        ) { _, preset ->
+                            ReorderableItem(gridReorderState, key = FytPhysicalRadio.stablePresetKey(preset)) {
+                                val isActive = state.isActive && state.currentPreset?.id == preset.id
+                                FmFavouriteCard(
+                                    preset = preset,
+                                    pi = if (isActive && state.pi > 0) state.pi else preset.pi,
+                                    activeFrequency = state.frequency,
+                                    activeEcc = state.ecc,
+                                    isActive = isActive,
+                                    onPlay = {
+                                        if (!isActive) {
+                                            playerConnection?.pause()
+                                            radio.tunePreset(preset)
+                                        }
+                                    },
+                                    onNextAf = {
+                                        if (isActive) {
+                                            radio.tuneNextAlternativeFrequency(preset)
+                                            Toast.makeText(context, "Alternative Frequenz wird geprüft", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    onEdit = { editingPreset = preset },
+                                    onDelete = { deletingPreset = preset },
+                                    dragHandle = {
+                                        IconButton(
+                                            onClick = {},
+                                            modifier =
+                                                Modifier
+                                                    .draggableHandle(
+                                                        onDragStarted = {
+                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        },
+                                                    ).size(42.dp),
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.drag_indicator_grid),
                                                 contentDescription = "Sender verschieben",
                                             )
                                         }
@@ -468,40 +554,122 @@ private fun FmFavouriteRow(
                 modifier = Modifier.padding(end = 4.dp),
             )
         }
-        var menuExpanded by remember(preset.id) { mutableStateOf(false) }
-        Box {
-            IconButton(onClick = { menuExpanded = true }) {
-                Icon(painterResource(R.drawable.more_vert), contentDescription = "Senderaktionen")
-            }
-            DropdownMenu(
-                expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false },
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Bearbeiten") },
-                    leadingIcon = { Icon(painterResource(R.drawable.edit), contentDescription = null) },
-                    onClick = {
-                        menuExpanded = false
-                        onEdit()
-                    },
+        FmStationActionMenu(
+            menuKey = FytPhysicalRadio.stablePresetKey(preset),
+            onEdit = onEdit,
+            onDelete = onDelete,
+        )
+        dragHandle()
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FmFavouriteCard(
+    preset: FytPhysicalRadio.Preset,
+    pi: Int,
+    activeFrequency: Float,
+    activeEcc: String,
+    isActive: Boolean,
+    onPlay: () -> Unit,
+    onNextAf: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    dragHandle: @Composable () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.86f)
+                .clip(RoundedCornerShape(14.dp))
+                .background(
+                    if (isActive) MaterialTheme.colorScheme.primaryContainer
+                    else MaterialTheme.colorScheme.surfaceContainer,
                 )
-                DropdownMenuItem(
-                    text = { Text("Löschen", color = MaterialTheme.colorScheme.error) },
-                    leadingIcon = {
-                        Icon(
-                            painterResource(R.drawable.delete),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                        )
-                    },
-                    onClick = {
-                        menuExpanded = false
-                        onDelete()
-                    },
+                .combinedClickable(onClick = onPlay, onDoubleClick = onNextAf),
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxSize().padding(start = 10.dp, top = 10.dp, end = 10.dp, bottom = 44.dp),
+        ) {
+            FmStationArtwork(
+                stationName = preset.name,
+                frequency = if (isActive) activeFrequency else preset.frequency,
+                pi = pi,
+                ecc = if (isActive) activeEcc.ifBlank { preset.ecc } else preset.ecc,
+                size = 88.dp,
+                allFrequencies = listOf(if (isActive) activeFrequency else preset.frequency),
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = preset.name,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = "${FytPhysicalRadio.formatFrequency(if (isActive) activeFrequency else preset.frequency)} MHz",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+            if (isActive) {
+                Text(
+                    text = "● LÄUFT",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
         }
-        dragHandle()
+        FmStationActionMenu(
+            menuKey = FytPhysicalRadio.stablePresetKey(preset),
+            onEdit = onEdit,
+            onDelete = onDelete,
+            modifier = Modifier.align(Alignment.BottomStart).padding(start = 2.dp, bottom = 2.dp),
+        )
+        Box(Modifier.align(Alignment.BottomEnd).padding(end = 2.dp, bottom = 2.dp)) { dragHandle() }
+    }
+}
+
+@Composable
+private fun FmStationActionMenu(
+    menuKey: String,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var menuExpanded by remember(menuKey) { mutableStateOf(false) }
+    Box(modifier) {
+        IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(42.dp)) {
+            Icon(painterResource(R.drawable.more_vert), contentDescription = "Senderaktionen")
+        }
+        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Bearbeiten") },
+                leadingIcon = { Icon(painterResource(R.drawable.edit), contentDescription = null) },
+                onClick = {
+                    menuExpanded = false
+                    onEdit()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Löschen", color = MaterialTheme.colorScheme.error) },
+                leadingIcon = {
+                    Icon(
+                        painterResource(R.drawable.delete),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                },
+                onClick = {
+                    menuExpanded = false
+                    onDelete()
+                },
+            )
+        }
     }
 }
 

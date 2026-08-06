@@ -25,11 +25,12 @@ import kotlin.math.min
 
 /**
  * Decodes and validates station artwork before it is shown or persisted. Every
- * selected logo becomes a new local 512 x 512 PNG URI, so Coil cannot keep
- * displaying an older bitmap under the same file-cache key.
+ * selected logo becomes a versioned local square PNG URI. Source detail is preserved
+ * up to 1600 px so the full-screen Dudu7 background does not reuse a 512 px list thumbnail.
  */
 object RadioStationLogoCache {
-    private const val TARGET_SIZE = 512
+    private const val MIN_TARGET_SIZE = 512
+    private const val MAX_TARGET_SIZE = 1600
     private const val MIN_SOURCE_SIZE = 24
     private const val MAX_REMOTE_BYTES = 10_000_000
     private const val USER_AGENT = "MetrolistHU/13.7.9 (radio artwork)"
@@ -93,7 +94,7 @@ object RadioStationLogoCache {
                 ImageRequest
                     .Builder(appContext)
                     .data(requestData)
-                    .size(TARGET_SIZE, TARGET_SIZE)
+                    .size(MAX_TARGET_SIZE, MAX_TARGET_SIZE)
                     .scale(Scale.FIT)
                     .allowHardware(false)
                     .memoryCachePolicy(CachePolicy.DISABLED)
@@ -105,14 +106,16 @@ object RadioStationLogoCache {
                 return@withContext null
             }
 
-            val square = Bitmap.createBitmap(TARGET_SIZE, TARGET_SIZE, Bitmap.Config.ARGB_8888)
+            val targetSize =
+                maxOf(decoded.width, decoded.height).coerceIn(MIN_TARGET_SIZE, MAX_TARGET_SIZE)
+            val square = Bitmap.createBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(square)
             canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
-            val scale = min(TARGET_SIZE.toFloat() / decoded.width, TARGET_SIZE.toFloat() / decoded.height)
+            val scale = min(targetSize.toFloat() / decoded.width, targetSize.toFloat() / decoded.height)
             val width = decoded.width * scale
             val height = decoded.height * scale
-            val left = (TARGET_SIZE - width) / 2f
-            val top = (TARGET_SIZE - height) / 2f
+            val left = (targetSize - width) / 2f
+            val top = (targetSize - height) / 2f
             canvas.drawBitmap(
                 decoded,
                 null,

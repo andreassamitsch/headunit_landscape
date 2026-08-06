@@ -166,6 +166,7 @@ fun PhysicalRadioPlayerPane(
     }
 
     val resolvedSong = nowPlaying.resolvedSong
+    val hasRecognizedTrackArtwork = nowPlaying.hasTrackMetadata && !nowPlaying.coverUrl.isNullOrBlank()
     val librarySongFlow =
         remember(playerConnection, resolvedSong?.id) {
             if (playerConnection != null && resolvedSong != null) {
@@ -199,7 +200,7 @@ fun PhysicalRadioPlayerPane(
         ) {
             // Match the large WebRadio artwork footprint instead of the old 190 dp FM tile.
             val artworkSize = minOf(maxWidth, maxHeight).coerceAtMost(340.dp)
-            if (!nowPlaying.coverUrl.isNullOrBlank()) {
+            if (hasRecognizedTrackArtwork) {
                 AsyncImage(
                     model = nowPlaying.coverUrl,
                     contentDescription = "Cover $displayTitle",

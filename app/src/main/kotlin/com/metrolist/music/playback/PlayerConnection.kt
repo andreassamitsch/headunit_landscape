@@ -217,6 +217,8 @@ class PlayerConnection(
     val radioResolvedSong = MutableStateFlow<SongItem?>(null)
     /** True only when the stream or manual recognition supplied artist + title. */
     val radioHasTrackMetadata = MutableStateFlow(false)
+    /** True only when the current WebRadio metadata has a real title artwork, not the station logo fallback. */
+    val radioHasTrackArtwork = MutableStateFlow(false)
     // stateIn so the latest DB result is cached and shared: on resume / re-subscription the value
     // is available immediately instead of re-running the Room query (which delayed now-playing
     // details, format and like-state on every foreground). Lazily keeps it hot across lifecycle
@@ -747,6 +749,7 @@ class PlayerConnection(
         lastAppliedRadioMetadataKey = null
         radioResolvedSong.value = null
         radioHasTrackMetadata.value = false
+        radioHasTrackArtwork.value = false
         mediaMetadata.value = withStoredRadioArtwork(mediaItem?.metadata)
         currentMediaItemIndex.value = player.currentMediaItemIndex
         currentWindowIndex.value = player.getCurrentQueueIndex()
@@ -814,6 +817,7 @@ class PlayerConnection(
                     ),
             )
         mediaMetadata.value = dynamic
+        radioHasTrackArtwork.value = false
 
         val artist = parsed.first
         val isClear = isClearRadioTrackMetadata(artist, parsed.second, stationName)
@@ -842,6 +846,7 @@ class PlayerConnection(
                 thumbnailUrl = preferredCover ?: base.thumbnailUrl,
             )
         radioHasTrackMetadata.value = result.artist.isNotBlank() && result.title.isNotBlank()
+        radioHasTrackArtwork.value = !preferredCover.isNullOrBlank()
         if (radioHasTrackMetadata.value) {
             lookupRadioSong(base, result.artist, result.title, preferredCover)
         }
@@ -876,6 +881,7 @@ class PlayerConnection(
         preferredCover: String? = null,
     ) {
         val key = "${normalizeRadioTrackText(artist)}|${normalizeRadioTrackText(title)}"
+        radioHasTrackArtwork.value = !preferredCover.isNullOrBlank()
         if (radioSongCache.containsKey(key)) {
             applyResolvedRadioSong(base, title, radioSongCache[key], preferredCover)
             return
@@ -908,6 +914,7 @@ class PlayerConnection(
         if (current?.id != base.id || current.title != expectedTitle) return
         radioResolvedSong.value = song
         val cover = preferredCover ?: song?.thumbnail?.resize(1200, 1200)
+        radioHasTrackArtwork.value = !cover.isNullOrBlank()
         if (song != null) {
             Timber.tag(TAG).d("Resolved radio song to YouTube Music: %s (%s)", song.title, song.id)
             mediaMetadata.value =
