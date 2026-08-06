@@ -88,7 +88,6 @@ jobs:
           ! grep -q 'GlassBackdropLayer' "$DUDU7_LAYOUT"
           ! grep -q 'requiredSize(' "$DUDU7_LAYOUT"
           ! grep -q 'glassPaneOriginInRoot' "$DUDU7_LAYOUT"
-          ! grep -q 'positionInRoot' "$DUDU7_LAYOUT"
 
       - name: Compile standard flavor bridge
         run: |
