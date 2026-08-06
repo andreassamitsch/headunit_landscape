@@ -196,6 +196,8 @@ import com.metrolist.music.ui.utils.ShowOffsetDialog
 import com.metrolist.music.variant.Dudu7Layout
 import com.metrolist.music.variant.VehicleEmptyPlayer
 import com.metrolist.music.variant.VehicleLandscapeLayout
+import com.metrolist.music.variant.rememberVehicleHazeState
+import com.metrolist.music.variant.vehicleHazeSource
 import com.metrolist.music.variant.VehiclePlayerControls
 import com.metrolist.music.variant.VehicleVariantConfig
 import com.metrolist.music.utils.dataStore
@@ -254,6 +256,7 @@ fun BottomSheetPlayer(
     val copiedArtistStr = stringResource(R.string.copied_artist)
     val bottomSheetPageState = LocalBottomSheetPageState.current
     val playerConnection = LocalPlayerConnection.current ?: return
+    val vehicleHazeState = rememberVehicleHazeState()
     val database = LocalDatabase.current
     val syncUtils = LocalSyncUtils.current
 
@@ -1022,6 +1025,7 @@ fun BottomSheetPlayer(
                 modifier =
                     Modifier
                         .fillMaxSize()
+                        .vehicleHazeSource(vehicleHazeState)
                         .background(bottomSheetBackgroundColor),
             ) {
                 when (playerBackground) {
@@ -2052,11 +2056,7 @@ fun BottomSheetPlayer(
                     playerPlayButtonContainerColor = textButtonColor,
                     playerPlayButtonContentColor = iconButtonColor,
                     playerSideButtonContentColor = sideButtonContentColor,
-                    backdropArtworkUrl = effectiveBackgroundArtworkUrl,
-                    backdropFallbackUrl = effectiveBackgroundFallbackUrl,
-                    backdropUsesArtwork = playerBackground == PlayerBackgroundStyle.BLUR,
-                    backdropUsesGradient = playerBackground == PlayerBackgroundStyle.GRADIENT,
-                    backdropGradientColors = gradientColors,
+                    hazeState = vehicleHazeState,
                     onPhysicalRadioVisualChanged = { active, identity, artworkUrl ->
                         val next = Dudu7FmVisualSnapshot(active, identity, artworkUrl)
                         if (dudu7FmVisual != next) dudu7FmVisual = next
