@@ -42,6 +42,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -140,7 +142,6 @@ fun WebRadioScreen() {
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var editingStation by remember { mutableStateOf<RadioStation?>(null) }
-    var actionStation by remember { mutableStateOf<RadioStation?>(null) }
     var deletingStation by remember { mutableStateOf<RadioStation?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
     var favoritePlayJob by remember { mutableStateOf<Job?>(null) }
@@ -331,7 +332,8 @@ fun WebRadioScreen() {
                                         }
                                     },
                                     onSave = {},
-                                    onLongClick = { actionStation = station },
+                                    onEdit = { editingStation = station },
+                                    onDelete = { deletingStation = station },
                                     dragHandle = {
                                         RadioDragHandle(
                                             Modifier.draggableHandle(
@@ -369,7 +371,8 @@ fun WebRadioScreen() {
                                         }
                                     },
                                     onSave = {},
-                                    onLongClick = { actionStation = station },
+                                    onEdit = { editingStation = station },
+                                    onDelete = { deletingStation = station },
                                     dragHandle = {
                                         RadioDragHandle(
                                             modifier =
@@ -472,7 +475,8 @@ fun WebRadioScreen() {
                                         }
                                     },
                                     onSave = { store.addOrUpdate(station) },
-                                    onLongClick = {},
+                                    onEdit = {},
+                                    onDelete = {},
                                     onLogoResolved = { enriched ->
                                         results = results.map { if (it.uuid == enriched.uuid) enriched else it }
                                         if (savedStations.any { it.uuid == enriched.uuid }) store.addOrUpdate(enriched)
@@ -506,7 +510,8 @@ fun WebRadioScreen() {
                                         }
                                     },
                                     onSave = { store.addOrUpdate(station) },
-                                    onLongClick = {},
+                                    onEdit = {},
+                                    onDelete = {},
                                     onLogoResolved = { enriched ->
                                         results = results.map { if (it.uuid == enriched.uuid) enriched else it }
                                         if (savedStations.any { it.uuid == enriched.uuid }) store.addOrUpdate(enriched)
@@ -537,30 +542,6 @@ fun WebRadioScreen() {
                     RadioFilterKind.LANGUAGE -> languageFilter = value
                 }
                 editingFilter = null
-            },
-        )
-    }
-
-    actionStation?.let { station ->
-        AlertDialog(
-            onDismissRequest = { actionStation = null },
-            title = { Text(station.name) },
-            text = { Text("Aktion für diesen Radiosender auswählen") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        actionStation = null
-                        editingStation = station
-                    },
-                ) { Text("Bearbeiten") }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        actionStation = null
-                        deletingStation = station
-                    },
-                ) { Text("Löschen", color = MaterialTheme.colorScheme.error) }
             },
         )
     }
@@ -637,7 +618,8 @@ private fun RadioStationRow(
     isPlaying: Boolean,
     onPlay: () -> Unit,
     onSave: () -> Unit,
-    onLongClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
     dragHandle: @Composable () -> Unit = {},
     onLogoResolved: (RadioStation) -> Unit = {},
 ) {
@@ -649,7 +631,7 @@ private fun RadioStationRow(
                 .padding(horizontal = 6.dp, vertical = 2.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer)
-                .combinedClickable(onClick = onPlay, onLongClick = onLongClick)
+                .clickable(onClick = onPlay)
                 .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
         RadioStationArtwork(station, 54, Modifier, onLogoResolved)
@@ -658,6 +640,7 @@ private fun RadioStationRow(
             StationDetails(station)
         }
         if (isSaved) {
+            RadioStationActionMenu(onEdit = onEdit, onDelete = onDelete)
             dragHandle()
         } else {
             IconButton(onClick = onSave) {
@@ -676,7 +659,8 @@ private fun RadioStationCard(
     isPlaying: Boolean,
     onPlay: () -> Unit,
     onSave: () -> Unit,
-    onLongClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
     dragHandle: @Composable () -> Unit = {},
     onLogoResolved: (RadioStation) -> Unit = {},
 ) {
@@ -692,7 +676,7 @@ private fun RadioStationCard(
                     } else {
                         MaterialTheme.colorScheme.surfaceContainer
                     },
-                ).combinedClickable(onClick = onPlay, onLongClick = onLongClick),
+                ).clickable(onClick = onPlay),
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -703,7 +687,11 @@ private fun RadioStationCard(
         ) {
             Box(contentAlignment = Alignment.TopEnd) {
                 RadioStationArtwork(station, 88, Modifier, onLogoResolved)
-                if (!isSaved) {
+                if (isSaved) {
+                    Box(modifier = Modifier.align(Alignment.TopEnd)) {
+                        RadioStationActionMenu(onEdit = onEdit, onDelete = onDelete)
+                    }
+                } else {
                     IconButton(onClick = onSave, modifier = Modifier.align(Alignment.TopEnd).size(34.dp)) {
                         Icon(painterResource(R.drawable.add_circle), contentDescription = "Speichern")
                     }
@@ -737,6 +725,43 @@ private fun RadioStationCard(
             ) {
                 dragHandle()
             }
+        }
+    }
+}
+
+@Composable
+private fun RadioStationActionMenu(
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }, modifier = Modifier.size(42.dp)) {
+            Icon(painterResource(R.drawable.more_vert), contentDescription = "Senderaktionen")
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Bearbeiten") },
+                leadingIcon = { Icon(painterResource(R.drawable.edit), contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onEdit()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Löschen", color = MaterialTheme.colorScheme.error) },
+                leadingIcon = {
+                    Icon(
+                        painterResource(R.drawable.delete),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    onDelete()
+                },
+            )
         }
     }
 }

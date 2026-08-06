@@ -143,6 +143,7 @@ import com.metrolist.music.R
 import com.metrolist.music.constants.CropAlbumArtKey
 import com.metrolist.music.constants.DarkModeKey
 import com.metrolist.music.constants.Dudu7PlayerPaneWeightKey
+import com.metrolist.music.constants.Dudu7BackgroundBlurStrengthKey
 import com.metrolist.music.constants.Dudu7StartWithLyricsKey
 import com.metrolist.music.constants.HidePlayerThumbnailKey
 import com.metrolist.music.constants.HideStatusBarOnFullscreenKey
@@ -370,6 +371,12 @@ fun BottomSheetPlayer(
         remember(mediaMetadata?.id, savedRadioStations) {
             runCatching { playerConnection.player.currentMediaItem?.toRadioStationOrNull() }.getOrNull()
         }
+    val effectiveArtworkFallbackUrl =
+        if (isWebRadio) {
+            currentRadioStation?.favicon?.takeIf { it.isNotBlank() && it != effectiveArtworkUrl }
+        } else {
+            null
+        }
     val currentSong by playerConnection.currentSong.collectAsStateWithLifecycle(initialValue = null)
     val resolvedRadioSong by playerConnection.radioResolvedSong.collectAsStateWithLifecycle()
     val resolvedRadioLibrarySong by playerConnection.resolvedRadioLibrarySong.collectAsStateWithLifecycle()
@@ -386,6 +393,15 @@ fun BottomSheetPlayer(
     val (storedDudu7PlayerPaneWeight) =
         rememberPreference(Dudu7PlayerPaneWeightKey, VehicleVariantConfig.defaultPlayerPaneWeight)
     val dudu7PlayerPaneWeight = Dudu7Layout.sanitizePlayerPaneWeight(storedDudu7PlayerPaneWeight)
+    val dudu7BackgroundBlurStrength by rememberPreference(Dudu7BackgroundBlurStrengthKey, defaultValue = 120)
+    val artworkBackgroundBlur =
+        if (VehicleVariantConfig.isDudu7) {
+            dudu7BackgroundBlurStrength.coerceIn(0, 200).dp
+        } else if (useDarkTheme) {
+            150.dp
+        } else {
+            100.dp
+        }
     val squigglySlider by rememberPreference(SquigglySliderKey, defaultValue = false)
 
     // Listen Together state (reactive)
@@ -468,15 +484,15 @@ fun BottomSheetPlayer(
     val defaultGradientColors = listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant)
     val fallbackColor = MaterialTheme.colorScheme.surface.toArgb()
 
-    val visualArtworkKey = "${effectiveVisualId.orEmpty()}|${effectiveArtworkUrl.orEmpty()}"
+    val visualArtworkKey = "${effectiveVisualId.orEmpty()}|${effectiveArtworkUrl.orEmpty()}|${effectiveArtworkFallbackUrl.orEmpty()}"
     val latestVisualArtworkKey by rememberUpdatedState(visualArtworkKey)
 
     LaunchedEffect(visualArtworkKey, playerBackground) {
         val needsArtworkPalette =
             playerBackground == PlayerBackgroundStyle.GRADIENT ||
                 (VehicleVariantConfig.isDudu7 && playerBackground == PlayerBackgroundStyle.BLUR)
-        val artworkUrl = effectiveArtworkUrl?.takeIf { it.isNotBlank() }
-        if (!needsArtworkPalette || artworkUrl == null) {
+        val artworkCandidates = listOfNotNull(effectiveArtworkUrl?.takeIf { it.isNotBlank() }, effectiveArtworkFallbackUrl).distinct()
+        if (!needsArtworkPalette || artworkCandidates.isEmpty()) {
             gradientColors = emptyList()
             return@LaunchedEffect
         }
@@ -488,17 +504,18 @@ fun BottomSheetPlayer(
             return@LaunchedEffect
         }
         withContext(Dispatchers.IO) {
-            val request =
-                ImageRequest
-                    .Builder(context)
-                    .data(artworkUrl)
-                    .size(100, 100)
-                    .allowHardware(false)
-                    .memoryCacheKey("gradient_${artworkCacheKey.hashCode()}")
-                    .build()
-
-            val result = runCatching { context.imageLoader.execute(request) }.getOrNull()
-            val bitmap = result?.image?.toBitmap()
+            val bitmap =
+                artworkCandidates.firstNotNullOfOrNull { artworkUrl ->
+                    val request =
+                        ImageRequest
+                            .Builder(context)
+                            .data(artworkUrl)
+                            .size(100, 100)
+                            .allowHardware(false)
+                            .memoryCacheKey("gradient_${artworkCacheKey.hashCode()}_${artworkUrl.hashCode()}")
+                            .build()
+                    runCatching { context.imageLoader.execute(request).image?.toBitmap() }.getOrNull()
+                }
             if (bitmap != null) {
                 val palette =
                     withContext(Dispatchers.Default) {
@@ -987,29 +1004,42 @@ fun BottomSheetPlayer(
                 when (playerBackground) {
                     PlayerBackgroundStyle.BLUR -> {
                         AnimatedContent(
-                            targetState = effectiveArtworkUrl,
+                            targetState = effectiveArtworkUrl to effectiveArtworkFallbackUrl,
                             transitionSpec = {
                                 fadeIn(tween(800)).togetherWith(fadeOut(tween(800)))
                             },
                             label = "blurBackground",
-                        ) { thumbnailUrl ->
-                            if (thumbnailUrl != null) {
+                        ) { (thumbnailUrl, fallbackUrl) ->
+                            if (thumbnailUrl != null || fallbackUrl != null) {
                                 Box(modifier = Modifier.alpha(backgroundAlpha)) {
-                                    AsyncImage(
-                                        model =
-                                            ImageRequest
-                                                .Builder(context)
-                                                .data(thumbnailUrl)
-                                                .size(100, 100)
-                                                .allowHardware(false)
-                                                .build(),
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier =
-                                            Modifier
-                                                .fillMaxSize()
-                                                .blur(if (useDarkTheme) 150.dp else 100.dp),
-                                    )
+                                    if (!fallbackUrl.isNullOrBlank()) {
+                                        AsyncImage(
+                                            model =
+                                                ImageRequest
+                                                    .Builder(context)
+                                                    .data(fallbackUrl)
+                                                    .size(100, 100)
+                                                    .allowHardware(false)
+                                                    .build(),
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize().blur(artworkBackgroundBlur),
+                                        )
+                                    }
+                                    if (!thumbnailUrl.isNullOrBlank()) {
+                                        AsyncImage(
+                                            model =
+                                                ImageRequest
+                                                    .Builder(context)
+                                                    .data(thumbnailUrl)
+                                                    .size(100, 100)
+                                                    .allowHardware(false)
+                                                    .build(),
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize().blur(artworkBackgroundBlur),
+                                        )
+                                    }
                                     Box(
                                         modifier =
                                             Modifier

@@ -590,8 +590,34 @@ private fun ThumbnailItem(
 
                 ThumbnailImage(
                     artworkUri = artworkUriToUse,
-                    cropArtwork = cropAlbumArt
+                    fallbackArtworkUri = stableRadioArtwork?.takeIf { it != artworkUriToUse },
+                    cropArtwork = cropAlbumArt,
                 )
+
+                val showStationLogoOverlay =
+                    VehicleVariantConfig.isDudu7 &&
+                        isLandscape &&
+                        com.metrolist.music.radio.isRadioMediaId(item.mediaId) &&
+                        item.mediaId == currentMediaId &&
+                        !currentMediaThumbnail.isNullOrBlank() &&
+                        !stableRadioArtwork.isNullOrBlank() &&
+                        currentMediaThumbnail != stableRadioArtwork
+                if (showStationLogoOverlay) {
+                    AsyncImage(
+                        model = stableRadioArtwork,
+                        contentDescription = "Senderlogo",
+                        contentScale = ContentScale.Fit,
+                        modifier =
+                            Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(10.dp)
+                                .size(56.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.White.copy(alpha = 0.78f))
+                                .padding(4.dp)
+                                .graphicsLayer { alpha = 0.86f },
+                    )
+                }
             }
             
             if (!VehicleVariantConfig.isDudu7) {
@@ -634,8 +660,9 @@ private fun HiddenThumbnailPlaceholder(
 @Composable
 private fun ThumbnailImage(
     artworkUri: String?,
+    fallbackArtworkUri: String? = null,
     cropArtwork: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Box(
         modifier = modifier
@@ -646,17 +673,34 @@ private fun ThumbnailImage(
             }
             .background(MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(artworkUri)
-                .memoryCachePolicy(CachePolicy.ENABLED)
-                .diskCachePolicy(CachePolicy.ENABLED)
-                .networkCachePolicy(CachePolicy.ENABLED)
-                .build(),
-            contentDescription = null,
-            contentScale = if (cropArtwork) ContentScale.Crop else ContentScale.Fit,
-            modifier = Modifier.fillMaxSize()
-        )
+        if (!fallbackArtworkUri.isNullOrBlank()) {
+            AsyncImage(
+                model =
+                    ImageRequest.Builder(LocalContext.current)
+                        .data(fallbackArtworkUri)
+                        .memoryCachePolicy(CachePolicy.ENABLED)
+                        .diskCachePolicy(CachePolicy.ENABLED)
+                        .networkCachePolicy(CachePolicy.ENABLED)
+                        .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        if (!artworkUri.isNullOrBlank()) {
+            AsyncImage(
+                model =
+                    ImageRequest.Builder(LocalContext.current)
+                        .data(artworkUri)
+                        .memoryCachePolicy(CachePolicy.ENABLED)
+                        .diskCachePolicy(CachePolicy.ENABLED)
+                        .networkCachePolicy(CachePolicy.ENABLED)
+                        .build(),
+                contentDescription = null,
+                contentScale = if (cropArtwork) ContentScale.Crop else ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 

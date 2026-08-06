@@ -2,6 +2,7 @@ package com.metrolist.music.ui.screens.radio
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,6 +31,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -94,6 +97,7 @@ fun PhysicalRadioScreen() {
     var section by remember { mutableStateOf(PhysicalRadioSection.FAVOURITES) }
     var frequencyInput by remember { mutableStateOf(FytPhysicalRadio.formatFrequency(state.frequency)) }
     var editingPreset by remember { mutableStateOf<FytPhysicalRadio.Preset?>(null) }
+    var deletingPreset by remember { mutableStateOf<FytPhysicalRadio.Preset?>(null) }
     var logoPickerPreset by remember { mutableStateOf<FytPhysicalRadio.Preset?>(null) }
 
     val orderedPresets = remember { mutableStateListOf<FytPhysicalRadio.Preset>() }
@@ -126,6 +130,14 @@ fun PhysicalRadioScreen() {
             FmPresetOrderStore.persist(context, orderedPresets)
         }
         wasDragging = isDragging
+    }
+
+    fun deletePreset(preset: FytPhysicalRadio.Preset) {
+        val remaining = orderedPresets.filterNot { it == preset }
+        orderedPresets.clear()
+        orderedPresets.addAll(remaining)
+        FmPresetOrderStore.persist(context, remaining)
+        radio.removePreset(preset)
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -202,19 +214,11 @@ fun PhysicalRadioScreen() {
                                     onNextAf = {
                                         if (isActive) {
                                             radio.tuneNextAlternativeFrequency(preset)
-                                        } else {
-                                            playerConnection?.pause()
-                                            radio.tunePreset(preset)
+                                            Toast.makeText(context, "Alternative Frequenz wird geprüft", Toast.LENGTH_SHORT).show()
                                         }
                                     },
                                     onEdit = { editingPreset = preset },
-                                    onDelete = {
-                                        val remaining = orderedPresets.filterNot { it == preset }
-                                        orderedPresets.clear()
-                                        orderedPresets.addAll(remaining)
-                                        FmPresetOrderStore.persist(context, remaining)
-                                        radio.removePreset(preset)
-                                    },
+                                    onDelete = { deletingPreset = preset },
                                     dragHandle = {
                                         IconButton(
                                             onClick = {},
@@ -264,6 +268,25 @@ fun PhysicalRadioScreen() {
                 PhysicalRadioSettingsPanel(radio)
             }
         }
+    }
+
+    deletingPreset?.let { preset ->
+        AlertDialog(
+            onDismissRequest = { deletingPreset = null },
+            title = { Text("FM-Favorit löschen?") },
+            text = { Text("${preset.name} wird aus den FM-Favoriten entfernt.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        deletePreset(preset)
+                        deletingPreset = null
+                    },
+                ) { Text("Löschen") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { deletingPreset = null }) { Text("Abbrechen") }
+            },
+        )
     }
 
     editingPreset?.let { preset ->
@@ -405,7 +428,6 @@ private fun FmFavouriteRow(
                 ).combinedClickable(
                     onClick = onPlay,
                     onDoubleClick = onNextAf,
-                    onLongClick = onEdit,
                 )
                 .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
@@ -446,8 +468,38 @@ private fun FmFavouriteRow(
                 modifier = Modifier.padding(end = 4.dp),
             )
         }
-        IconButton(onClick = onDelete) {
-            Icon(painterResource(R.drawable.delete), contentDescription = "Favorit löschen")
+        var menuExpanded by remember(preset.id) { mutableStateOf(false) }
+        Box {
+            IconButton(onClick = { menuExpanded = true }) {
+                Icon(painterResource(R.drawable.more_vert), contentDescription = "Senderaktionen")
+            }
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Bearbeiten") },
+                    leadingIcon = { Icon(painterResource(R.drawable.edit), contentDescription = null) },
+                    onClick = {
+                        menuExpanded = false
+                        onEdit()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Löschen", color = MaterialTheme.colorScheme.error) },
+                    leadingIcon = {
+                        Icon(
+                            painterResource(R.drawable.delete),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onDelete()
+                    },
+                )
+            }
         }
         dragHandle()
     }
