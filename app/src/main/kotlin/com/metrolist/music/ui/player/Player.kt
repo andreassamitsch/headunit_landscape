@@ -144,6 +144,7 @@ import com.metrolist.music.constants.CropAlbumArtKey
 import com.metrolist.music.constants.DarkModeKey
 import com.metrolist.music.constants.Dudu7PlayerPaneWeightKey
 import com.metrolist.music.constants.Dudu7BackgroundBlurStrengthKey
+import com.metrolist.music.constants.Dudu7BackgroundBottomScrimStrengthKey
 import com.metrolist.music.constants.Dudu7StartWithLyricsKey
 import com.metrolist.music.constants.HidePlayerThumbnailKey
 import com.metrolist.music.constants.HideStatusBarOnFullscreenKey
@@ -415,6 +416,10 @@ fun BottomSheetPlayer(
         rememberPreference(Dudu7PlayerPaneWeightKey, VehicleVariantConfig.defaultPlayerPaneWeight)
     val dudu7PlayerPaneWeight = Dudu7Layout.sanitizePlayerPaneWeight(storedDudu7PlayerPaneWeight)
     val dudu7BackgroundBlurStrength by rememberPreference(Dudu7BackgroundBlurStrengthKey, defaultValue = 120)
+    val dudu7BackgroundBottomScrimStrength by
+        rememberPreference(Dudu7BackgroundBottomScrimStrengthKey, defaultValue = 35)
+    val dudu7BackgroundBottomScrimAlpha =
+        dudu7BackgroundBottomScrimStrength.coerceIn(0, 100) / 100f * 0.80f
     val artworkBackgroundBlur =
         if (VehicleVariantConfig.isDudu7) {
             dudu7BackgroundBlurStrength.coerceIn(0, 200).dp
@@ -1113,6 +1118,31 @@ fun BottomSheetPlayer(
                     else -> {
                         PlayerBackgroundStyle.DEFAULT
                     }
+                }
+                if (
+                    VehicleVariantConfig.isDudu7 &&
+                    playerBackground == PlayerBackgroundStyle.BLUR &&
+                    dudu7BackgroundBlurStrength > 0 &&
+                    dudu7BackgroundBottomScrimAlpha > 0f
+                ) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .alpha(backgroundAlpha)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colorStops =
+                                            arrayOf(
+                                                0.00f to Color.Transparent,
+                                                0.48f to Color.Transparent,
+                                                0.72f to Color.Black.copy(alpha = dudu7BackgroundBottomScrimAlpha * 0.22f),
+                                                0.88f to Color.Black.copy(alpha = dudu7BackgroundBottomScrimAlpha * 0.58f),
+                                                1.00f to Color.Black.copy(alpha = dudu7BackgroundBottomScrimAlpha),
+                                            ),
+                                    ),
+                                ),
+                    )
                 }
             }
         },
@@ -2082,7 +2112,7 @@ fun BottomSheetPlayer(
                                     modifier = Modifier.animateContentSize(),
                                     isPlayerExpanded = isExpandedProvider,
                                     isLandscape = true,
-                                    landscapeHorizontalPadding = 2.dp,
+                                    landscapeHorizontalPadding = VehicleRadioPlayerMetrics.ArtworkHorizontalPadding,
                                     isListenTogetherGuest = isListenTogetherGuest,
                                     showRadioStationLogoOverlay = isWebRadio && radioHasTrackArtwork,
                                 )

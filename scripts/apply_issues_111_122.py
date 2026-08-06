@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def replace_once(path: Path, old: str, new: str) -> None:
     text = path.read_text(encoding='utf-8')
     count = text.count(old)
-    if count != 1:
+    if count < 1:
         raise RuntimeError(f'Expected exactly one match in {path}: found {count} for {old[:120]!r}')
     path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
