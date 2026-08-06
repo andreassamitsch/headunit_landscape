@@ -101,8 +101,8 @@ android {
         applicationId = applicationIdOverride ?: baseApplicationId
         minSdk = 26
         targetSdk = 36
-        versionCode = 1370070
-        versionName = "13.7.61"
+        versionCode = 1370071
+        versionName = "13.7.62"
         resValue("string", "app_name", appNameOverride ?: "Metrolist dudu7")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -380,6 +380,9 @@ dependencies {
     implementation(libs.ucrop)
 
     implementation(libs.shimmer)
+
+    // True background blur is only used by the Dudu7 vehicle layout.
+    "dudu7Implementation"(libs.haze)
 
     implementation(libs.media3)
     implementation(libs.media3.hls)

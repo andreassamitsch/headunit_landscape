@@ -19,8 +19,6 @@ import androidx.compose.foundation.layout.add
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
@@ -58,7 +56,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
@@ -74,11 +71,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -188,69 +182,6 @@ private fun FrostTextureOverlay(
     )
 }
 
-@Composable
-private fun GlassBackdropLayer(
-    artworkUrl: String?,
-    fallbackUrl: String?,
-    usesArtwork: Boolean,
-    usesGradient: Boolean,
-    gradientColors: List<Color>,
-    rootSize: IntSize,
-    paneOffset: IntOffset,
-    blurRadius: androidx.compose.ui.unit.Dp,
-    shape: RoundedCornerShape,
-    baseColor: Color,
-    modifier: Modifier = Modifier,
-) {
-    if (rootSize.width <= 0 || rootSize.height <= 0 || blurRadius <= 0.dp) return
-    val density = LocalDensity.current
-    val rootWidth = with(density) { rootSize.width.toDp() }
-    val rootHeight = with(density) { rootSize.height.toDp() }
-    Box(modifier = modifier.clip(shape)) {
-        Box(
-            modifier =
-                Modifier
-                    .requiredSize(rootWidth, rootHeight)
-                    .offset { IntOffset(-paneOffset.x, -paneOffset.y) }
-                    .blur(blurRadius),
-        ) {
-            when {
-                usesArtwork -> {
-                    if (!fallbackUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = fallbackUrl,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                    if (!artworkUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = artworkUrl,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.30f)))
-                }
-                usesGradient && gradientColors.isNotEmpty() -> {
-                    val colors =
-                        if (gradientColors.size >= 3) gradientColors.take(3)
-                        else listOf(gradientColors.first(), gradientColors.first().copy(alpha = 0.7f), Color.Black)
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .background(Brush.verticalGradient(colors))
-                            .background(Color.Black.copy(alpha = 0.20f)),
-                    )
-                }
-                else -> Box(Modifier.fillMaxSize().background(baseColor))
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VehicleLandscapeLayout(
@@ -265,11 +196,7 @@ fun VehicleLandscapeLayout(
     playerPlayButtonContainerColor: Color,
     playerPlayButtonContentColor: Color,
     playerSideButtonContentColor: Color,
-    backdropArtworkUrl: String?,
-    backdropFallbackUrl: String?,
-    backdropUsesArtwork: Boolean,
-    backdropUsesGradient: Boolean,
-    backdropGradientColors: List<Color>,
+    hazeState: VehicleHazeState,
     onPhysicalRadioVisualChanged: (Boolean, String, String?) -> Unit,
     thumbnailContent: @Composable () -> Unit,
     controlsContent: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
@@ -314,9 +241,6 @@ fun VehicleLandscapeLayout(
     val rightPaneScope = rememberCoroutineScope()
     val rightPaneScrollBridge = remember { RightPaneScrollBridge() }
     var rightPaneOriginInRoot by remember { mutableStateOf(Offset.Zero) }
-    var layoutOriginInRoot by remember { mutableStateOf(Offset.Zero) }
-    var layoutSize by remember { mutableStateOf(IntSize.Zero) }
-    var glassPaneOriginInRoot by remember { mutableStateOf(Offset.Zero) }
 
     LaunchedEffect(
         physicalRadioState.isActive,
@@ -597,14 +521,7 @@ fun VehicleLandscapeLayout(
     val glassShape = RoundedCornerShape(24.dp)
 
     Box(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .clipToBounds()
-                .onGloballyPositioned { coordinates ->
-                    layoutOriginInRoot = coordinates.positionInRoot()
-                    layoutSize = coordinates.size
-                },
+        modifier = Modifier.fillMaxSize().clipToBounds(),
     ) {
         Row(
             modifier =
@@ -674,31 +591,14 @@ fun VehicleLandscapeLayout(
                         .weight(1f - safePlayerWeight)
                         .fillMaxSize()
                         .padding(horizontal = 8.dp, vertical = 4.dp)
-                        .onGloballyPositioned { coordinates ->
-                            glassPaneOriginInRoot = coordinates.positionInRoot()
-                        },
+                        .clip(if (frostedIceEnabled) glassShape else RoundedCornerShape(12.dp))
+                        .vehicleHazeEffect(
+                            state = hazeState,
+                            enabled = frostedIceEnabled && frostedBlurStrength > 0,
+                            blurRadius = glassBlur,
+                        ),
             ) {
                 Box(Modifier.fillMaxSize()) {
-                    if (frostedIceEnabled && frostedBlurStrength > 0) {
-                        val relativePaneOffset = glassPaneOriginInRoot - layoutOriginInRoot
-                        GlassBackdropLayer(
-                            artworkUrl = backdropArtworkUrl,
-                            fallbackUrl = backdropFallbackUrl,
-                            usesArtwork = backdropUsesArtwork,
-                            usesGradient = backdropUsesGradient,
-                            gradientColors = backdropGradientColors,
-                            rootSize = layoutSize,
-                            paneOffset =
-                                IntOffset(
-                                    relativePaneOffset.x.toInt(),
-                                    relativePaneOffset.y.toInt(),
-                                ),
-                            blurRadius = glassBlur,
-                            shape = glassShape,
-                            baseColor = baseColors.surface,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
                     if (frostedIceEnabled && glassAlpha > 0f) {
                         Box(
                             Modifier

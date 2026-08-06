@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
@@ -29,6 +30,15 @@ fun VehicleLandscapeLayout(
     showInlineLyrics: Boolean,
     playerPaneWeight: Float,
     onToggleLyrics: () -> Unit,
+    tabContentColor: Color,
+    tabGlassColor: Color,
+    playerTextColor: Color,
+    playerSecondaryTextColor: Color,
+    playerPlayButtonContainerColor: Color,
+    playerPlayButtonContentColor: Color,
+    playerSideButtonContentColor: Color,
+    hazeState: VehicleHazeState,
+    onPhysicalRadioVisualChanged: (Boolean, String, String?) -> Unit,
     thumbnailContent: @Composable () -> Unit,
     controlsContent: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
     queueContent: @Composable () -> Unit,
