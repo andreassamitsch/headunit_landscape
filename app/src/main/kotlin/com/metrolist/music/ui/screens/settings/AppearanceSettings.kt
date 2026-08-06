@@ -68,6 +68,7 @@ import com.metrolist.music.constants.Dudu7FrostedBlurStrengthKey
 import com.metrolist.music.constants.Dudu7FrostTextureEnabledKey
 import com.metrolist.music.constants.Dudu7FrostTextureStrengthKey
 import com.metrolist.music.constants.Dudu7BackgroundBlurStrengthKey
+import com.metrolist.music.constants.Dudu7BackgroundBottomScrimStrengthKey
 import com.metrolist.music.constants.EnableDynamicIconKey
 import com.metrolist.music.constants.EnableHighRefreshRateKey
 import com.metrolist.music.constants.EnableLandscapeScalingKey
@@ -189,6 +190,11 @@ fun AppearanceSettings(
         rememberPreference(
             Dudu7BackgroundBlurStrengthKey,
             defaultValue = 120,
+        )
+    val (dudu7BackgroundBottomScrimStrength, onDudu7BackgroundBottomScrimStrengthChange) =
+        rememberPreference(
+            Dudu7BackgroundBottomScrimStrengthKey,
+            defaultValue = 35,
         )
     val (selectedThemeColorInt) =
         rememberPreference(
@@ -1083,6 +1089,32 @@ fun AppearanceSettings(
                                     onValueChange = { onDudu7BackgroundBlurStrengthChange(it.roundToInt()) },
                                     valueRange = 0f..200f,
                                     steps = 199,
+                                    modifier = Modifier.fillMaxWidth(0.42f),
+                                )
+                            },
+                            onClick = {},
+                        ),
+                    )
+                    add(
+                        Material3SettingsItem(
+                            icon = painterResource(R.drawable.palette),
+                            title = { Text("Unteren Hintergrund abdunkeln") },
+                            description = {
+                                Text(
+                                    if (dudu7BackgroundBlurStrength > 0) {
+                                        "${dudu7BackgroundBottomScrimStrength}% · weicher Verlauf"
+                                    } else {
+                                        "Wirkt bei aktivierter Hintergrund-Unschärfe"
+                                    },
+                                )
+                            },
+                            trailingContent = {
+                                Slider(
+                                    value = dudu7BackgroundBottomScrimStrength.toFloat(),
+                                    onValueChange = { onDudu7BackgroundBottomScrimStrengthChange(it.roundToInt()) },
+                                    valueRange = 0f..100f,
+                                    steps = 99,
+                                    enabled = dudu7BackgroundBlurStrength > 0,
                                     modifier = Modifier.fillMaxWidth(0.42f),
                                 )
                             },
