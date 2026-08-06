@@ -1,0 +1,58 @@
+name: Inspect Issues 111-116 Radio UI
+
+on:
+  pull_request:
+    branches: [agent/issue-109-fm-player-adaptive-colors]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: false
+
+      - name: Collect relevant source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inspection
+          {
+            echo '=== RADIO / PLAYER / SETTINGS FILES ==='
+            find app/src -type f \( \
+              -iname '*Radio*.kt' -o \
+              -iname '*Player*.kt' -o \
+              -iname '*Appearance*.kt' -o \
+              -iname '*Settings*.kt' -o \
+              -iname '*Constants*.kt' \
+            \) -print | sort
+            echo
+            echo '=== RELEVANT IDENTIFIERS ==='
+            grep -RInE 'FmFavouriteRow|FmScanResultRow|RadioStation|WebRadio|combinedClickable|DropdownMenu|more_vert|delete|blur\(|PlayerBackground|thumbnailUrl|logoUrl|alternativeFrequencies|doubleTap|onDoubleClick|requestRightPaneNavigation' \
+              app/src/main app/src/dudu7 --include='*.kt' || true
+          } > inspection/report.txt
+
+          for dir in \
+            app/src/dudu7/kotlin/com/metrolist/music \
+            app/src/main/kotlin/com/metrolist/music/ui/screens/radio \
+            app/src/main/kotlin/com/metrolist/music/ui/player \
+            app/src/main/kotlin/com/metrolist/music/ui/screens/settings \
+            app/src/main/kotlin/com/metrolist/music/constants \
+            app/src/main/kotlin/com/metrolist/music/radio; do
+            if [ -d "$dir" ]; then
+              mkdir -p "inspection/$dir"
+              cp -R "$dir"/. "inspection/$dir/"
+            fi
+          done
+          cp app/build.gradle.kts inspection/app-build.gradle.kts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: issues-111-116-source
+          path: inspection/
+          retention-days: 2

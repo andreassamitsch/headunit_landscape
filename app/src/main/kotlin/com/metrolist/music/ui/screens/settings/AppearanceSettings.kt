@@ -67,6 +67,7 @@ import com.metrolist.music.constants.Dudu7FrostedGlassStrengthKey
 import com.metrolist.music.constants.Dudu7FrostedBlurStrengthKey
 import com.metrolist.music.constants.Dudu7FrostTextureEnabledKey
 import com.metrolist.music.constants.Dudu7FrostTextureStrengthKey
+import com.metrolist.music.constants.Dudu7BackgroundBlurStrengthKey
 import com.metrolist.music.constants.EnableDynamicIconKey
 import com.metrolist.music.constants.EnableHighRefreshRateKey
 import com.metrolist.music.constants.EnableLandscapeScalingKey
@@ -183,6 +184,11 @@ fun AppearanceSettings(
         rememberPreference(
             Dudu7FrostTextureStrengthKey,
             defaultValue = 35,
+        )
+    val (dudu7BackgroundBlurStrength, onDudu7BackgroundBlurStrengthChange) =
+        rememberPreference(
+            Dudu7BackgroundBlurStrengthKey,
+            defaultValue = 120,
         )
     val (selectedThemeColorInt) =
         rememberPreference(
@@ -1064,6 +1070,23 @@ fun AppearanceSettings(
                                 )
                             },
                             onClick = { onDudu7FrostedIceChange(!dudu7FrostedIce) },
+                        ),
+                    )
+                    add(
+                        Material3SettingsItem(
+                            icon = painterResource(R.drawable.palette),
+                            title = { Text("Dudu7-Hintergrund-Unschärfe") },
+                            description = { Text("${dudu7BackgroundBlurStrength} dp · unabhängig vom Glas") },
+                            trailingContent = {
+                                Slider(
+                                    value = dudu7BackgroundBlurStrength.toFloat(),
+                                    onValueChange = { onDudu7BackgroundBlurStrengthChange(it.roundToInt()) },
+                                    valueRange = 0f..200f,
+                                    steps = 19,
+                                    modifier = Modifier.fillMaxWidth(0.42f),
+                                )
+                            },
+                            onClick = {},
                         ),
                     )
                     if (dudu7FrostedIce) {

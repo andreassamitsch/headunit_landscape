@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -181,7 +183,7 @@ fun PhysicalRadioPlayerPane(
     val displayArtist =
         nowPlaying.artist?.takeIf { it.isNotBlank() }
             ?: if (displayTitle == state.displayStation) {
-                "${FytPhysicalRadio.formatFrequency(state.frequency)} MHz • Antenne"
+                "${FytPhysicalRadio.formatFrequency(state.frequency)} MHz"
             } else {
                 state.displayStation
             }
@@ -189,14 +191,14 @@ fun PhysicalRadioPlayerPane(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
-        modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp),
     ) {
         BoxWithConstraints(
             contentAlignment = Alignment.Center,
             modifier = Modifier.weight(1f).fillMaxWidth(),
         ) {
             // Match the large WebRadio artwork footprint instead of the old 190 dp FM tile.
-            val artworkSize = minOf(maxWidth, maxHeight).coerceAtMost(320.dp)
+            val artworkSize = minOf(maxWidth, maxHeight).coerceAtMost(340.dp)
             if (!nowPlaying.coverUrl.isNullOrBlank()) {
                 AsyncImage(
                     model = nowPlaying.coverUrl,
@@ -209,6 +211,27 @@ fun PhysicalRadioPlayerPane(
                             .size(artworkSize)
                             .clip(RoundedCornerShape(26.dp)),
                 )
+                Box(
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(10.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.White.copy(alpha = 0.78f))
+                            .padding(3.dp)
+                            .graphicsLayer { alpha = 0.86f },
+                ) {
+                    FmStationArtwork(
+                        stationName = state.displayStation,
+                        frequency = state.frequency,
+                        pi = state.pi,
+                        ecc = state.ecc,
+                        size = 52.dp,
+                        allFrequencies =
+                            (currentPreset?.let(FytPhysicalRadio::presetFrequencies).orEmpty() +
+                                state.alternativeFrequencies + state.frequency),
+                    )
+                }
             } else {
                 FmStationArtwork(
                     stationName = state.displayStation,
@@ -331,12 +354,11 @@ fun PhysicalRadioPlayerPane(
             }
         }
 
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
 
-        Row(
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth(),
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
         ) {
             IconButton(
                 onClick = {
@@ -350,6 +372,7 @@ fun PhysicalRadioPlayerPane(
                     }
                 },
                 enabled = state.isActive,
+                modifier = Modifier.align(Alignment.CenterStart),
             ) {
                 Icon(
                     painter = painterResource(R.drawable.radio),
@@ -359,96 +382,70 @@ fun PhysicalRadioPlayerPane(
                         } else {
                             "FM-Sender als Favorit speichern"
                         },
-                    tint =
-                        if (isStationFavourite) {
-                            actionColor
-                        } else {
-                            sideButtonContentColor
-                        },
+                    tint = if (isStationFavourite) actionColor else sideButtonContentColor,
                 )
             }
+
             Text(
                 text = if (state.ta && state.taEnabled) "●  TA VERKEHR" else "●  FM LIVE",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color =
-                    if (state.ta && state.taEnabled) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        actionColor
-                    },
+                color = if (state.ta && state.taEnabled) MaterialTheme.colorScheme.error else actionColor,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.align(Alignment.Center),
             )
-            IconButton(
-                onClick = {
-                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-                        PackageManager.PERMISSION_GRANTED
-                    ) {
-                        beginFmRecognition()
-                    } else {
-                        recordPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                    }
-                },
-                enabled = state.isActive && !recognitionInProgress,
-            ) {
-                if (recognitionInProgress) {
-                    CircularProgressIndicator(color = actionColor, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-                } else {
+
+            if (resolvedSong != null && playerConnection != null) {
+                IconButton(
+                    onClick = {
+                        val matchedSong = resolvedSong ?: return@IconButton
+                        val connection = playerConnection ?: return@IconButton
+                        val currentLibrarySong = librarySong
+                        connection.database.transaction {
+                            val updated: SongEntity
+                            if (currentLibrarySong == null) {
+                                insert(matchedSong.toMediaMetadata(), SongEntity::toggleLike)
+                                updated = matchedSong.toMediaMetadata().toSongEntity().toggleLike()
+                            } else {
+                                updated = currentLibrarySong.song.toggleLike()
+                                update(updated)
+                            }
+                            syncUtils.likeSong(updated)
+                        }
+                    },
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                ) {
                     Icon(
-                        painter = painterResource(R.drawable.search),
-                        contentDescription = "FM-Musik erkennen",
-                        tint = sideButtonContentColor,
+                        painter = painterResource(if (isSongLiked) R.drawable.favorite else R.drawable.favorite_border),
+                        contentDescription = if (isSongLiked) "Song-Like entfernen" else "Song auf YouTube Music liken",
+                        tint = if (isSongLiked) actionColor else sideButtonContentColor,
                     )
                 }
-            }
-            IconButton(
-                onClick = {
-                    val matchedSong = resolvedSong ?: return@IconButton
-                    val connection = playerConnection ?: return@IconButton
-                    val currentLibrarySong = librarySong
-                    connection.database.transaction {
-                        val updated: SongEntity
-                        if (currentLibrarySong == null) {
-                            insert(matchedSong.toMediaMetadata(), SongEntity::toggleLike)
-                            updated = matchedSong.toMediaMetadata().toSongEntity().toggleLike()
+            } else {
+                IconButton(
+                    onClick = {
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                            PackageManager.PERMISSION_GRANTED
+                        ) {
+                            beginFmRecognition()
                         } else {
-                            updated = currentLibrarySong.song.toggleLike()
-                            update(updated)
+                            recordPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                         }
-                        syncUtils.likeSong(updated)
+                    },
+                    enabled = state.isActive && !recognitionInProgress,
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                ) {
+                    if (recognitionInProgress) {
+                        CircularProgressIndicator(color = actionColor, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+                    } else {
+                        Icon(
+                            painter = painterResource(R.drawable.search),
+                            contentDescription = "FM-Musik erkennen",
+                            tint = sideButtonContentColor,
+                        )
                     }
-                },
-                enabled = resolvedSong != null && playerConnection != null,
-            ) {
-                Icon(
-                    painter = painterResource(if (isSongLiked) R.drawable.favorite else R.drawable.favorite_border),
-                    contentDescription = if (isSongLiked) "Song-Like entfernen" else "Song auf YouTube Music liken",
-                    tint =
-                        if (isSongLiked) {
-                            actionColor
-                        } else {
-                            sideButtonContentColor
-                        },
-                )
+                }
             }
         }
-
-        Text(
-            text =
-                buildString {
-                    append("${state.displayStation} • RSSI ${state.rssi}")
-                    state.stereo?.let { append(if (it) " • Stereo" else " • Mono") }
-                    if (state.pi != 0) append(" • PI ${state.pi.toString(16).uppercase()}")
-                    val pty = FytPhysicalRadio.ptyLabel(state.pty)
-                    if (pty.isNotBlank()) append(" • $pty")
-                    if (state.afEnabled) append(" • AF")
-                    if (state.tp) append(" • TP")
-                    if (state.ta && state.taEnabled) append(" • TA")
-                },
-            style = MaterialTheme.typography.labelLarge,
-            color = secondaryTextColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Spacer(Modifier.height(5.dp))
     }
 }
