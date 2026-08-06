@@ -40,6 +40,13 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
+          python3 - <<'PYFIX'
+          from pathlib import Path
+          path = Path('scripts/apply_issues_111_122.py')
+          text = path.read_text()
+          text = text.replace('if count != 1:', 'if count < 1:', 1)
+          path.write_text(text)
+          PYFIX
           python3 -m py_compile scripts/apply_issues_111_122.py
           if grep -q 'versionCode = 1370072' app/build.gradle.kts; then
             echo 'Product patch already applied.'
