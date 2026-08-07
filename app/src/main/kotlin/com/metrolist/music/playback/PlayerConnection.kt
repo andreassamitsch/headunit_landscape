@@ -182,15 +182,6 @@ class PlayerConnection(
                 }
             }
         }
-        scope.launch {
-            radioStationStore.stations.collect {
-                if (isRadioMediaId(getPlayerOrNull()?.currentMediaItem?.mediaId)) {
-                    val stableMetadata = withStoredRadioArtwork(mediaMetadata.value)
-                    if (stableMetadata != mediaMetadata.value) mediaMetadata.value = stableMetadata
-                    updateCanSkipPreviousAndNext()
-                }
-            }
-        }
 
         Timber.tag(TAG).d("PlayerConnection state flows initialized successfully")
     }
@@ -291,6 +282,18 @@ class PlayerConnection(
     private var attachedPlayer: Player? = null
 
     init {
+        // All StateFlows used by this collector are initialized above this point.
+        // Keep it here so an immediate StateFlow emission during service reconnect
+        // cannot observe a partially constructed PlayerConnection.
+        scope.launch {
+            radioStationStore.stations.collect {
+                if (isRadioMediaId(getPlayerOrNull()?.currentMediaItem?.mediaId)) {
+                    val stableMetadata = withStoredRadioArtwork(mediaMetadata.value)
+                    if (stableMetadata != mediaMetadata.value) mediaMetadata.value = stableMetadata
+                    updateCanSkipPreviousAndNext()
+                }
+            }
+        }
         scope.launch {
             service.playerFlow.collect { newPlayer ->
                 if (newPlayer != null && newPlayer != attachedPlayer) {
