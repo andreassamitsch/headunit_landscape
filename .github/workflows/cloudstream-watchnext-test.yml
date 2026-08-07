@@ -31,59 +31,45 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path('cloudstream/app/src/main/java/com/lagradost/cloudstream3/utils/AppContextUtils.kt')
           text = path.read_text()
 
-          old_signature = '''    private fun buildWatchNextProgramUri(
-                  context: Context,
-                  card: DataStoreHelper.ResumeWatchingResult,
-                  resumeWatching: DownloadObjects.ResumeWatching?
-              ): WatchNextProgram {'''
-          new_signature = '''    private fun buildWatchNextProgramUri(
-                  context: Context,
-                  card: DataStoreHelper.ResumeWatchingResult,
-                  resumeWatching: DownloadObjects.ResumeWatching?,
-                  internalProviderId: String
-              ): WatchNextProgram {'''
-
-          # Source indentation can change without affecting semantics; use exact smaller replacements below.
           old_param = '''        resumeWatching: DownloadObjects.ResumeWatching?\n    ): WatchNextProgram {'''
           new_param = '''        resumeWatching: DownloadObjects.ResumeWatching?,\n        internalProviderId: String\n    ): WatchNextProgram {'''
-          assert old_param in text, 'buildWatchNextProgramUri signature not found'
+          assert text.count(old_param) == 1, 'buildWatchNextProgramUri signature not found exactly once'
           text = text.replace(old_param, new_param, 1)
 
           old_provider_id = '.setInternalProviderId(card.url)'
-          assert old_provider_id in text, 'old internal provider id assignment not found'
+          assert text.count(old_provider_id) == 1, 'old internal provider id assignment not found exactly once'
           text = text.replace(old_provider_id, '.setInternalProviderId(internalProviderId)', 1)
 
-          old_call = '''                    val nextProgram = buildWatchNextProgramUri(
-                          context,
-                          episodeInfo,
-                          timeStampHashMap[episodeInfo.id]
-                      )'''
-          new_call = '''                    val resumeWatching = episodeInfo.parentId?.let { timeStampHashMap[it] }
-                      val nextProgram = buildWatchNextProgramUri(
-                          context,
-                          episodeInfo,
-                          resumeWatching,
-                          customId
-                      )'''
-          assert old_call in text, 'old Watch Next call not found'
-          text = text.replace(old_call, new_call, 1)
+          pattern = re.compile(
+              r'(val nextProgram = buildWatchNextProgramUri\(\s*context,\s*episodeInfo,\s*)'
+              r'timeStampHashMap\[episodeInfo\.id\]'
+              r'(\s*\))',
+              re.MULTILINE,
+          )
+          replacement = (
+              r'\1episodeInfo.parentId?.let { timeStampHashMap[it] },\n'
+              r'                        customId\2'
+          )
+          text, count = pattern.subn(replacement, text, count=1)
+          assert count == 1, 'Watch Next call not found exactly once'
 
           path.write_text(text)
 
           assert 'timeStampHashMap[episodeInfo.id]' not in text
           assert '.setInternalProviderId(internalProviderId)' in text
           assert 'episodeInfo.parentId?.let { timeStampHashMap[it] }' in text
-          assert 'resumeWatching,\n                        customId' in text
+          assert 'customId' in text
           print('Watch Next patch applied and source assertions passed.')
           PY
 
       - name: Show patch
         working-directory: cloudstream
-        run: git diff -- app/src/main/java/com/lagradost/cloudstream3/utils/AppContextUtils.kt
+        run: git diff --check && git diff -- app/src/main/java/com/lagradost/cloudstream3/utils/AppContextUtils.kt
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
