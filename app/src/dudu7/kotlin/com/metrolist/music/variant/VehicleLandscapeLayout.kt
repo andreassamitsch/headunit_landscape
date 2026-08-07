@@ -3,6 +3,7 @@ package com.metrolist.music.variant
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -65,12 +66,15 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
@@ -112,6 +116,7 @@ import java.text.Normalizer
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 private const val VEHICLE_QUEUE_ROUTE = "vehicle_queue"
 private const val VEHICLE_WEBRADIO_ROUTE = "vehicle_webradio"
@@ -182,6 +187,47 @@ private fun FrostTextureOverlay(
     )
 }
 
+
+@Composable
+private fun VehicleAdaptivePaneLayout(
+    isPortrait: Boolean,
+    playerFraction: Float,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Layout(
+        content = content,
+        modifier = modifier,
+    ) { measurables, constraints ->
+        require(measurables.size == 2) {
+            "VehicleAdaptivePaneLayout expects exactly player and tab panes"
+        }
+        val width = constraints.maxWidth
+        val height = constraints.maxHeight
+        val fraction = playerFraction.coerceIn(0.35f, 0.65f)
+
+        if (isPortrait) {
+            val playerHeight = (height * fraction).roundToInt().coerceIn(0, height)
+            val contentHeight = height - playerHeight
+            val playerPlaceable = measurables[0].measure(Constraints.fixed(width, playerHeight))
+            val contentPlaceable = measurables[1].measure(Constraints.fixed(width, contentHeight))
+            layout(width, height) {
+                playerPlaceable.placeRelative(0, 0)
+                contentPlaceable.placeRelative(0, playerHeight)
+            }
+        } else {
+            val playerWidth = (width * fraction).roundToInt().coerceIn(0, width)
+            val contentWidth = width - playerWidth
+            val playerPlaceable = measurables[0].measure(Constraints.fixed(playerWidth, height))
+            val contentPlaceable = measurables[1].measure(Constraints.fixed(contentWidth, height))
+            layout(width, height) {
+                playerPlaceable.placeRelative(0, 0)
+                contentPlaceable.placeRelative(playerWidth, 0)
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VehicleLandscapeLayout(
@@ -212,6 +258,7 @@ fun VehicleLandscapeLayout(
     val verticalWindowInsets =
         WindowInsets(left = 0.dp, top = verticalPaddingDp, right = 0.dp, bottom = verticalPaddingDp)
     val safePlayerWeight = 0.5f
+    val isPortrait = LocalConfiguration.current.orientation == Configuration.ORIENTATION_PORTRAIT
 
     val context = LocalContext.current
     val initialTab =
@@ -523,7 +570,9 @@ fun VehicleLandscapeLayout(
     Box(
         modifier = Modifier.fillMaxSize().clipToBounds(),
     ) {
-        Row(
+        VehicleAdaptivePaneLayout(
+            isPortrait = isPortrait,
+            playerFraction = safePlayerWeight,
             modifier =
                 Modifier
                     .windowInsetsPadding(
@@ -535,7 +584,6 @@ fun VehicleLandscapeLayout(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier =
                 Modifier
-                    .weight(safePlayerWeight)
                     .fillMaxSize()
                     .padding(horizontal = 12.dp, vertical = 4.dp)
                     .nestedScroll(state.preUpPostDownNestedScrollConnection),
@@ -588,7 +636,6 @@ fun VehicleLandscapeLayout(
                 shadowElevation = 0.dp,
                 modifier =
                     Modifier
-                        .weight(1f - safePlayerWeight)
                         .fillMaxSize()
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                         .clip(if (frostedIceEnabled) glassShape else RoundedCornerShape(12.dp))
