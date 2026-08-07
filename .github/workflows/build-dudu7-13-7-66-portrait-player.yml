@@ -71,6 +71,7 @@ jobs:
           grep -q 'VehicleLandscapeLayout(' "$PLAYER"
           test "$(grep -c 'when (LocalConfiguration.current.orientation)' "$PLAYER")" -eq 0
           test -f app/src/test/kotlin/com/metrolist/music/ui/player/Dudu7PlayerLayoutSelectionTest.kt
+          test -f scripts/run_issue_128_portrait_emulator.sh
 
       - name: Compile standard flavor
         run: |
@@ -139,51 +140,7 @@ jobs:
           target: google_apis
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: |
-            set -eu
-            adb install -r artifacts/Metrolist-dudu7-13.7.66-x86_64-test.apk
-            adb shell pm grant com.metrolist.music.dudu7.debug android.permission.POST_NOTIFICATIONS || true
-            adb shell settings put system accelerometer_rotation 0
-            adb shell settings put system user_rotation 0
-            adb shell wm size 1080x1920
-            adb shell wm density 420
-            adb shell am force-stop com.metrolist.music.dudu7.debug
-            adb shell am start -W -n com.metrolist.music.dudu7.debug/com.metrolist.music.MainActivity
-            sleep 15
-            for attempt in 1 2 3; do
-              adb shell uiautomator dump /sdcard/window.xml || true
-              adb pull /sdcard/window.xml artifacts/portrait-ui.xml || true
-              if grep -q 'text="WebRadio"' artifacts/portrait-ui.xml && grep -q 'text="FM"' artifacts/portrait-ui.xml; then
-                break
-              fi
-              adb shell input keyevent 4 || true
-              sleep 4
-            done
-            adb exec-out screencap -p > artifacts/portrait-emulator.png
-            adb shell dumpsys window displays > artifacts/window-displays.txt
-            adb shell dumpsys activity top > artifacts/activity-top.txt
-            python3 - <<'PY'
-            import re
-            import xml.etree.ElementTree as ET
-            from pathlib import Path
-            xml = Path('artifacts/portrait-ui.xml')
-            if not xml.exists():
-                raise SystemExit('portrait UI hierarchy missing')
-            root = ET.parse(xml).getroot()
-            found = {}
-            for node in root.iter('node'):
-                text = node.attrib.get('text', '')
-                if text in {'WebRadio', 'FM'}:
-                    m = re.match(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', node.attrib.get('bounds',''))
-                    if m:
-                        found[text] = tuple(map(int, m.groups()))
-            print('portrait tab bounds:', found)
-            if 'WebRadio' not in found or 'FM' not in found:
-                raise SystemExit('Dudu7 tabs not present in portrait UI')
-            for name, (_, y1, _, y2) in found.items():
-                if not (780 <= y1 <= 1250):
-                    raise SystemExit(f'{name} is not in lower 50% region: y={y1}..{y2}')
-            PY
+          script: bash scripts/run_issue_128_portrait_emulator.sh
 
       - name: Upload verified APK and emulator evidence
         if: always()
@@ -200,8 +157,11 @@ jobs:
             artifacts/build.log
             artifacts/emulator-build.log
             artifacts/emulator-apk-contents.txt
+            artifacts/portrait-emulator-initial.png
+            artifacts/portrait-ui-initial.xml
             artifacts/portrait-emulator.png
             artifacts/portrait-ui.xml
             artifacts/window-displays.txt
             artifacts/activity-top.txt
+            artifacts/portrait-logcat.txt
           retention-days: 14
