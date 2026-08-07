@@ -1,0 +1,167 @@
+name: Build Dudu7 13.7.65 portrait resize fix
+
+on:
+  pull_request:
+    branches: [agent/issue-124-dudu7-portrait]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  implement-test-build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-cleanup: on-success
+
+      - name: Verify Android SDK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          test -n "${ANDROID_HOME:-}"
+          test -d "$ANDROID_HOME/platform-tools"
+          test -d "$ANDROID_HOME/build-tools"
+
+      - name: Apply Issues 124 and 126 follow-up
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile scripts/apply_issues_124_126_portrait_resize_fix.py
+          if grep -q 'versionCode = 1370074' app/build.gradle.kts; then
+            echo '13.7.65 product patch already applied.'
+          else
+            python3 scripts/apply_issues_124_126_portrait_resize_fix.py
+          fi
+          git diff --check
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add app scripts/apply_issues_124_126_portrait_resize_fix.py
+            git commit -m "Fix Dudu7 portrait rotation and reconnect crash [skip ci]"
+            BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+            git push origin HEAD:"$BRANCH"
+          fi
+
+      - name: Verify source invariants
+        shell: bash
+        run: |
+          set -euxo pipefail
+          LAYOUT=app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+          DUDU7_MANIFEST=app/src/dudu7/AndroidManifest.xml
+          PLAYER=app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt
+
+          grep -q 'versionCode = 1370074' app/build.gradle.kts
+          grep -q 'versionName = "13.7.65"' app/build.gradle.kts
+
+          ! grep -q 'android:screenOrientation="landscape"' "$DUDU7_MANIFEST"
+          grep -q 'android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout"' "$DUDU7_MANIFEST"
+
+          grep -q 'import androidx.compose.ui.platform.LocalWindowInfo' "$LAYOUT"
+          ! grep -q 'LocalConfiguration.current.orientation' "$LAYOUT"
+          ! grep -q 'Configuration.ORIENTATION_PORTRAIT' "$LAYOUT"
+          grep -q 'val windowSize = LocalWindowInfo.current.containerDpSize' "$LAYOUT"
+          grep -q 'val isPortrait = windowSize.height > windowSize.width' "$LAYOUT"
+          grep -q 'private fun VehicleAdaptivePaneLayout' "$LAYOUT"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt').read_text()
+          media = text.index('val mediaMetadata = MutableStateFlow')
+          prev = text.index('val canSkipPrevious = MutableStateFlow')
+          nxt = text.index('val canSkipNext = MutableStateFlow')
+          collector = text.index('radioStationStore.stations.collect')
+          assert text.count('radioStationStore.stations.collect') == 1
+          assert media < collector, (media, collector)
+          assert prev < collector, (prev, collector)
+          assert nxt < collector, (nxt, collector)
+          print('PlayerConnection collector starts only after dependent StateFlows are initialized')
+          PY
+
+      - name: Verify merged Dudu7 manifest
+        shell: bash
+        run: |
+          set -euxo pipefail
+          chmod +x gradlew
+          ./gradlew --console=plain :app:processGmsDudu7DebugMainManifest --no-daemon --stacktrace
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          android = '{http://schemas.android.com/apk/res/android}'
+          candidates = list(Path('app/build/intermediates').rglob('AndroidManifest.xml'))
+          candidates = [p for p in candidates if 'gmsDudu7Debug' in str(p)]
+          if not candidates:
+              raise SystemExit('No merged GMS Dudu7 manifest found')
+          checked = 0
+          found_main = False
+          for p in candidates:
+              try:
+                  root = ET.parse(p).getroot()
+              except ET.ParseError:
+                  continue
+              for activity in root.findall('.//activity'):
+                  name = activity.attrib.get(android + 'name', '')
+                  if name in {'.MainActivity', 'com.metrolist.music.MainActivity'}:
+                      found_main = True
+                      checked += 1
+                      orientation = activity.attrib.get(android + 'screenOrientation')
+                      if orientation == 'landscape':
+                          raise SystemExit(f'MainActivity still landscape-locked in merged manifest: {p}')
+          if not found_main:
+              raise SystemExit('MainActivity not found in merged Dudu7 manifest candidates')
+          print(f'Checked MainActivity in {checked} merged manifest(s): no landscape lock')
+          PY
+
+      - name: Compile standard flavor
+        run: |
+          ./gradlew --console=plain :app:compileGmsStandardDebugKotlin --no-daemon --stacktrace
+
+      - name: Dudu7 unit tests
+        run: |
+          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+
+      - name: Build and verify APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace | tee artifacts/build.log
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          cp "$APK" artifacts/Metrolist-dudu7-13.7.65.apk
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$BUILD_TOOLS/aapt" dump badging artifacts/Metrolist-dudu7-13.7.65.apk > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs artifacts/Metrolist-dudu7-13.7.65.apk > artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370074'" artifacts/apk-badging.txt
+          grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
+          unzip -l artifacts/Metrolist-dudu7-13.7.65.apk > artifacts/apk-contents.txt
+          grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
+          grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
+          stat -c '%s' artifacts/Metrolist-dudu7-13.7.65.apk > artifacts/apk-size.txt
+          sha256sum artifacts/Metrolist-dudu7-13.7.65.apk > artifacts/Metrolist-dudu7-13.7.65.apk.sha256
+
+      - name: Upload verified APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.65-apk
+          path: |
+            artifacts/Metrolist-dudu7-13.7.65.apk
+            artifacts/Metrolist-dudu7-13.7.65.apk.sha256
+            artifacts/apk-size.txt
+            artifacts/apk-badging.txt
+            artifacts/apk-signature.txt
+            artifacts/apk-contents.txt
+            artifacts/build.log
+          retention-days: 14
