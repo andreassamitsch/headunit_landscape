@@ -228,6 +228,11 @@ private data class Dudu7FmVisualSnapshot(
     val artworkUrl: String? = null,
 )
 
+internal fun shouldUseVehiclePlayerLayout(
+    isDudu7: Boolean,
+    isLandscape: Boolean,
+): Boolean = isDudu7 || isLandscape
+
 private fun dudu7HighResolutionArtworkUrl(value: String?): String? {
     val url = value?.trim()?.takeIf { it.isNotBlank() } ?: return null
     if (url.startsWith("file:", ignoreCase = true) || url.startsWith("content:", ignoreCase = true)) return url
@@ -2062,8 +2067,11 @@ fun BottomSheetPlayer(
             }
         }
 
-        when (LocalConfiguration.current.orientation) {
-            Configuration.ORIENTATION_LANDSCAPE -> {
+        when {
+            shouldUseVehiclePlayerLayout(
+                isDudu7 = VehicleVariantConfig.isDudu7,
+                isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE,
+            ) -> {
                 val tabContentColor =
                     if (playerBackground == PlayerBackgroundStyle.DEFAULT) {
                         MaterialTheme.colorScheme.onSurface
