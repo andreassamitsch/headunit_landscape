@@ -182,7 +182,7 @@ fun BrowseScreen(
                                             onLongPress = { onItemLongClick() },
                                         )
                                     },
-                        )
+                        ) {}
                     }
                 }
             }
