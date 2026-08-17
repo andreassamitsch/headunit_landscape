@@ -26,13 +26,16 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Apply touch fix and version bump
+      - name: Apply and correct touch fix
         shell: bash
         run: |
           set -euxo pipefail
           if ! grep -q 'versionName = "13.7.70"' app/build.gradle.kts; then
             python3 scripts/apply_issue_140_touch_fix.py
-            git diff --check
+          fi
+          python3 scripts/fix_issue_140_touch_compile.py
+          git diff --check
+          if ! git diff --quiet; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add app/build.gradle.kts \
@@ -51,8 +54,16 @@ jobs:
           grep -q 'versionName = "13.7.70"' app/build.gradle.kts
           grep -q 'onPlayClick =' app/src/main/kotlin/com/metrolist/music/ui/screens/BrowseScreen.kt
           grep -q 'playBrowseSong' app/src/main/kotlin/com/metrolist/music/ui/screens/BrowseScreen.kt
-          grep -q 'onPlayClick: (() -> Unit)? = null' app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt
-          grep -q 'Modifier.clickable(onClick = onClick)' app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt
+          python3 - <<'PY'
+          from pathlib import Path
+          text=Path('app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt').read_text()
+          start=text.index('fun YouTubeGridItem(')
+          end=text.index('\n@Composable\nfun LocalSongsGrid', start)
+          block=text[start:end]
+          assert 'onPlayClick: (() -> Unit)? = null' in block
+          assert 'onClick = onPlayClick' in block
+          assert 'Modifier.clickable(onClick = onClick)' in text
+          PY
 
       - name: Compile and test
         run: |
