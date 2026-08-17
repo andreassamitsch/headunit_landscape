@@ -335,7 +335,7 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
     }
 }
 
-// Android provides org.json as a platform API (/apex/com.android.art/javalib/core-libart.jar).
+// Android provides org.json as a platform API (/apex/com.android/art/javalib/core-libart.jar).
 // The standalone org.json:json artefact bundles an older Apache Harmony copy of JSONArray that
 // contains an internal `myArrayList` field absent from the platform class.  Without obfuscation
 // R8 inlines against this internal field; at runtime the platform class is resolved instead,
@@ -391,8 +391,8 @@ dependencies {
 
     // Google Cast - only included in GMS flavor (not available in F-Droid/FOSS builds)
     "gmsImplementation"(libs.media3.cast)
-    implementation(libs.mediarouter)
-    implementation(libs.cast.framework)
+    "gmsImplementation"(libs.mediarouter)
+    "gmsImplementation"(libs.cast.framework)
 
     implementation(libs.room.runtime)
     implementation(libs.kuromoji.ipadic)
