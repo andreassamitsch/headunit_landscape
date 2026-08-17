@@ -1,0 +1,214 @@
+name: Build Dudu7 13.7.67 updater and offline playback
+
+on:
+  pull_request:
+    branches: [agent/issue-128-portrait-dudu7-player]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  implement-test-build-release:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-cleanup: on-success
+
+      - name: Apply Issues 130 and 131
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile scripts/apply_issues_130_131.py
+          if grep -q 'versionCode = 1370076' app/build.gradle.kts; then
+            echo 'Product patch already applied.'
+          else
+            python3 scripts/apply_issues_130_131.py
+          fi
+          git diff --check
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add app
+            git commit -m "Add Dudu7 updater and restore offline downloads [skip ci]"
+            BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+            git push origin HEAD:"$BRANCH"
+          fi
+
+      - name: Verify implementation invariants
+        shell: bash
+        run: |
+          set -euxo pipefail
+          grep -q 'versionCode = 1370076' app/build.gradle.kts
+          grep -q 'versionName = "13.7.67"' app/build.gradle.kts
+          grep -q 'android.permission.REQUEST_INSTALL_PACKAGES' app/src/dudu7/AndroidManifest.xml
+          ! grep -q 'android.permission.REQUEST_INSTALL_PACKAGES' app/src/main/AndroidManifest.xml
+          test -f app/src/dudu7/kotlin/com/metrolist/music/update/Dudu7UpdateManager.kt
+          test -f app/src/dudu7/kotlin/com/metrolist/music/variant/Dudu7Updater.kt
+          test -f app/src/standard/kotlin/com/metrolist/music/variant/Dudu7Updater.kt
+          grep -q 'Dudu7UpdaterCard()' app/src/main/kotlin/com/metrolist/music/ui/screens/settings/AboutScreen.kt
+          grep -q 'https://api.github.com/repos/andreassamitsch/headunit_landscape/releases' app/src/dudu7/kotlin/com/metrolist/music/update/Dudu7UpdateManager.kt
+          ! grep -Eqi 'github[_-]?token|ghp_[A-Za-z0-9]+' app/src/dudu7/kotlin/com/metrolist/music/update/Dudu7UpdateManager.kt
+          python3 - <<'PY'
+          from pathlib import Path
+          s = Path('app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt').read_text()
+          anchor = '.setCacheWriteDataSinkFactory(null)'
+          pos = s.index(anchor)
+          tail = s[pos:pos+700]
+          assert '.setFlags(FLAG_IGNORE_CACHE_ON_ERROR)' in tail
+          assert 'FLAG_IGNORE_CACHE_FOR_UNSET_LENGTH_REQUESTS' not in tail
+          assert s.count('FLAG_IGNORE_CACHE_FOR_UNSET_LENGTH_REQUESTS') >= 2, 'inner HLS/player cache protection must remain'
+          print('download cache keeps LENGTH_UNSET readable while inner HLS cache bypass remains')
+          PY
+
+      - name: Compile standard flavor
+        run: |
+          chmod +x gradlew
+          ./gradlew --console=plain :app:compileGmsStandardDebugKotlin --no-daemon --stacktrace
+
+      - name: Dudu7 unit tests
+        run: |
+          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+
+      - name: Build and verify APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace | tee artifacts/build.log
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          cp "$APK" artifacts/Metrolist-dudu7-13.7.67.apk
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$BUILD_TOOLS/aapt" dump badging artifacts/Metrolist-dudu7-13.7.67.apk > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs artifacts/Metrolist-dudu7-13.7.67.apk > artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370076'" artifacts/apk-badging.txt
+          grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
+          unzip -l artifacts/Metrolist-dudu7-13.7.67.apk > artifacts/apk-contents.txt
+          grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
+          grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
+          stat -c '%s' artifacts/Metrolist-dudu7-13.7.67.apk > artifacts/apk-size.txt
+          sha256sum artifacts/Metrolist-dudu7-13.7.67.apk > artifacts/Metrolist-dudu7-13.7.67.apk.sha256
+
+      - name: Prepare durable Dudu7 release manifest
+        shell: bash
+        run: |
+          set -euxo pipefail
+          SHA=$(awk '{print $1}' artifacts/Metrolist-dudu7-13.7.67.apk.sha256)
+          SIGNER='138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee'
+          grep -qi "$SIGNER" artifacts/apk-signature.txt
+          cat > artifacts/dudu7-update.json <<JSON
+          {
+            "versionCode": 1370076,
+            "versionName": "13.7.67",
+            "packageName": "com.metrolist.music.dudu7.debug",
+            "signerSha256": "$SIGNER",
+            "apkAsset": "Metrolist-dudu7-13.7.67.apk",
+            "sha256": "$SHA"
+          }
+          JSON
+          cat > artifacts/release-notes.md <<'MD'
+          ## MetroList dudu7 13.7.67
+
+          **Dudu7 Update Center**
+          - erkennt neue dudu7-Entwicklungsstände über einen öffentlichen GitHub-Releasekanal
+          - zeigt Version, Release Notes, Status und Downloadfortschritt
+          - verifiziert SHA-256, Paketname, VersionCode und dieselbe App-Signatur
+          - öffnet erst danach den normalen Android-Paketinstaller
+          - keine GitHub-Tokens oder stille Installation
+
+          **Offline-Wiedergabe aus Favoriten behoben**
+          - vollständige Downloads werden wieder aus dem persistenten Download-Cache gelesen, auch wenn die erste Media3-Anfrage `LENGTH_UNSET` verwendet
+          - HLS-/Live-Schutz des normalen Player-Caches bleibt erhalten
+
+          Bezieht sich auf #130 und #131. Basis ist der getestete Portrait-/Resize-Stand 13.7.66.
+          MD
+
+      - name: Publish Dudu7 development release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          TAG='dudu7-v13.7.67'
+          TARGET=$(git rev-parse HEAD)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title 'MetroList dudu7 13.7.67' --notes-file artifacts/release-notes.md --prerelease
+            gh release upload "$TAG" \
+              artifacts/Metrolist-dudu7-13.7.67.apk \
+              artifacts/Metrolist-dudu7-13.7.67.apk.sha256 \
+              artifacts/dudu7-update.json --clobber
+          else
+            gh release create "$TAG" \
+              artifacts/Metrolist-dudu7-13.7.67.apk \
+              artifacts/Metrolist-dudu7-13.7.67.apk.sha256 \
+              artifacts/dudu7-update.json \
+              --target "$TARGET" \
+              --title 'MetroList dudu7 13.7.67' \
+              --notes-file artifacts/release-notes.md \
+              --prerelease
+          fi
+
+      - name: Verify public update channel
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          import json, time, urllib.request
+          url = 'https://api.github.com/repos/andreassamitsch/headunit_landscape/releases?per_page=20'
+          for attempt in range(6):
+              req = urllib.request.Request(
+                  url,
+                  headers={'User-Agent':'Metrolist-dudu7-ci','Accept':'application/vnd.github+json'},
+              )
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  releases = json.load(response)
+              release = next((r for r in releases if r['tag_name'] == 'dudu7-v13.7.67'), None)
+              if release is not None:
+                  assets = {a['name']: a['browser_download_url'] for a in release['assets']}
+                  if 'Metrolist-dudu7-13.7.67.apk' in assets and 'dudu7-update.json' in assets:
+                      try:
+                          with urllib.request.urlopen(assets['dudu7-update.json'], timeout=30) as response:
+                              manifest = json.load(response)
+                          assert manifest['versionCode'] == 1370076
+                          assert manifest['packageName'] == 'com.metrolist.music.dudu7.debug'
+                          assert manifest['sha256']
+                          assert manifest['signerSha256'] == '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee'
+                          print('public Dudu7 update channel verified')
+                          break
+                      except Exception:
+                          if attempt == 5:
+                              raise
+              if attempt == 5:
+                  raise RuntimeError('Dudu7 release did not become publicly readable')
+              time.sleep(5)
+          PY
+
+      - name: Upload verified APK and release metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.67-apk
+          path: |
+            artifacts/Metrolist-dudu7-13.7.67.apk
+            artifacts/Metrolist-dudu7-13.7.67.apk.sha256
+            artifacts/dudu7-update.json
+            artifacts/release-notes.md
+            artifacts/apk-size.txt
+            artifacts/apk-badging.txt
+            artifacts/apk-signature.txt
+            artifacts/apk-contents.txt
+            artifacts/build.log
+          retention-days: 14
