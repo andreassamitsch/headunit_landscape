@@ -27,9 +27,11 @@ import androidx.navigation.NavController
 import com.metrolist.innertube.models.AlbumItem
 import com.metrolist.innertube.models.ArtistItem
 import com.metrolist.innertube.models.PlaylistItem
+import com.metrolist.innertube.models.SongItem
 import com.metrolist.music.LocalPlayerAwareWindowInsets
 import com.metrolist.music.LocalPlayerConnection
 import com.metrolist.music.R
+import com.metrolist.music.constants.AutoRadioQueueKey
 import com.metrolist.music.constants.GridItemSize
 import com.metrolist.music.constants.GridItemsSizeKey
 import com.metrolist.music.constants.GridThumbnailHeight
@@ -43,6 +45,7 @@ import com.metrolist.music.ui.menu.YouTubeArtistMenu
 import com.metrolist.music.ui.menu.YouTubePlaylistMenu
 import com.metrolist.music.ui.utils.backToMain
 import com.metrolist.music.utils.rememberEnumPreference
+import com.metrolist.music.utils.rememberPreference
 import com.metrolist.music.viewmodels.BrowseViewModel
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
@@ -62,6 +65,20 @@ fun BrowseScreen(
 
     val coroutineScope = rememberCoroutineScope()
     val gridItemSize by rememberEnumPreference(GridItemsSizeKey, GridItemSize.BIG)
+    val autoRadioQueue by rememberPreference(AutoRadioQueueKey, defaultValue = true)
+
+    val playBrowseSong: (SongItem) -> Unit = { songItem ->
+        if (songItem.id == mediaMetadata?.id) {
+            playerConnection.togglePlayPause()
+        } else {
+            playerConnection.playQueue(
+                createBrowseSongQueue(
+                    item = songItem,
+                    autoRadioQueue = autoRadioQueue,
+                ),
+            )
+        }
+    }
 
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = GridThumbnailHeight + if (gridItemSize == GridItemSize.BIG) 24.dp else (-24).dp),
@@ -77,11 +94,17 @@ fun BrowseScreen(
                     isPlaying = isPlaying,
                     fillMaxWidth = true,
                     coroutineScope = coroutineScope,
+                    onPlayClick =
+                        (item as? SongItem)?.let { songItem ->
+                            { playBrowseSong(songItem) }
+                        },
                     modifier =
                         Modifier
                             .combinedClickable(
                                 onClick = {
                                     when (item) {
+                                        is SongItem -> playBrowseSong(item)
+
                                         is AlbumItem -> {
                                             navController.navigate("album/${item.id}")
                                         }
@@ -95,7 +118,7 @@ fun BrowseScreen(
                                         }
 
                                         else -> {
-                                            // Do nothing
+                                            // Do nothing for unsupported browse item types.
                                         }
                                     }
                                 },
