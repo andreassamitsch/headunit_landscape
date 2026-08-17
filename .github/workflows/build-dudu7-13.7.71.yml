@@ -58,9 +58,9 @@ jobs:
           for needle in required:
               assert needle in browse, needle
           assert 'userScrollEnabled = rightPaneScrollBridge == null' in browse
-          assert 'continue-on-error: true' not in workflow
-          assert 'gh release' not in workflow
-          assert 'Publish updater release' not in workflow
+          assert ('continue-on-error' + ': true') not in workflow
+          assert ('gh ' + 'release') not in workflow
+          assert ('Publish updater ' + 'release') not in workflow
           PY
           git diff --check HEAD~1 HEAD
 
