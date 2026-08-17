@@ -121,9 +121,10 @@ internal object Dudu7SourcePlaybackCoordinator {
         if (physicalRadio.state.value.isActive) {
             physicalRadio.powerOff()
         }
-        memory.markUserYtSelection(
-            requiresRestoreBypass = current != Dudu7PlaybackSource.YT_MUSIC,
-        )
+        // An explicit song selection owns the next YT queue. This must bypass one
+        // remembered YT snapshot restore even when YT/Favourites was already active;
+        // otherwise the tab switch to Queue can resurrect the old favourites queue.
+        memory.markUserYtSelection(requiresRestoreBypass = true)
         Timber.tag(TAG).i("User selected YT content; source handoff prepared from %s", current)
     }
 

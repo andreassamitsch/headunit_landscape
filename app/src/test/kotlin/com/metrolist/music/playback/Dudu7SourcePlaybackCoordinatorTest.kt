@@ -100,12 +100,13 @@ class Dudu7SourcePlaybackCoordinatorTest {
     }
 
     @Test
-    fun `new YT selection while YT is already active leaves no stale bypass`() {
+    fun `explicit YT selection while YT is already active bypasses stale queue restore once`() {
         val memory = Dudu7SourcePlaybackMemory()
 
-        memory.markUserYtSelection(requiresRestoreBypass = false)
+        memory.markUserYtSelection(requiresRestoreBypass = true)
 
         assertEquals(Dudu7PlaybackSource.YT_MUSIC, memory.activeSource)
+        assertTrue(memory.consumeUserYtSelection())
         assertFalse(memory.consumeUserYtSelection())
     }
 }
