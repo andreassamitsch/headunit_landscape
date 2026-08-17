@@ -1,6 +1,8 @@
 name: Build Dudu7 13.7.70 Issue 140 touch fix
 
 on:
+  push:
+    branches: [agent/issue-140-home-genre-song-playback]
   pull_request:
     branches: [agent/issues-133-134-search-home]
   workflow_dispatch:
@@ -146,6 +148,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Metrolist-dudu7-13.7.70
+          name: Metrolist-dudu7-13.7.70-${{ github.run_id }}
           path: artifacts/
           retention-days: 14
