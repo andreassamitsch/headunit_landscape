@@ -335,7 +335,7 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
     }
 }
 
-// Android provides org.json as a platform API (/apex/com.android/art/javalib/core-libart.jar).
+// Android provides org.json as a platform API (/apex/com.android.art/javalib/core-libart.jar).
 // The standalone org.json:json artefact bundles an older Apache Harmony copy of JSONArray that
 // contains an internal `myArrayList` field absent from the platform class.  Without obfuscation
 // R8 inlines against this internal field; at runtime the platform class is resolved instead,
