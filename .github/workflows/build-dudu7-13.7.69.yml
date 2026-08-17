@@ -59,8 +59,10 @@ jobs:
           grep -q 'ListQueue(' "$FACTORY"
           grep -q 'browse song uses YouTube radio queue when auto radio is enabled' "$TEST"
           grep -q 'browse song uses single item queue when auto radio is disabled' "$TEST"
+          grep -q 'RobolectricTestRunner' "$TEST"
           grep -q 'memory.markUserYtSelection(requiresRestoreBypass = true)' app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7SourcePlaybackCoordinator.kt
           grep -q 'HOME("Home", R.drawable.home_outlined, Screens.Home.route)' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+          test -f scripts/run_issue_140_browse_playback_emulator.sh
 
       - name: Compile standard flavor
         run: |
@@ -120,7 +122,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
 
-      - name: Emulate Dudu7 Home in portrait and landscape
+      - name: Emulate real Home browse song selection
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -129,11 +131,7 @@ jobs:
           target: google_apis
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: |
-            cp artifacts/Metrolist-dudu7-13.7.69-x86_64-test.apk artifacts/Metrolist-dudu7-13.7.68-x86_64-test.apk
-            bash scripts/run_issues_133_134_home_emulator.sh
-            mv artifacts/home-portrait.png artifacts/home-portrait-13.7.69.png
-            mv artifacts/home-landscape.png artifacts/home-landscape-13.7.69.png
+          script: bash scripts/run_issue_140_browse_playback_emulator.sh
 
       - name: Prepare durable Dudu7 release manifest
         shell: bash
@@ -156,14 +154,14 @@ jobs:
           ## MetroList dudu7 13.7.69
 
           **Home / Genre-Wiedergabe behoben**
-          - Song- und Video-Kacheln auf `Home → Stimmungen & Genres → Genre` starten jetzt tatsächlich die gewählte Wiedergabe.
+          - Song- und Video-Kacheln auf Home/Browse-/Genre-Unterseiten starten jetzt tatsächlich die gewählte Wiedergabe.
           - Der Queue-Aufbau entspricht dem bewährten MetroList-Suchpfad: Auto-Radio verwendet `YouTubeQueue`, andernfalls wird eine Einzeltitel-`ListQueue` gestartet.
           - Die explizite Auswahl läuft weiterhin durch den 13.7.68-Fix gegen das Wiederherstellen einer alten Favoriten-Queue.
 
           Behebt #140. Enthält weiterhin #133 und #134. Basis: 13.7.68.
           MD
 
-      - name: Publish Dudu7 development release
+      - name: Keep existing 13.7.69 release immutable or publish once
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -172,40 +170,34 @@ jobs:
           TAG='dudu7-v13.7.69'
           TARGET=$(git rev-parse HEAD)
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release edit "$TAG" --title 'MetroList dudu7 13.7.69' --notes-file artifacts/release-notes.md --prerelease
-            gh release upload "$TAG" artifacts/Metrolist-dudu7-13.7.69.apk artifacts/Metrolist-dudu7-13.7.69.apk.sha256 artifacts/dudu7-update.json --clobber
+            echo '13.7.69 already published; validation-only rerun will not replace same-version APK assets.'
           else
             gh release create "$TAG" artifacts/Metrolist-dudu7-13.7.69.apk artifacts/Metrolist-dudu7-13.7.69.apk.sha256 artifacts/dudu7-update.json --target "$TARGET" --title 'MetroList dudu7 13.7.69' --notes-file artifacts/release-notes.md --prerelease
           fi
 
-      - name: Verify public update channel
+      - name: Verify public update channel matches validated build
         shell: bash
         run: |
           set -euxo pipefail
           python3 - <<'PY'
-          import json, time, urllib.request
+          import json, urllib.request
+          from pathlib import Path
+          local = json.loads(Path('artifacts/dudu7-update.json').read_text())
           url = 'https://api.github.com/repos/andreassamitsch/headunit_landscape/releases?per_page=20'
-          for attempt in range(8):
-              req = urllib.request.Request(url, headers={'User-Agent':'Metrolist-dudu7-ci','Accept':'application/vnd.github+json'})
-              with urllib.request.urlopen(req, timeout=30) as response:
-                  releases = json.load(response)
-              release = next((r for r in releases if r['tag_name'] == 'dudu7-v13.7.69'), None)
-              if release:
-                  assets = {a['name']: a['browser_download_url'] for a in release['assets']}
-                  if 'Metrolist-dudu7-13.7.69.apk' in assets and 'dudu7-update.json' in assets:
-                      with urllib.request.urlopen(assets['dudu7-update.json'], timeout=30) as response:
-                          manifest = json.load(response)
-                      assert manifest['versionCode'] == 1370078
-                      assert manifest['packageName'] == 'com.metrolist.music.dudu7.debug'
-                      assert manifest['sha256']
-                      print('public 13.7.69 update channel verified')
-                      break
-              if attempt == 7:
-                  raise RuntimeError('13.7.69 release not publicly readable')
-              time.sleep(5)
+          req = urllib.request.Request(url, headers={'User-Agent':'Metrolist-dudu7-ci','Accept':'application/vnd.github+json'})
+          with urllib.request.urlopen(req, timeout=30) as response:
+              releases = json.load(response)
+          release = next(r for r in releases if r['tag_name'] == 'dudu7-v13.7.69')
+          assets = {a['name']: a['browser_download_url'] for a in release['assets']}
+          with urllib.request.urlopen(assets['dudu7-update.json'], timeout=30) as response:
+              remote = json.load(response)
+          assert remote['versionCode'] == 1370078
+          assert remote['packageName'] == 'com.metrolist.music.dudu7.debug'
+          assert remote['sha256'] == local['sha256'], (remote['sha256'], local['sha256'])
+          print('public 13.7.69 update channel matches validated APK')
           PY
 
-      - name: Upload verified APK and emulator evidence
+      - name: Upload verified APK and targeted emulator evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -222,10 +214,12 @@ jobs:
             artifacts/build.log
             artifacts/emulator-build.log
             artifacts/emulator-apk-contents.txt
-            artifacts/home-portrait-ui.xml
-            artifacts/home-portrait-13.7.69.png
-            artifacts/home-landscape-ui.xml
-            artifacts/home-landscape-13.7.69.png
-            artifacts/home-activity-top.txt
-            artifacts/home-emulator-logcat.txt
+            artifacts/browse-home-pre.xml
+            artifacts/browse-home-pre-*.png
+            artifacts/browse-page.xml
+            artifacts/browse-page.png
+            artifacts/browse-after-play.xml
+            artifacts/browse-after-play.png
+            artifacts/browse-after-play-media-session.txt
+            artifacts/browse-after-play-logcat.txt
           retention-days: 14
