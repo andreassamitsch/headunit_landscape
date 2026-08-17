@@ -1,0 +1,231 @@
+name: Build Dudu7 13.7.69 Home browse playback fix
+
+on:
+  pull_request:
+    branches: [agent/issues-133-134-search-home]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test-build-emulate-release:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-cleanup: on-success
+
+      - name: Apply 13.7.69 version and verify Issue 140 patch
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile scripts/apply_issue_140.py
+          python3 scripts/apply_issue_140.py
+          git diff --check
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add app/build.gradle.kts
+            git commit -m "Bump Dudu7 to 13.7.69 for Home browse playback fix [skip ci]"
+            BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+            git push origin HEAD:"$BRANCH"
+          fi
+
+      - name: Verify implementation invariants
+        shell: bash
+        run: |
+          set -euxo pipefail
+          grep -q 'versionCode = 1370078' app/build.gradle.kts
+          grep -q 'versionName = "13.7.69"' app/build.gradle.kts
+          BROWSE=app/src/main/kotlin/com/metrolist/music/ui/screens/BrowseScreen.kt
+          FACTORY=app/src/main/kotlin/com/metrolist/music/ui/screens/BrowsePlayback.kt
+          TEST=app/src/test/kotlin/com/metrolist/music/ui/screens/BrowsePlaybackTest.kt
+          grep -q 'is SongItem -> {' "$BROWSE"
+          grep -q 'createBrowseSongQueue(' "$BROWSE"
+          grep -q 'YouTubeQueue(' "$FACTORY"
+          grep -q 'ListQueue(' "$FACTORY"
+          grep -q 'browse song uses YouTube radio queue when auto radio is enabled' "$TEST"
+          grep -q 'browse song uses single item queue when auto radio is disabled' "$TEST"
+          grep -q 'memory.markUserYtSelection(requiresRestoreBypass = true)' app/src/dudu7/kotlin/com/metrolist/music/playback/Dudu7SourcePlaybackCoordinator.kt
+          grep -q 'HOME("Home", R.drawable.home_outlined, Screens.Home.route)' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+
+      - name: Compile standard flavor
+        run: |
+          chmod +x gradlew
+          ./gradlew --console=plain :app:compileGmsStandardDebugKotlin --no-daemon --stacktrace
+
+      - name: Dudu7 unit tests
+        run: |
+          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+
+      - name: Build and verify production APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace | tee artifacts/build.log
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          cp "$APK" artifacts/Metrolist-dudu7-13.7.69.apk
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$BUILD_TOOLS/aapt" dump badging artifacts/Metrolist-dudu7-13.7.69.apk > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs artifacts/Metrolist-dudu7-13.7.69.apk > artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370078'" artifacts/apk-badging.txt
+          grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
+          unzip -l artifacts/Metrolist-dudu7-13.7.69.apk > artifacts/apk-contents.txt
+          grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
+          grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
+          stat -c '%s' artifacts/Metrolist-dudu7-13.7.69.apk > artifacts/apk-size.txt
+          sha256sum artifacts/Metrolist-dudu7-13.7.69.apk > artifacts/Metrolist-dudu7-13.7.69.apk.sha256
+
+      - name: Prepare x86_64 emulator APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cp app/build.gradle.kts /tmp/build.gradle.kts.production
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/build.gradle.kts')
+          s = p.read_text()
+          old = 'abiFilters += listOf("arm64-v8a", "armeabi-v7a")'
+          if old not in s:
+              raise SystemExit('production ABI filter anchor not found')
+          p.write_text(s.replace(old, 'abiFilters += listOf("x86_64")', 1))
+          PY
+          rm -rf app/build/outputs/apk/gmsDudu7/debug
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace | tee artifacts/emulator-build.log
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          cp "$APK" artifacts/Metrolist-dudu7-13.7.69-x86_64-test.apk
+          unzip -l artifacts/Metrolist-dudu7-13.7.69-x86_64-test.apk > artifacts/emulator-apk-contents.txt
+          grep -q 'lib/x86_64/' artifacts/emulator-apk-contents.txt
+          cp /tmp/build.gradle.kts.production app/build.gradle.kts
+
+      - name: Enable KVM
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+
+      - name: Emulate Dudu7 Home in portrait and landscape
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            cp artifacts/Metrolist-dudu7-13.7.69-x86_64-test.apk artifacts/Metrolist-dudu7-13.7.68-x86_64-test.apk
+            bash scripts/run_issues_133_134_home_emulator.sh
+            mv artifacts/home-portrait.png artifacts/home-portrait-13.7.69.png
+            mv artifacts/home-landscape.png artifacts/home-landscape-13.7.69.png
+
+      - name: Prepare durable Dudu7 release manifest
+        shell: bash
+        run: |
+          set -euxo pipefail
+          SHA=$(awk '{print $1}' artifacts/Metrolist-dudu7-13.7.69.apk.sha256)
+          SIGNER='138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee'
+          grep -qi "$SIGNER" artifacts/apk-signature.txt
+          cat > artifacts/dudu7-update.json <<JSON
+          {
+            "versionCode": 1370078,
+            "versionName": "13.7.69",
+            "packageName": "com.metrolist.music.dudu7.debug",
+            "signerSha256": "$SIGNER",
+            "apkAsset": "Metrolist-dudu7-13.7.69.apk",
+            "sha256": "$SHA"
+          }
+          JSON
+          cat > artifacts/release-notes.md <<'MD'
+          ## MetroList dudu7 13.7.69
+
+          **Home / Genre-Wiedergabe behoben**
+          - Song- und Video-Kacheln auf `Home → Stimmungen & Genres → Genre` starten jetzt tatsächlich die gewählte Wiedergabe.
+          - Der Queue-Aufbau entspricht dem bewährten MetroList-Suchpfad: Auto-Radio verwendet `YouTubeQueue`, andernfalls wird eine Einzeltitel-`ListQueue` gestartet.
+          - Die explizite Auswahl läuft weiterhin durch den 13.7.68-Fix gegen das Wiederherstellen einer alten Favoriten-Queue.
+
+          Behebt #140. Enthält weiterhin #133 und #134. Basis: 13.7.68.
+          MD
+
+      - name: Publish Dudu7 development release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          TAG='dudu7-v13.7.69'
+          TARGET=$(git rev-parse HEAD)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title 'MetroList dudu7 13.7.69' --notes-file artifacts/release-notes.md --prerelease
+            gh release upload "$TAG" artifacts/Metrolist-dudu7-13.7.69.apk artifacts/Metrolist-dudu7-13.7.69.apk.sha256 artifacts/dudu7-update.json --clobber
+          else
+            gh release create "$TAG" artifacts/Metrolist-dudu7-13.7.69.apk artifacts/Metrolist-dudu7-13.7.69.apk.sha256 artifacts/dudu7-update.json --target "$TARGET" --title 'MetroList dudu7 13.7.69' --notes-file artifacts/release-notes.md --prerelease
+          fi
+
+      - name: Verify public update channel
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          import json, time, urllib.request
+          url = 'https://api.github.com/repos/andreassamitsch/headunit_landscape/releases?per_page=20'
+          for attempt in range(8):
+              req = urllib.request.Request(url, headers={'User-Agent':'Metrolist-dudu7-ci','Accept':'application/vnd.github+json'})
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  releases = json.load(response)
+              release = next((r for r in releases if r['tag_name'] == 'dudu7-v13.7.69'), None)
+              if release:
+                  assets = {a['name']: a['browser_download_url'] for a in release['assets']}
+                  if 'Metrolist-dudu7-13.7.69.apk' in assets and 'dudu7-update.json' in assets:
+                      with urllib.request.urlopen(assets['dudu7-update.json'], timeout=30) as response:
+                          manifest = json.load(response)
+                      assert manifest['versionCode'] == 1370078
+                      assert manifest['packageName'] == 'com.metrolist.music.dudu7.debug'
+                      assert manifest['sha256']
+                      print('public 13.7.69 update channel verified')
+                      break
+              if attempt == 7:
+                  raise RuntimeError('13.7.69 release not publicly readable')
+              time.sleep(5)
+          PY
+
+      - name: Upload verified APK and emulator evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.69-apk-evidence
+          path: |
+            artifacts/Metrolist-dudu7-13.7.69.apk
+            artifacts/Metrolist-dudu7-13.7.69.apk.sha256
+            artifacts/dudu7-update.json
+            artifacts/release-notes.md
+            artifacts/apk-size.txt
+            artifacts/apk-badging.txt
+            artifacts/apk-signature.txt
+            artifacts/apk-contents.txt
+            artifacts/build.log
+            artifacts/emulator-build.log
+            artifacts/emulator-apk-contents.txt
+            artifacts/home-portrait-ui.xml
+            artifacts/home-portrait-13.7.69.png
+            artifacts/home-landscape-ui.xml
+            artifacts/home-landscape-13.7.69.png
+            artifacts/home-activity-top.txt
+            artifacts/home-emulator-logcat.txt
+          retention-days: 14
