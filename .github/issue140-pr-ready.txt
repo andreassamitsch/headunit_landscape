@@ -1,0 +1,1 @@
+Issue #140: playlist row touch fix ready for blocking CI validation before updater release.
