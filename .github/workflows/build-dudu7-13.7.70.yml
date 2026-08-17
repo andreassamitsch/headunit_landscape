@@ -1,0 +1,140 @@
+name: Build Dudu7 13.7.70 Issue 140 touch fix
+
+on:
+  pull_request:
+    branches: [agent/issues-133-134-search-home]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test-build-release:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Apply touch fix and version bump
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if ! grep -q 'versionName = "13.7.70"' app/build.gradle.kts; then
+            python3 scripts/apply_issue_140_touch_fix.py
+            git diff --check
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add app/build.gradle.kts \
+              app/src/main/kotlin/com/metrolist/music/ui/screens/BrowseScreen.kt \
+              app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt
+            git commit -m "Fix Dudu7 Home browse touch playback and bump 13.7.70 [skip ci]"
+            BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+            git push origin HEAD:"$BRANCH"
+          fi
+
+      - name: Verify touch implementation
+        shell: bash
+        run: |
+          set -euxo pipefail
+          grep -q 'versionCode = 1370079' app/build.gradle.kts
+          grep -q 'versionName = "13.7.70"' app/build.gradle.kts
+          grep -q 'onPlayClick =' app/src/main/kotlin/com/metrolist/music/ui/screens/BrowseScreen.kt
+          grep -q 'playBrowseSong' app/src/main/kotlin/com/metrolist/music/ui/screens/BrowseScreen.kt
+          grep -q 'onPlayClick: (() -> Unit)? = null' app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt
+          grep -q 'Modifier.clickable(onClick = onClick)' app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt
+
+      - name: Compile and test
+        run: |
+          chmod +x gradlew
+          ./gradlew --console=plain :app:compileGmsStandardDebugKotlin --no-daemon --stacktrace
+          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+
+      - name: Build Dudu7 APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          cp "$APK" artifacts/Metrolist-dudu7-13.7.70.apk
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$BUILD_TOOLS/aapt" dump badging artifacts/Metrolist-dudu7-13.7.70.apk > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs artifacts/Metrolist-dudu7-13.7.70.apk > artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370079'" artifacts/apk-badging.txt
+          grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
+          sha256sum artifacts/Metrolist-dudu7-13.7.70.apk > artifacts/Metrolist-dudu7-13.7.70.apk.sha256
+          SHA=$(awk '{print $1}' artifacts/Metrolist-dudu7-13.7.70.apk.sha256)
+          cat > artifacts/dudu7-update.json <<JSON
+          {
+            "versionCode": 1370079,
+            "versionName": "13.7.70",
+            "packageName": "com.metrolist.music.dudu7.debug",
+            "signerSha256": "138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee",
+            "apkAsset": "Metrolist-dudu7-13.7.70.apk",
+            "sha256": "$SHA"
+          }
+          JSON
+
+      - name: Publish updater release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          TAG='dudu7-v13.7.70'
+          cat > artifacts/release-notes.md <<'MD'
+          ## MetroList dudu7 13.7.70
+
+          **Issue #140 – Touch-Wiedergabe auf Home-/Genre-Kacheln behoben**
+          - Das sichtbare Play-Overlay von Song-/Video-Kacheln ist jetzt ein echter Touch-Button.
+          - Touch und Tastensteuerung verwenden denselben Browse-Playbackpfad und dieselbe Queue-Logik.
+          - Album-/Playlist-/Künstlernavigation bleibt unverändert.
+
+          Folgereparatur zu 13.7.69 nach Gerätetest auf Dudu7.
+          MD
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              artifacts/Metrolist-dudu7-13.7.70.apk \
+              artifacts/Metrolist-dudu7-13.7.70.apk.sha256 \
+              artifacts/dudu7-update.json \
+              --target "$(git rev-parse HEAD)" \
+              --title 'MetroList dudu7 13.7.70' \
+              --notes-file artifacts/release-notes.md \
+              --prerelease
+          fi
+
+      - name: Verify public updater manifest
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          import json, urllib.request
+          api='https://api.github.com/repos/andreassamitsch/headunit_landscape/releases?per_page=20'
+          req=urllib.request.Request(api,headers={'User-Agent':'Metrolist-dudu7-ci','Accept':'application/vnd.github+json'})
+          releases=json.load(urllib.request.urlopen(req,timeout=30))
+          release=next(r for r in releases if r['tag_name']=='dudu7-v13.7.70')
+          assets={a['name']:a['browser_download_url'] for a in release['assets']}
+          remote=json.load(urllib.request.urlopen(assets['dudu7-update.json'],timeout=30))
+          assert remote['versionCode']==1370079
+          assert remote['versionName']=='13.7.70'
+          print('public updater exposes 13.7.70')
+          PY
+
+      - name: Upload APK evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.70
+          path: artifacts/
+          retention-days: 14
