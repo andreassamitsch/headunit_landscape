@@ -107,8 +107,8 @@ jobs:
         run: |
           set -euxo pipefail
           SHA=$(awk '{print $1}' artifacts/Metrolist-dudu7-13.7.67.apk.sha256)
-          SIGNER=$(grep -i 'Signer #1 certificate SHA-256 digest:' artifacts/apk-signature.txt | head -1 | awk '{print $NF}' | tr -d ':' | tr '[:upper:]' '[:lower:]')
-          test -n "$SIGNER"
+          SIGNER='138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee'
+          grep -qi "$SIGNER" artifacts/apk-signature.txt
           cat > artifacts/dudu7-update.json <<JSON
           {
             "versionCode": 1370076,
@@ -168,7 +168,6 @@ jobs:
           python3 - <<'PY'
           import json, time, urllib.request
           url = 'https://api.github.com/repos/andreassamitsch/headunit_landscape/releases?per_page=20'
-          release = None
           for attempt in range(6):
               req = urllib.request.Request(
                   url,
@@ -186,7 +185,7 @@ jobs:
                           assert manifest['versionCode'] == 1370076
                           assert manifest['packageName'] == 'com.metrolist.music.dudu7.debug'
                           assert manifest['sha256']
-                          assert manifest['signerSha256']
+                          assert manifest['signerSha256'] == '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee'
                           print('public Dudu7 update channel verified')
                           break
                       except Exception:
@@ -198,6 +197,7 @@ jobs:
           PY
 
       - name: Upload verified APK and release metadata
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Metrolist-dudu7-13.7.67-apk
