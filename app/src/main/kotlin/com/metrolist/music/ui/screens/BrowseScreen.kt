@@ -28,7 +28,6 @@ import com.metrolist.innertube.models.AlbumItem
 import com.metrolist.innertube.models.ArtistItem
 import com.metrolist.innertube.models.PlaylistItem
 import com.metrolist.innertube.models.SongItem
-import com.metrolist.innertube.models.WatchEndpoint
 import com.metrolist.music.LocalPlayerAwareWindowInsets
 import com.metrolist.music.LocalPlayerConnection
 import com.metrolist.music.R
@@ -36,10 +35,6 @@ import com.metrolist.music.constants.AutoRadioQueueKey
 import com.metrolist.music.constants.GridItemSize
 import com.metrolist.music.constants.GridItemsSizeKey
 import com.metrolist.music.constants.GridThumbnailHeight
-import com.metrolist.music.extensions.toMediaItem
-import com.metrolist.music.models.toMediaMetadata
-import com.metrolist.music.playback.queues.ListQueue
-import com.metrolist.music.playback.queues.YouTubeQueue
 import com.metrolist.music.ui.component.IconButton
 import com.metrolist.music.ui.component.LocalMenuState
 import com.metrolist.music.ui.component.YouTubeGridItem
@@ -93,24 +88,16 @@ fun BrowseScreen(
                                     when (item) {
                                         is SongItem -> {
                                             // Browse/genre pages already render a play overlay for SongItem.
-                                            // Use the same canonical playback path as online search so the
-                                            // explicit selection owns the next queue (including Dudu7's
-                                            // one-shot stale-queue restore bypass in PlayerConnection).
+                                            // Reuse the normal search queue semantics so PlayerConnection also
+                                            // triggers Dudu7's explicit-selection/stale-restore protection.
                                             if (item.id == mediaMetadata?.id) {
                                                 playerConnection.togglePlayPause()
                                             } else {
                                                 playerConnection.playQueue(
-                                                    if (autoRadioQueue) {
-                                                        YouTubeQueue(
-                                                            WatchEndpoint(videoId = item.id),
-                                                            item.toMediaMetadata(),
-                                                        )
-                                                    } else {
-                                                        ListQueue(
-                                                            title = item.title,
-                                                            items = listOf(item.toMediaItem()),
-                                                        )
-                                                    },
+                                                    createBrowseSongQueue(
+                                                        item = item,
+                                                        autoRadioQueue = autoRadioQueue,
+                                                    ),
                                                 )
                                             }
                                         }
