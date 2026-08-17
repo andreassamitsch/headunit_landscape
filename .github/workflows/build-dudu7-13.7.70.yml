@@ -11,7 +11,7 @@ permissions:
 jobs:
   test-build-release:
     runs-on: ubuntu-22.04
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,8 +51,17 @@ jobs:
           grep -q 'versionName = "13.7.70"' app/build.gradle.kts
           grep -q 'onPlayClick =' app/src/main/kotlin/com/metrolist/music/ui/screens/BrowseScreen.kt
           grep -q 'playBrowseSong' app/src/main/kotlin/com/metrolist/music/ui/screens/BrowseScreen.kt
-          grep -q 'onPlayClick: (() -> Unit)? = null' app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt
-          grep -q 'Modifier.clickable(onClick = onClick)' app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt
+          python3 - <<'PY'
+          from pathlib import Path
+          text=Path('app/src/main/kotlin/com/metrolist/music/ui/component/Items.kt').read_text()
+          start=text.index('fun YouTubeGridItem(')
+          end=text.index('\n@Composable\nfun LocalSongsGrid', start)
+          block=text[start:end]
+          assert 'onPlayClick: (() -> Unit)? = null' in block
+          assert 'onClick = onPlayClick' in block
+          assert 'Modifier.clickable(onClick = onClick)' in text
+          PY
+          test -f scripts/run_issue_140_browse_playback_emulator.sh
 
       - name: Compile and test
         run: |
@@ -73,6 +82,10 @@ jobs:
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs artifacts/Metrolist-dudu7-13.7.70.apk > artifacts/apk-signature.txt
           grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370079'" artifacts/apk-badging.txt
           grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
+          unzip -l artifacts/Metrolist-dudu7-13.7.70.apk > artifacts/apk-contents.txt
+          grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
+          grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
+          stat -c '%s' artifacts/Metrolist-dudu7-13.7.70.apk > artifacts/apk-size.txt
           sha256sum artifacts/Metrolist-dudu7-13.7.70.apk > artifacts/Metrolist-dudu7-13.7.70.apk.sha256
           SHA=$(awk '{print $1}' artifacts/Metrolist-dudu7-13.7.70.apk.sha256)
           cat > artifacts/dudu7-update.json <<JSON
@@ -86,6 +99,47 @@ jobs:
           }
           JSON
 
+      - name: Prepare x86_64 emulator APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cp app/build.gradle.kts /tmp/build.gradle.kts.production
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app/build.gradle.kts')
+          s=p.read_text()
+          old='abiFilters += listOf("arm64-v8a", "armeabi-v7a")'
+          if old not in s:
+              raise SystemExit('production ABI filter anchor not found')
+          p.write_text(s.replace(old,'abiFilters += listOf("x86_64")',1))
+          PY
+          rm -rf app/build/outputs/apk/gmsDudu7/debug
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace > artifacts/emulator-build.log
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          cp "$APK" artifacts/Metrolist-dudu7-13.7.70-x86_64-test.apk
+          unzip -l artifacts/Metrolist-dudu7-13.7.70-x86_64-test.apk > artifacts/emulator-apk-contents.txt
+          grep -q 'lib/x86_64/' artifacts/emulator-apk-contents.txt
+          cp /tmp/build.gradle.kts.production app/build.gradle.kts
+
+      - name: Enable KVM
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+
+      - name: Emulate visible Dudu7 Home genre playback
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash scripts/run_issue_140_browse_playback_emulator.sh
+
       - name: Publish updater release
         shell: bash
         env:
@@ -98,8 +152,9 @@ jobs:
 
           **Issue #140 – Touch-Wiedergabe auf Home-/Genre-Kacheln behoben**
           - Das sichtbare Play-Overlay von Song-/Video-Kacheln ist jetzt ein echter Touch-Button.
-          - Touch und Tastensteuerung verwenden denselben Browse-Playbackpfad und dieselbe Queue-Logik.
+          - Touch und Kachel-Tap verwenden denselben Browse-Playbackpfad und dieselbe Queue-Logik.
           - Album-/Playlist-/Künstlernavigation bleibt unverändert.
+          - Enthält weiterhin den 13.7.68-Fix gegen die Wiederherstellung einer alten Favoriten-Queue.
 
           Folgereparatur zu 13.7.69 nach Gerätetest auf Dudu7.
           MD
@@ -112,14 +167,18 @@ jobs:
               --title 'MetroList dudu7 13.7.70' \
               --notes-file artifacts/release-notes.md \
               --prerelease
+          else
+            echo '13.7.70 already published; do not replace same-version APK assets.'
           fi
 
-      - name: Verify public updater manifest
+      - name: Verify public updater manifest matches validated APK
         shell: bash
         run: |
           set -euxo pipefail
           python3 - <<'PY'
           import json, urllib.request
+          from pathlib import Path
+          local=json.loads(Path('artifacts/dudu7-update.json').read_text())
           api='https://api.github.com/repos/andreassamitsch/headunit_landscape/releases?per_page=20'
           req=urllib.request.Request(api,headers={'User-Agent':'Metrolist-dudu7-ci','Accept':'application/vnd.github+json'})
           releases=json.load(urllib.request.urlopen(req,timeout=30))
@@ -128,13 +187,42 @@ jobs:
           remote=json.load(urllib.request.urlopen(assets['dudu7-update.json'],timeout=30))
           assert remote['versionCode']==1370079
           assert remote['versionName']=='13.7.70'
-          print('public updater exposes 13.7.70')
+          assert remote['sha256']==local['sha256'], (remote['sha256'],local['sha256'])
+          print('public updater exposes the exact validated 13.7.70 APK')
           PY
 
-      - name: Upload APK evidence
+      - name: Upload APK and emulator evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Metrolist-dudu7-13.7.70
-          path: artifacts/
+          path: |
+            artifacts/Metrolist-dudu7-13.7.70.apk
+            artifacts/Metrolist-dudu7-13.7.70.apk.sha256
+            artifacts/dudu7-update.json
+            artifacts/apk-size.txt
+            artifacts/apk-badging.txt
+            artifacts/apk-signature.txt
+            artifacts/apk-contents.txt
+            artifacts/emulator-build.log
+            artifacts/emulator-apk-contents.txt
+            artifacts/tab-*.xml
+            artifacts/tab-*.png
+            artifacts/home-tab-visible.xml
+            artifacts/home-selected.xml
+            artifacts/home-selected.png
+            artifacts/home-scroll-*.xml
+            artifacts/home-scroll-*.png
+            artifacts/mood-title-visible.xml
+            artifacts/mood-genres.xml
+            artifacts/mood-genres.png
+            artifacts/selected-genre.txt
+            artifacts/browse-page.xml
+            artifacts/browse-page.png
+            artifacts/selected-browse-title.txt
+            artifacts/browse-after-play.xml
+            artifacts/browse-after-play.png
+            artifacts/browse-after-play-media-session.txt
+            artifacts/browse-after-play-logcat.txt
+            artifacts/release-notes.md
           retention-days: 14
