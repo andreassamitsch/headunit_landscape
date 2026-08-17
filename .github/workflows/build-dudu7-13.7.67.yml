@@ -143,6 +143,7 @@ jobs:
         run: |
           set -euxo pipefail
           TAG='dudu7-v13.7.67'
+          TARGET=$(git rev-parse HEAD)
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" --title 'MetroList dudu7 13.7.67' --notes-file artifacts/release-notes.md --prerelease
             gh release upload "$TAG" \
@@ -154,7 +155,7 @@ jobs:
               artifacts/Metrolist-dudu7-13.7.67.apk \
               artifacts/Metrolist-dudu7-13.7.67.apk.sha256 \
               artifacts/dudu7-update.json \
-              --target "${GITHUB_HEAD_SHA}" \
+              --target "$TARGET" \
               --title 'MetroList dudu7 13.7.67' \
               --notes-file artifacts/release-notes.md \
               --prerelease
@@ -165,24 +166,35 @@ jobs:
         run: |
           set -euxo pipefail
           python3 - <<'PY'
-          import json, urllib.request
-          req = urllib.request.Request(
-              'https://api.github.com/repos/andreassamitsch/headunit_landscape/releases?per_page=20',
-              headers={'User-Agent':'Metrolist-dudu7-ci','Accept':'application/vnd.github+json'},
-          )
-          with urllib.request.urlopen(req, timeout=30) as response:
-              releases = json.load(response)
-          release = next(r for r in releases if r['tag_name'] == 'dudu7-v13.7.67')
-          assets = {a['name']: a['browser_download_url'] for a in release['assets']}
-          assert 'Metrolist-dudu7-13.7.67.apk' in assets
-          assert 'dudu7-update.json' in assets
-          with urllib.request.urlopen(assets['dudu7-update.json'], timeout=30) as response:
-              manifest = json.load(response)
-          assert manifest['versionCode'] == 1370076
-          assert manifest['packageName'] == 'com.metrolist.music.dudu7.debug'
-          assert manifest['sha256']
-          assert manifest['signerSha256']
-          print('public Dudu7 update channel verified')
+          import json, time, urllib.request
+          url = 'https://api.github.com/repos/andreassamitsch/headunit_landscape/releases?per_page=20'
+          release = None
+          for attempt in range(6):
+              req = urllib.request.Request(
+                  url,
+                  headers={'User-Agent':'Metrolist-dudu7-ci','Accept':'application/vnd.github+json'},
+              )
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  releases = json.load(response)
+              release = next((r for r in releases if r['tag_name'] == 'dudu7-v13.7.67'), None)
+              if release is not None:
+                  assets = {a['name']: a['browser_download_url'] for a in release['assets']}
+                  if 'Metrolist-dudu7-13.7.67.apk' in assets and 'dudu7-update.json' in assets:
+                      try:
+                          with urllib.request.urlopen(assets['dudu7-update.json'], timeout=30) as response:
+                              manifest = json.load(response)
+                          assert manifest['versionCode'] == 1370076
+                          assert manifest['packageName'] == 'com.metrolist.music.dudu7.debug'
+                          assert manifest['sha256']
+                          assert manifest['signerSha256']
+                          print('public Dudu7 update channel verified')
+                          break
+                      except Exception:
+                          if attempt == 5:
+                              raise
+              if attempt == 5:
+                  raise RuntimeError('Dudu7 release did not become publicly readable')
+              time.sleep(5)
           PY
 
       - name: Upload verified APK and release metadata
