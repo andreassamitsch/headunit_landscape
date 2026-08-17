@@ -97,8 +97,11 @@ for node in root.iter('node'):
 print('portrait Dudu7 tab bounds:', found)
 if 'Home' not in found:
     raise SystemExit('Home tab missing in portrait')
-if not (780 <= found['Home'][1] <= 1250):
-    raise SystemExit(f'Home tab not in portrait lower pane: {found["Home"]}')
+x1,y1,x2,y2 = found['Home']
+# 1080x1920 portrait: the Dudu7 tab strip belongs in the lower half. Do not hard-code
+# the old landscape-derived 780..1250 window; adaptive portrait places it near bottom.
+if not (960 <= y1 < y2 <= 1920):
+    raise SystemExit(f'Home tab not in portrait lower half: {found["Home"]}')
 PY
 
 # Verify the same Home tab survives the adaptive landscape arrangement.
