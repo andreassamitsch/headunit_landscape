@@ -1,0 +1,29 @@
+name: Issue 140 13.7.73 blocking validation
+on:
+  pull_request:
+    branches: [agent/issues-133-134-search-home]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Regression invariant
+        run: python3 scripts/verify_issue_140_playlist_row_touch.py
+      - name: Standard compile
+        run: ./gradlew --console=plain :app:compileGmsStandardDebugKotlin --no-daemon --stacktrace
+      - name: Dudu7 tests
+        run: ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+      - name: Dudu7 ARM build
+        run: ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace
