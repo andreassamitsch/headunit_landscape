@@ -67,6 +67,19 @@ fun BrowseScreen(
     val gridItemSize by rememberEnumPreference(GridItemsSizeKey, GridItemSize.BIG)
     val autoRadioQueue by rememberPreference(AutoRadioQueueKey, defaultValue = true)
 
+    val playBrowseSong: (SongItem) -> Unit = { songItem ->
+        if (songItem.id == mediaMetadata?.id) {
+            playerConnection.togglePlayPause()
+        } else {
+            playerConnection.playQueue(
+                createBrowseSongQueue(
+                    item = songItem,
+                    autoRadioQueue = autoRadioQueue,
+                ),
+            )
+        }
+    }
+
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = GridThumbnailHeight + if (gridItemSize == GridItemSize.BIG) 24.dp else (-24).dp),
         contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues(),
@@ -81,26 +94,16 @@ fun BrowseScreen(
                     isPlaying = isPlaying,
                     fillMaxWidth = true,
                     coroutineScope = coroutineScope,
+                    onPlayClick =
+                        (item as? SongItem)?.let { songItem ->
+                            { playBrowseSong(songItem) }
+                        },
                     modifier =
                         Modifier
                             .combinedClickable(
                                 onClick = {
                                     when (item) {
-                                        is SongItem -> {
-                                            // Browse/genre pages already render a play overlay for SongItem.
-                                            // Reuse the normal search queue semantics so PlayerConnection also
-                                            // triggers Dudu7's explicit-selection/stale-restore protection.
-                                            if (item.id == mediaMetadata?.id) {
-                                                playerConnection.togglePlayPause()
-                                            } else {
-                                                playerConnection.playQueue(
-                                                    createBrowseSongQueue(
-                                                        item = item,
-                                                        autoRadioQueue = autoRadioQueue,
-                                                    ),
-                                                )
-                                            }
-                                        }
+                                        is SongItem -> playBrowseSong(item)
 
                                         is AlbumItem -> {
                                             navController.navigate("album/${item.id}")
