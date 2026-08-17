@@ -7,7 +7,10 @@ package com.metrolist.music.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -20,6 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -28,6 +32,7 @@ import com.metrolist.innertube.models.AlbumItem
 import com.metrolist.innertube.models.ArtistItem
 import com.metrolist.innertube.models.PlaylistItem
 import com.metrolist.innertube.models.SongItem
+import com.metrolist.music.BuildConfig
 import com.metrolist.music.LocalPlayerAwareWindowInsets
 import com.metrolist.music.LocalPlayerConnection
 import com.metrolist.music.R
@@ -89,72 +94,97 @@ fun BrowseScreen(
                 items = items.distinctBy { it.id },
                 key = { "browse_${it.id}" },
             ) { item ->
-                YouTubeGridItem(
-                    item = item,
-                    isPlaying = isPlaying,
-                    fillMaxWidth = true,
-                    coroutineScope = coroutineScope,
-                    onPlayClick =
-                        (item as? SongItem)?.let { songItem ->
-                            { playBrowseSong(songItem) }
-                        },
-                    modifier =
-                        Modifier
-                            .combinedClickable(
-                                onClick = {
-                                    when (item) {
-                                        is SongItem -> playBrowseSong(item)
+                val onItemClick: () -> Unit = {
+                    when (item) {
+                        is SongItem -> playBrowseSong(item)
 
-                                        is AlbumItem -> {
-                                            navController.navigate("album/${item.id}")
-                                        }
+                        is AlbumItem -> {
+                            navController.navigate("album/${item.id}")
+                        }
 
-                                        is PlaylistItem -> {
-                                            navController.navigate("online_playlist/${item.id}")
-                                        }
+                        is PlaylistItem -> {
+                            navController.navigate("online_playlist/${item.id}")
+                        }
 
-                                        is ArtistItem -> {
-                                            navController.navigate("artist/${item.id}")
-                                        }
+                        is ArtistItem -> {
+                            navController.navigate("artist/${item.id}")
+                        }
 
-                                        else -> {
-                                            // Do nothing for unsupported browse item types.
-                                        }
-                                    }
-                                },
-                                onLongClick = {
-                                    menuState.show {
-                                        when (item) {
-                                            is AlbumItem -> {
-                                                YouTubeAlbumMenu(
-                                                    albumItem = item,
-                                                    onDismiss = menuState::dismiss,
-                                                )
-                                            }
+                        else -> {
+                            // Do nothing for unsupported browse item types.
+                        }
+                    }
+                }
 
-                                            is PlaylistItem -> {
-                                                YouTubePlaylistMenu(
-                                                    playlist = item,
-                                                    coroutineScope = coroutineScope,
-                                                    onDismiss = menuState::dismiss,
-                                                )
-                                            }
+                val onItemLongClick: () -> Unit = {
+                    menuState.show {
+                        when (item) {
+                            is AlbumItem -> {
+                                YouTubeAlbumMenu(
+                                    albumItem = item,
+                                    onDismiss = menuState::dismiss,
+                                )
+                            }
 
-                                            is ArtistItem -> {
-                                                YouTubeArtistMenu(
-                                                    artist = item,
-                                                    onDismiss = menuState::dismiss,
-                                                )
-                                            }
+                            is PlaylistItem -> {
+                                YouTubePlaylistMenu(
+                                    playlist = item,
+                                    coroutineScope = coroutineScope,
+                                    onDismiss = menuState::dismiss,
+                                )
+                            }
 
-                                            else -> {
-                                                // Do nothing
-                                            }
-                                        }
-                                    }
-                                },
-                            ),
-                )
+                            is ArtistItem -> {
+                                YouTubeArtistMenu(
+                                    artist = item,
+                                    onDismiss = menuState::dismiss,
+                                )
+                            }
+
+                            else -> {
+                                // Do nothing
+                            }
+                        }
+                    }
+                }
+
+                Box {
+                    YouTubeGridItem(
+                        item = item,
+                        isPlaying = isPlaying,
+                        fillMaxWidth = true,
+                        coroutineScope = coroutineScope,
+                        onPlayClick =
+                            (item as? SongItem)?.let { songItem ->
+                                { playBrowseSong(songItem) }
+                            },
+                        modifier =
+                            Modifier
+                                .combinedClickable(
+                                    onClick = onItemClick,
+                                    onLongClick = onItemLongClick,
+                                ),
+                    )
+
+                    // On the Dudu7 embedded player pane PlaylistItem activation works via
+                    // keyboard/D-pad semantics, while the regular GridItem pointer path can
+                    // lose taps. Keep the original combinedClickable for semantics/focus and
+                    // add only a pointer-layer for playlists so touch invokes exactly the same
+                    // navigation/menu actions. Standard MetroList never receives this layer.
+                    if (BuildConfig.IS_DUDU7 && item is PlaylistItem) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .matchParentSize()
+                                    .pointerInput(item.id) {
+                                        detectTapGestures(
+                                            onTap = { onItemClick() },
+                                            onLongPress = { onItemLongClick() },
+                                        )
+                                    },
+                        )
+                    }
+                }
             }
 
             if (items.isEmpty()) {
