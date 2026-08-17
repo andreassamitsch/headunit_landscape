@@ -9,6 +9,7 @@ object VehicleTabOrderStore {
 
     val defaultOrder: List<String> =
         listOf(
+            "HOME",
             "QUEUE",
             "LIBRARY",
             "WEBRADIO",

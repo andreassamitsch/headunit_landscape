@@ -1,0 +1,96 @@
+name: Publish Dudu7 13.7.70 validated APK
+
+on:
+  push:
+    branches:
+      - agent/issue-140-home-genre-song-playback
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download validated APK artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts downloaded
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            /repos/andreassamitsch/headunit_landscape/actions/artifacts/9286743246/zip \
+            > downloaded/validated.zip
+          unzip -q downloaded/validated.zip -d artifacts
+          test -f artifacts/Metrolist-dudu7-13.7.70.apk
+          test -f artifacts/Metrolist-dudu7-13.7.70.apk.sha256
+          test -f artifacts/dudu7-update.json
+          (cd artifacts && sha256sum -c Metrolist-dudu7-13.7.70.apk.sha256)
+          python3 - <<'PY'
+          import json, hashlib
+          from pathlib import Path
+          manifest=json.loads(Path('artifacts/dudu7-update.json').read_text())
+          apk=Path('artifacts/Metrolist-dudu7-13.7.70.apk').read_bytes()
+          digest=hashlib.sha256(apk).hexdigest()
+          assert manifest['versionCode']==1370079
+          assert manifest['versionName']=='13.7.70'
+          assert manifest['packageName']=='com.metrolist.music.dudu7.debug'
+          assert manifest['sha256']==digest
+          assert digest=='b0c9eb137b07b761b0db803930387d70487efebb0520c068cb7a89ab9e143a76'
+          print('validated artifact digest:', digest)
+          PY
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          TAG='dudu7-v13.7.70'
+          cat > release-notes.md <<'MD'
+          ## MetroList dudu7 13.7.70
+
+          **Issue #140 – Touch-Wiedergabe auf Home-/Genre-Kacheln behoben**
+          - Das sichtbare Play-Overlay der Song-/Video-Kacheln ist jetzt ein echter Touch-Button.
+          - Touch und Tastensteuerung verwenden denselben Browse-Playbackpfad und dieselbe Queue-Logik.
+          - Album-/Playlist-/Künstlernavigation bleibt unverändert.
+          - Folgereparatur zu 13.7.69 nach dem Dudu7-Gerätetest.
+          MD
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "$TAG already exists"
+            exit 0
+          fi
+          gh release create "$TAG" \
+            artifacts/Metrolist-dudu7-13.7.70.apk \
+            artifacts/Metrolist-dudu7-13.7.70.apk.sha256 \
+            artifacts/dudu7-update.json \
+            --target 056dcc2c0477b87974b291475eca4ff394cf8d6d \
+            --title 'MetroList dudu7 13.7.70' \
+            --notes-file release-notes.md \
+            --prerelease
+
+      - name: Verify public updater manifest
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          import json, urllib.request
+          api='https://api.github.com/repos/andreassamitsch/headunit_landscape/releases?per_page=20'
+          req=urllib.request.Request(api,headers={'User-Agent':'Metrolist-dudu7-publish','Accept':'application/vnd.github+json'})
+          releases=json.load(urllib.request.urlopen(req,timeout=30))
+          release=next(r for r in releases if r['tag_name']=='dudu7-v13.7.70')
+          assets={a['name']:a['browser_download_url'] for a in release['assets']}
+          remote=json.load(urllib.request.urlopen(assets['dudu7-update.json'],timeout=30))
+          assert remote['versionCode']==1370079
+          assert remote['versionName']=='13.7.70'
+          assert remote['sha256']=='b0c9eb137b07b761b0db803930387d70487efebb0520c068cb7a89ab9e143a76'
+          assert 'Metrolist-dudu7-13.7.70.apk' in assets
+          print('public updater exposes validated 13.7.70')
+          PY

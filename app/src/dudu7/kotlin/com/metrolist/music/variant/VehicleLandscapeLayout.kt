@@ -128,6 +128,7 @@ private enum class VehicleRightPaneTab(
     val icon: Int,
     val route: String,
 ) {
+    HOME("Home", R.drawable.home_outlined, Screens.Home.route),
     QUEUE("Warteschlange", R.drawable.queue_music, VEHICLE_QUEUE_ROUTE),
     LIBRARY("Bibliothek", R.drawable.library_music_outlined, Screens.Library.route),
     WEBRADIO("WebRadio", R.drawable.radio, VEHICLE_WEBRADIO_ROUTE),

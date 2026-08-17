@@ -1248,6 +1248,7 @@ fun YouTubeGridItem(
     thumbnailRatio: Float = if (item is SongItem) 16f / 9 else 1f,
     isActive: Boolean = false,
     isPlaying: Boolean = false,
+    onPlayClick: (() -> Unit)? = null,
     fillMaxWidth: Boolean = false,
 ) = GridItem(
     title = {
@@ -1295,7 +1296,8 @@ fun YouTubeGridItem(
 
         if (item is SongItem && !isActive) {
             OverlayPlayButton(
-                visible = true
+                visible = true,
+                onClick = onPlayClick,
             )
         }
 
@@ -1711,7 +1713,8 @@ fun PlaylistThumbnail(
 
 @Composable
 fun BoxScope.OverlayPlayButton(
-    visible: Boolean
+    visible: Boolean,
+    onClick: (() -> Unit)? = null,
 ) {
     AnimatedVisibility(
         visible = visible,
@@ -1726,6 +1729,9 @@ fun BoxScope.OverlayPlayButton(
                 .size(36.dp)
                 .clip(CircleShape)
                 .background(Color.Black.copy(alpha = ActiveBoxAlpha))
+                .then(
+                    if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
+                )
         ) {
             Icon(
                 painter = painterResource(R.drawable.play),
