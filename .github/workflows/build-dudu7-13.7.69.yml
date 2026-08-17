@@ -2,7 +2,9 @@ name: Build Dudu7 13.7.70 Issue 140 touch fix
 
 on:
   push:
-    branches: [agent/issue-140-home-genre-song-playback]
+    branches:
+      - agent/issue-140-home-genre-song-playback
+      - agent/issues-133-134-search-home
   pull_request:
     branches: [agent/issues-133-134-search-home]
   workflow_dispatch:
@@ -100,6 +102,7 @@ jobs:
           JSON
 
       - name: Publish updater release
+        if: github.event_name != 'pull_request'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -111,8 +114,9 @@ jobs:
 
           **Issue #140 – Touch-Wiedergabe auf Home-/Genre-Kacheln behoben**
           - Das sichtbare Play-Overlay von Song-/Video-Kacheln ist jetzt ein echter Touch-Button.
-          - Touch und Tastensteuerung verwenden denselben Browse-Playbackpfad und dieselbe Queue-Logik.
+          - Touch und Kachel-Tap verwenden denselben Browse-Playbackpfad und dieselbe Queue-Logik.
           - Album-/Playlist-/Künstlernavigation bleibt unverändert.
+          - Enthält weiterhin den Fix gegen die Wiederherstellung einer alten Favoriten-Queue.
 
           Folgereparatur zu 13.7.69 nach Gerätetest auf Dudu7.
           MD
@@ -128,6 +132,7 @@ jobs:
           fi
 
       - name: Verify public updater manifest
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euxo pipefail
