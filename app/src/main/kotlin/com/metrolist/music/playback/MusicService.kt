@@ -3460,7 +3460,11 @@ class MusicService :
                         ),
                     ),
             ).setCacheWriteDataSinkFactory(null)
-            .setFlags(FLAG_IGNORE_CACHE_ON_ERROR or FLAG_IGNORE_CACHE_FOR_UNSET_LENGTH_REQUESTS)
+            // The outer cache contains completed offline downloads. A normal song's
+            // first DataSpec commonly has LENGTH_UNSET, so ignoring the cache here
+            // defeats offline playback and forces a network resolve. HLS/live safety
+            // remains on the inner playerCache layer above.
+            .setFlags(FLAG_IGNORE_CACHE_ON_ERROR)
 
     private var isSilenceSkipping = false
 
