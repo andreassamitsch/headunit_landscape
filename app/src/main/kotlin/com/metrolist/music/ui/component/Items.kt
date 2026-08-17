@@ -626,7 +626,6 @@ fun SongGridItem(
     },
     isActive: Boolean = false,
     isPlaying: Boolean = false,
-    onPlayClick: (() -> Unit)? = null,
     fillMaxWidth: Boolean = false,
 ) = GridItem(
     title = {
@@ -663,8 +662,7 @@ fun SongGridItem(
         )
         if (!isActive) {
             OverlayPlayButton(
-                visible = true,
-                onClick = onPlayClick,
+                visible = true
             )
         }
     },
@@ -1250,6 +1248,7 @@ fun YouTubeGridItem(
     thumbnailRatio: Float = if (item is SongItem) 16f / 9 else 1f,
     isActive: Boolean = false,
     isPlaying: Boolean = false,
+    onPlayClick: (() -> Unit)? = null,
     fillMaxWidth: Boolean = false,
 ) = GridItem(
     title = {
@@ -1297,7 +1296,8 @@ fun YouTubeGridItem(
 
         if (item is SongItem && !isActive) {
             OverlayPlayButton(
-                visible = true
+                visible = true,
+                onClick = onPlayClick,
             )
         }
 
