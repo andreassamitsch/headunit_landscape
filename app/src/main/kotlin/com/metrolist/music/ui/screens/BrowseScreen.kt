@@ -5,8 +5,10 @@
 
 package com.metrolist.music.ui.screens
 
+import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -23,9 +25,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.key.nativeKeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -54,6 +60,7 @@ import com.metrolist.music.ui.utils.backToMain
 import com.metrolist.music.utils.rememberEnumPreference
 import com.metrolist.music.utils.rememberPreference
 import com.metrolist.music.viewmodels.BrowseViewModel
+import timber.log.Timber
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -91,11 +98,12 @@ fun BrowseScreen(
         }
     }
 
-    // The fixed Dudu7 right pane arbitrates pointer gestures before embedded
-    // screens receive them. Browse cards therefore have to register their bounds
-    // with the same bridge already used by ArtistScreen. D-pad/keyboard activation
-    // still stays on combinedClickable; standard MetroList has no bridge provider
-    // and keeps its original pointer path unchanged.
+    // The fixed Dudu7 right pane owns vertical gestures and can route taps by the
+    // real card bounds. Playlist cards deliberately do not attach a pointer-click
+    // modifier while embedded: on the FYT/Dudu7 target combinedClickable consumes
+    // the touch but can fail to execute its click callback. The parent then sees a
+    // consumed event and cannot use its bridge fallback. Keyboard/D-pad activation
+    // is preserved explicitly below; standard MetroList keeps combinedClickable.
     DisposableEffect(rightPaneScrollBridge, lazyGridState) {
         if (rightPaneScrollBridge != null) {
             rightPaneScrollBridge.register(
@@ -107,7 +115,7 @@ fun BrowseScreen(
                             bounds.contains(positionInRoot)
                         }
                     if (target != null) {
-                        timber.log.Timber.tag("Dudu7BrowseTap").i(
+                        Timber.tag("Dudu7BrowseTap").i(
                             "Bridged BrowseScreen tap x=%.1f y=%.1f browseId=%s",
                             positionInRoot.x,
                             positionInRoot.y,
@@ -148,6 +156,12 @@ fun BrowseScreen(
 
                         is PlaylistItem -> {
                             navController.navigate("online_playlist/${item.id}")
+                            Timber.tag("Dudu7BrowseNavigate").i(
+                                "completed type=playlist id=%s currentRoute=%s title=%s",
+                                item.id,
+                                navController.currentDestination?.route,
+                                item.title,
+                            )
                         }
 
                         is ArtistItem -> {
@@ -195,12 +209,48 @@ fun BrowseScreen(
                 val rightPaneTapKey = "browse_item_${item.id}"
                 val bridgeSupportsItem =
                     item is SongItem || item is AlbumItem || item is PlaylistItem || item is ArtistItem
+                val parentOwnsPlaylistPointer = rightPaneScrollBridge != null && item is PlaylistItem
 
                 DisposableEffect(rightPaneTapKey, rightPaneScrollBridge) {
                     onDispose {
                         rightPaneTapTargets.remove(rightPaneTapKey)
                     }
                 }
+
+                val interactionModifier =
+                    if (parentOwnsPlaylistPointer) {
+                        Modifier
+                            .focusable()
+                            .onKeyEvent { event ->
+                                val native = event.nativeKeyEvent
+                                val activate =
+                                    native.action == AndroidKeyEvent.ACTION_UP &&
+                                        native.keyCode in
+                                        setOf(
+                                            AndroidKeyEvent.KEYCODE_DPAD_CENTER,
+                                            AndroidKeyEvent.KEYCODE_ENTER,
+                                            AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
+                                            AndroidKeyEvent.KEYCODE_SPACE,
+                                        )
+                                if (activate) {
+                                    onItemClick()
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            .semantics {
+                                onClick {
+                                    onItemClick()
+                                    true
+                                }
+                            }
+                    } else {
+                        Modifier.combinedClickable(
+                            onClick = onItemClick,
+                            onLongClick = onItemLongClick,
+                        )
+                    }
 
                 YouTubeGridItem(
                     item = item,
@@ -215,16 +265,26 @@ fun BrowseScreen(
                         Modifier
                             .onGloballyPositioned { coordinates ->
                                 if (rightPaneScrollBridge != null && bridgeSupportsItem) {
-                                    rightPaneTapTargets[rightPaneTapKey] =
-                                        coordinates.boundsInRoot() to onItemClick
+                                    val bounds = coordinates.boundsInRoot()
+                                    val previousBounds = rightPaneTapTargets[rightPaneTapKey]?.first
+                                    rightPaneTapTargets[rightPaneTapKey] = bounds to onItemClick
+                                    if (item is PlaylistItem && previousBounds != bounds) {
+                                        Timber.tag("Dudu7BrowseTarget").i(
+                                            "type=PlaylistItem id=%s bounds=[%.1f,%.1f,%.1f,%.1f] title=%s browseId=%s",
+                                            item.id,
+                                            bounds.left,
+                                            bounds.top,
+                                            bounds.right,
+                                            bounds.bottom,
+                                            item.title,
+                                            browseId,
+                                        )
+                                    }
                                 } else {
                                     rightPaneTapTargets.remove(rightPaneTapKey)
                                 }
                             }
-                            .combinedClickable(
-                                onClick = onItemClick,
-                                onLongClick = onItemLongClick,
-                            ),
+                            .then(interactionModifier),
                 )
             }
 

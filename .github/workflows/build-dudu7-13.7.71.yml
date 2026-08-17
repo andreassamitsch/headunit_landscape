@@ -1,4 +1,4 @@
-name: Build Dudu7 13.7.72 Issue 140 playlist touch bridge fix
+name: Verify Dudu7 Issue 140 playlist touch before release
 
 on:
   push:
@@ -7,11 +7,13 @@ on:
     branches: [agent/issues-133-134-search-home]
   workflow_dispatch:
 
+# Verification-only workflow. No updater release permission is granted until the
+# mandatory real-touch emulator path is green.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  test-build-release:
+  test-build-gate:
     runs-on: ubuntu-22.04
     timeout-minutes: 120
     steps:
@@ -27,7 +29,7 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Verify right-pane Browse touch implementation
+      - name: Verify Issue 140 touch fix and release gate
         shell: bash
         run: |
           set -euxo pipefail
@@ -35,24 +37,32 @@ jobs:
           grep -q 'versionName = "13.7.72"' app/build.gradle.kts
           python3 - <<'PY'
           from pathlib import Path
-          text = Path('app/src/main/kotlin/com/metrolist/music/ui/screens/BrowseScreen.kt').read_text()
+          browse = Path('app/src/main/kotlin/com/metrolist/music/ui/screens/BrowseScreen.kt').read_text()
+          workflow = Path('.github/workflows/build-dudu7-13.7.71.yml').read_text()
           required = [
               'LocalRightPaneScrollBridge',
-              'val lazyGridState = rememberLazyGridState()',
               'rightPaneScrollBridge.register(',
               'handler = { delta -> lazyGridState.dispatchRawDelta(delta) }',
               'tapHandler = { positionInRoot ->',
-              'coordinates.boundsInRoot() to onItemClick',
-              'userScrollEnabled = rightPaneScrollBridge == null',
-              'is PlaylistItem -> {\n                            navController.navigate("online_playlist/${item.id}")',
+              'parentOwnsPlaylistPointer = rightPaneScrollBridge != null && item is PlaylistItem',
+              'if (parentOwnsPlaylistPointer)',
+              '.focusable()',
+              '.onKeyEvent { event ->',
+              '.semantics {',
+              'Dudu7BrowseTarget',
+              'Dudu7BrowseNavigate',
+              'navController.navigate("online_playlist/${item.id}")',
+              '.then(interactionModifier)',
               '.combinedClickable(',
           ]
           for needle in required:
-              assert needle in text, needle
-          assert 'detectTapGestures' not in text
-          assert '.pointerInput(item.id)' not in text
+              assert needle in browse, needle
+          assert 'userScrollEnabled = rightPaneScrollBridge == null' in browse
+          assert 'continue-on-error: true' not in workflow
+          assert 'gh release' not in workflow
+          assert 'Publish updater release' not in workflow
           PY
-          git diff --check HEAD~2 HEAD || git diff --check
+          git diff --check HEAD~1 HEAD
 
       - name: Compile and unit test
         run: |
@@ -60,35 +70,23 @@ jobs:
           ./gradlew --console=plain :app:compileGmsStandardDebugKotlin --no-daemon --stacktrace
           ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
 
-      - name: Build and verify Dudu7 production APK
+      - name: Build and verify Dudu7 candidate APK
         shell: bash
         run: |
           set -euxo pipefail
           mkdir -p artifacts
           ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace
           APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
-          cp "$APK" artifacts/Metrolist-dudu7-13.7.72.apk
+          cp "$APK" artifacts/Metrolist-dudu7-issue140-candidate.apk
           BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
-          "$BUILD_TOOLS/aapt" dump badging artifacts/Metrolist-dudu7-13.7.72.apk > artifacts/apk-badging.txt
-          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs artifacts/Metrolist-dudu7-13.7.72.apk > artifacts/apk-signature.txt
+          "$BUILD_TOOLS/aapt" dump badging artifacts/Metrolist-dudu7-issue140-candidate.apk > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs artifacts/Metrolist-dudu7-issue140-candidate.apk > artifacts/apk-signature.txt
           grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370081'" artifacts/apk-badging.txt
           grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
-          unzip -l artifacts/Metrolist-dudu7-13.7.72.apk > artifacts/apk-contents.txt
+          unzip -l artifacts/Metrolist-dudu7-issue140-candidate.apk > artifacts/apk-contents.txt
           grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
           grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
-          stat -c '%s' artifacts/Metrolist-dudu7-13.7.72.apk > artifacts/apk-size.txt
-          sha256sum artifacts/Metrolist-dudu7-13.7.72.apk > artifacts/Metrolist-dudu7-13.7.72.apk.sha256
-          SHA=$(awk '{print $1}' artifacts/Metrolist-dudu7-13.7.72.apk.sha256)
-          cat > artifacts/dudu7-update.json <<JSON
-          {
-            "versionCode": 1370081,
-            "versionName": "13.7.72",
-            "packageName": "com.metrolist.music.dudu7.debug",
-            "signerSha256": "138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee",
-            "apkAsset": "Metrolist-dudu7-13.7.72.apk",
-            "sha256": "$SHA"
-          }
-          JSON
+          sha256sum artifacts/Metrolist-dudu7-issue140-candidate.apk > artifacts/Metrolist-dudu7-issue140-candidate.apk.sha256
 
       - name: Prepare x86_64 emulator APK
         shell: bash
@@ -107,11 +105,10 @@ jobs:
           rm -rf app/build/outputs/apk/gmsDudu7/debug
           ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace > artifacts/emulator-build.log
           APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
-          cp "$APK" artifacts/Metrolist-dudu7-13.7.72-x86_64-test.apk
-          unzip -l artifacts/Metrolist-dudu7-13.7.72-x86_64-test.apk > artifacts/emulator-apk-contents.txt
+          cp "$APK" artifacts/Metrolist-dudu7-issue140-x86_64-test.apk
+          unzip -l artifacts/Metrolist-dudu7-issue140-x86_64-test.apk > artifacts/emulator-apk-contents.txt
           grep -q 'lib/x86_64/' artifacts/emulator-apk-contents.txt
           cp /tmp/build.gradle.kts.production app/build.gradle.kts
-          cp artifacts/Metrolist-dudu7-13.7.72-x86_64-test.apk artifacts/Metrolist-dudu7-13.7.70-x86_64-test.apk
 
       - name: Enable KVM
         shell: bash
@@ -121,8 +118,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
 
-      - name: Best-effort regression test Dudu7 Home genre path
-        continue-on-error: true
+      - name: Mandatory real-touch test Home to Genre to Playlist
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -133,117 +129,21 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: bash scripts/run_issue_140_browse_playback_emulator.sh
 
-      - name: Publish updater release
-        if: github.event_name != 'pull_request'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euxo pipefail
-          TAG='dudu7-v13.7.72'
-          TARGET=$(git rev-parse HEAD)
-          cat > artifacts/release-notes.md <<'MD'
-          ## MetroList dudu7 13.7.72
-
-          **Issue #140 – zweiter Gerätetest-Fix für Home → Genre → Playlist-Touch**
-          - 13.7.71 hat auf dem realen Dudu7 keine Verbesserung gebracht; der lokale Playlist-Overlay-Ansatz wurde deshalb entfernt.
-          - Ursache: Die feste Dudu7-Rechtsansicht besitzt bereits einen übergeordneten Gesture-/Tap-Bridge-Pfad. Genau dieser Pfad wird nun auch von `BrowseScreen` verwendet.
-          - Sichtbare Browse-Karten registrieren ihre echten `boundsInRoot()` beim `RightPaneScrollBridge`; ein Touch wird dort derselben `onItemClick`-Aktion zugeordnet wie D-Pad/Enter.
-          - Playlist-Karten navigieren damit über denselben Pfad nach `online_playlist/<id>` wie die funktionierende Tastensteuerung.
-          - Vertikales Scrollen der eingebetteten Browse-Liste wird ebenfalls über den vorhandenen Right-Pane-Bridge-Mechanismus geführt.
-          - Standard-MetroList bleibt unverändert, weil außerhalb der Dudu7-Rechtsansicht kein `LocalRightPaneScrollBridge` bereitgestellt wird.
-
-          Automatisch geprüft: Standard-Compile, Dudu7-Unit-Tests, ARM64/ARMv7-Build, Signatur/Version/ABI-Prüfung und x86_64-Test-Build. Der live-datenabhängige Emulatorpfad bleibt Best-Effort; der reale Dudu7-Touchtest entscheidet Issue #140.
-          MD
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release edit "$TAG" \
-              --title 'MetroList dudu7 13.7.72' \
-              --notes-file artifacts/release-notes.md \
-              --prerelease
-            gh release upload "$TAG" \
-              artifacts/Metrolist-dudu7-13.7.72.apk \
-              artifacts/Metrolist-dudu7-13.7.72.apk.sha256 \
-              artifacts/dudu7-update.json \
-              --clobber
-          else
-            gh release create "$TAG" \
-              artifacts/Metrolist-dudu7-13.7.72.apk \
-              artifacts/Metrolist-dudu7-13.7.72.apk.sha256 \
-              artifacts/dudu7-update.json \
-              --target "$TARGET" \
-              --title 'MetroList dudu7 13.7.72' \
-              --notes-file artifacts/release-notes.md \
-              --prerelease
-          fi
-
-      - name: Verify public updater manifest
-        if: github.event_name != 'pull_request'
-        shell: bash
-        run: |
-          set -euxo pipefail
-          python3 - <<'PY'
-          import json, time, urllib.request
-          from pathlib import Path
-
-          local = json.loads(Path('artifacts/dudu7-update.json').read_text())
-          api = 'https://api.github.com/repos/andreassamitsch/headunit_landscape/releases?per_page=20'
-          last_error = None
-          for attempt in range(1, 7):
-              try:
-                  req = urllib.request.Request(
-                      api,
-                      headers={
-                          'User-Agent': 'Metrolist-dudu7-ci',
-                          'Accept': 'application/vnd.github+json',
-                          'Cache-Control': 'no-cache',
-                      },
-                  )
-                  with urllib.request.urlopen(req, timeout=30) as response:
-                      releases = json.load(response)
-                  release = next((r for r in releases if r.get('tag_name') == 'dudu7-v13.7.72'), None)
-                  if release is None:
-                      raise RuntimeError('13.7.72 release not visible yet')
-                  assets = {a['name']: a['browser_download_url'] for a in release.get('assets', [])}
-                  for required in ('Metrolist-dudu7-13.7.72.apk', 'dudu7-update.json'):
-                      if required not in assets:
-                          raise RuntimeError(f'missing updater asset: {required}')
-                  manifest_req = urllib.request.Request(
-                      assets['dudu7-update.json'],
-                      headers={'User-Agent': 'Metrolist-dudu7-ci', 'Cache-Control': 'no-cache'},
-                  )
-                  with urllib.request.urlopen(manifest_req, timeout=30) as response:
-                      remote = json.load(response)
-                  assert remote['versionCode'] == 1370081
-                  assert remote['versionName'] == '13.7.72'
-                  assert remote['packageName'] == 'com.metrolist.music.dudu7.debug'
-                  assert remote['signerSha256'] == '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee'
-                  assert remote['apkAsset'] == 'Metrolist-dudu7-13.7.72.apk'
-                  assert remote['sha256'] == local['sha256']
-                  print('public updater exposes the exact validated 13.7.72 APK')
-                  break
-              except Exception as error:
-                  last_error = error
-                  print(f'updater verification attempt {attempt}/6 failed: {error}')
-                  if attempt == 6:
-                      raise
-                  time.sleep(10)
-          PY
-
-      - name: Upload APK and test evidence
+      - name: Upload candidate and verification evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Metrolist-dudu7-13.7.72-${{ github.run_id }}
+          name: Metrolist-dudu7-issue140-verification-${{ github.run_id }}
           path: |
-            artifacts/Metrolist-dudu7-13.7.72.apk
-            artifacts/Metrolist-dudu7-13.7.72.apk.sha256
-            artifacts/dudu7-update.json
-            artifacts/apk-size.txt
+            artifacts/Metrolist-dudu7-issue140-candidate.apk
+            artifacts/Metrolist-dudu7-issue140-candidate.apk.sha256
             artifacts/apk-badging.txt
             artifacts/apk-signature.txt
             artifacts/apk-contents.txt
             artifacts/emulator-build.log
             artifacts/emulator-apk-contents.txt
+            artifacts/system-dialog-*.xml
+            artifacts/home-tabs-*.xml
             artifacts/home-selected.xml
             artifacts/home-selected.png
             artifacts/home-scroll-*.xml
@@ -254,10 +154,9 @@ jobs:
             artifacts/selected-genre.txt
             artifacts/browse-page.xml
             artifacts/browse-page.png
-            artifacts/selected-browse-title.txt
-            artifacts/browse-after-play.xml
-            artifacts/browse-after-play.png
-            artifacts/browse-after-play-media-session.txt
-            artifacts/browse-after-play-logcat.txt
-            artifacts/release-notes.md
+            artifacts/browse-targets-*.log
+            artifacts/selected-playlist.json
+            artifacts/playlist-after-tap.xml
+            artifacts/playlist-after-tap.png
+            artifacts/playlist-after-tap-logcat.txt
           retention-days: 14
