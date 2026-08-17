@@ -5,7 +5,6 @@
 
 package com.metrolist.music.ui.screens
 
-import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
@@ -25,8 +24,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.input.key.nativeKeyEvent
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.painterResource
@@ -222,15 +224,14 @@ fun BrowseScreen(
                         Modifier
                             .focusable()
                             .onKeyEvent { event ->
-                                val native = event.nativeKeyEvent
                                 val activate =
-                                    native.action == AndroidKeyEvent.ACTION_UP &&
-                                        native.keyCode in
+                                    event.type == KeyEventType.KeyUp &&
+                                        event.key in
                                         setOf(
-                                            AndroidKeyEvent.KEYCODE_DPAD_CENTER,
-                                            AndroidKeyEvent.KEYCODE_ENTER,
-                                            AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
-                                            AndroidKeyEvent.KEYCODE_SPACE,
+                                            Key.DirectionCenter,
+                                            Key.Enter,
+                                            Key.NumPadEnter,
+                                            Key.Spacebar,
                                         )
                                 if (activate) {
                                     onItemClick()
