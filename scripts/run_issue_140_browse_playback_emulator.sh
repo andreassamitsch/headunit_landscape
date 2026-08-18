@@ -2,10 +2,8 @@
 set -euxo pipefail
 
 # Stable workflow entry point for Issue #140. Keep the large v2 driver as the
-# baseline, but patch its genre chooser deterministically before running it:
-# full-width section headers such as "Moods & moments" are not genre cards.
-# Prefer the real visible "Chill" card so the test enters BrowseScreen and can
-# exercise an actual PlaylistItem touch.
+# baseline, but make its live-data genre selection deterministic and require
+# proof that the physical genre tap traverses the Dudu7 parent touch bridge.
 cp scripts/run_issue_140_browse_playback_emulator_v2.sh /tmp/run_issue_140.sh
 python3 - <<'PY'
 from pathlib import Path
@@ -26,8 +24,23 @@ s = s.replace(
     "candidates.sort(); preferred=next((c for c in candidates if c[4] == 'Chill'), None); ya,xa,xb,yb,text=preferred or candidates[0]",
     1,
 )
+anchor = "sleep 15\n\ndump_ui /sdcard/browse.xml \"$ARTIFACTS/browse-page.xml\""
+replacement = """sleep 15
+
+# A physical genre tap must have been consumed by the Dudu7 right-pane bridge
+# and must have executed the normal youtube_browse navigation callback. This
+# catches the real-device failure mode where the child Compose clickable ate the
+# touch and the right pane stayed on mood_and_genres.
+adb logcat -d -v brief > \"$ARTIFACTS/genre-after-tap-logcat.txt\"
+grep -q 'Dudu7MoodGenreTap.*Bridged MoodAndGenres tap' \"$ARTIFACTS/genre-after-tap-logcat.txt\"
+grep -q 'Dudu7MoodGenreNavigate.*navigate title=' \"$ARTIFACTS/genre-after-tap-logcat.txt\"
+
+dump_ui /sdcard/browse.xml \"$ARTIFACTS/browse-page.xml\""""
+if anchor not in s:
+    raise SystemExit('Issue 140 post-genre assertion anchor missing')
+s = s.replace(anchor, replacement, 1)
 if s == p.read_text():
-    raise SystemExit('Issue 140 genre chooser patch did not apply')
+    raise SystemExit('Issue 140 genre chooser/bridge patch did not apply')
 p.write_text(s)
 PY
 exec bash /tmp/run_issue_140.sh
