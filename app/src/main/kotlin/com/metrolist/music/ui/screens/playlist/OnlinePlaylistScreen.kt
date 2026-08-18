@@ -153,7 +153,12 @@ fun OnlinePlaylistScreen(navController: NavController, viewModel: OnlinePlaylist
     if (isSearching) BackHandler { isSearching = false; query = TextFieldValue() } else if (inSelectMode) BackHandler(onBack = onExitSelectionMode)
 
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(state = lazyListState, contentPadding = LocalPlayerAwareWindowInsets.current.union(WindowInsets.ime).asPaddingValues(), userScrollEnabled = rightPaneScrollBridge == null) {
+        // Keep Compose's native LazyColumn scrolling enabled inside the Dudu7 pane.
+        // The outer right-pane bridge observes PointerEventPass.Final and only
+        // applies its fallback delta when the child did not consume the drag, so
+        // native scrolling cannot double-scroll. This also leaves a working scroll
+        // path during NavHost/bridge-owner transitions while bridged row taps stay intact.
+        LazyColumn(state = lazyListState, contentPadding = LocalPlayerAwareWindowInsets.current.union(WindowInsets.ime).asPaddingValues()) {
             if (playlist == null || songs.isEmpty()) {
                 if (isLoading) item(key = "loading_placeholder") { Box(Modifier.fillParentMaxSize().padding(32.dp), contentAlignment = Alignment.Center) { ContainedLoadingIndicator() } }
                 else if (error != null) item(key = "error_placeholder") { Column(Modifier.fillParentMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) { Text(error ?: stringResource(R.string.error_unknown), style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center); Spacer(Modifier.height(16.dp)); androidx.compose.material3.TextButton(onClick = { viewModel.retry() }) { Text(stringResource(R.string.retry)) } } }
