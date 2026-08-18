@@ -137,36 +137,84 @@ jobs:
           MD
           TAG=dudu7-v13.7.73
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo '13.7.73 already exists; refusing to replace a same-version updater APK.'
-            exit 1
+            echo '13.7.73 release already exists; keeping the previously validated updater assets unchanged.'
+          else
+            gh release create "$TAG" \
+              artifacts/Metrolist-dudu7-13.7.73.apk \
+              artifacts/Metrolist-dudu7-13.7.73.apk.sha256 \
+              artifacts/dudu7-update.json \
+              --target "$(git rev-parse HEAD)" \
+              --title 'MetroList dudu7 13.7.73' \
+              --notes-file artifacts/release-notes.md \
+              --prerelease
           fi
-          gh release create "$TAG" \
-            artifacts/Metrolist-dudu7-13.7.73.apk \
-            artifacts/Metrolist-dudu7-13.7.73.apk.sha256 \
-            artifacts/dudu7-update.json \
-            --target "$(git rev-parse HEAD)" \
-            --title 'MetroList dudu7 13.7.73' \
-            --notes-file artifacts/release-notes.md \
-            --prerelease
 
       - name: Verify public updater manifest
         shell: bash
         run: |
           set -euxo pipefail
           python3 - <<'PY'
-          import json, urllib.request
+          import hashlib
+          import json
+          import time
+          import urllib.error
+          import urllib.request
           from pathlib import Path
+
           local=json.loads(Path('artifacts/dudu7-update.json').read_text())
-          api='https://api.github.com/repos/andreassamitsch/headunit_landscape/releases?per_page=20'
-          req=urllib.request.Request(api,headers={'User-Agent':'Metrolist-dudu7-ci','Accept':'application/vnd.github+json'})
-          releases=json.load(urllib.request.urlopen(req,timeout=30))
-          r=next(r for r in releases if r['tag_name']=='dudu7-v13.7.73')
-          assets={a['name']:a['browser_download_url'] for a in r['assets']}
-          m=json.load(urllib.request.urlopen(assets['dudu7-update.json'],timeout=30))
-          assert m['versionCode']==1370082
-          assert m['versionName']=='13.7.73'
-          assert m['sha256']==local['sha256']
-          print('13.7.73 public updater manifest verified against validated APK')
+          tag='dudu7-v13.7.73'
+          api=f'https://api.github.com/repos/andreassamitsch/headunit_landscape/releases/tags/{tag}'
+          headers={'User-Agent':'Metrolist-dudu7-ci','Accept':'application/vnd.github+json'}
+
+          release=None
+          for attempt in range(1, 13):
+              try:
+                  req=urllib.request.Request(api,headers=headers)
+                  release=json.load(urllib.request.urlopen(req,timeout=30))
+                  if release.get('tag_name')==tag and release.get('assets'):
+                      break
+              except (urllib.error.HTTPError, urllib.error.URLError):
+                  release=None
+              print(f'Waiting for public release propagation ({attempt}/12)')
+              time.sleep(5)
+          if not release:
+              raise SystemExit('13.7.73 release did not become publicly readable')
+
+          assets={a['name']:a['browser_download_url'] for a in release['assets']}
+          required={'dudu7-update.json','Metrolist-dudu7-13.7.73.apk','Metrolist-dudu7-13.7.73.apk.sha256'}
+          missing=required-assets.keys()
+          if missing:
+              raise SystemExit(f'Missing updater assets: {sorted(missing)}')
+
+          manifest=None
+          for attempt in range(1, 13):
+              try:
+                  req=urllib.request.Request(assets['dudu7-update.json'],headers={'User-Agent':'Metrolist-dudu7-ci'})
+                  manifest=json.load(urllib.request.urlopen(req,timeout=30))
+                  break
+              except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError):
+                  print(f'Waiting for public manifest asset propagation ({attempt}/12)')
+                  time.sleep(5)
+          if not manifest:
+              raise SystemExit('Public dudu7-update.json could not be read')
+
+          assert manifest['versionCode']==1370082
+          assert manifest['versionName']=='13.7.73'
+          assert manifest['packageName']=='com.metrolist.music.dudu7.debug'
+          assert manifest['signerSha256']=='138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee'
+          assert manifest['apkAsset']=='Metrolist-dudu7-13.7.73.apk'
+          assert manifest['sha256']==local['sha256']
+
+          req=urllib.request.Request(assets['Metrolist-dudu7-13.7.73.apk'],headers={'User-Agent':'Metrolist-dudu7-ci'})
+          h=hashlib.sha256()
+          with urllib.request.urlopen(req,timeout=120) as response:
+              while True:
+                  chunk=response.read(1024*1024)
+                  if not chunk:
+                      break
+                  h.update(chunk)
+          assert h.hexdigest()==manifest['sha256']
+          print('13.7.73 public updater manifest and APK verified against validated build')
           PY
 
       - name: Upload validation evidence
@@ -191,9 +239,8 @@ jobs:
             artifacts/home-scroll-*.xml
             artifacts/home-scroll-*.png
             artifacts/mood-title-visible.xml
-            artifacts/mood-genres.xml
-            artifacts/mood-genres.png
-            artifacts/selected-genre.txt
+            artifacts/selected-home-genre.json
+            artifacts/home-genre-after-tap-logcat.txt
             artifacts/browse-page.xml
             artifacts/browse-page.png
             artifacts/browse-targets-*.log
