@@ -33,8 +33,8 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          grep -q 'versionCode = 1370081' app/build.gradle.kts
-          grep -q 'versionName = "13.7.72"' app/build.gradle.kts
+          grep -q 'versionCode = 1370082' app/build.gradle.kts
+          grep -q 'versionName = "13.7.73"' app/build.gradle.kts
           python3 - <<'PY'
           from pathlib import Path
           browse = Path('app/src/main/kotlin/com/metrolist/music/ui/screens/BrowseScreen.kt').read_text()
@@ -81,7 +81,7 @@ jobs:
           BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
           "$BUILD_TOOLS/aapt" dump badging artifacts/Metrolist-dudu7-issue140-candidate.apk > artifacts/apk-badging.txt
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs artifacts/Metrolist-dudu7-issue140-candidate.apk > artifacts/apk-signature.txt
-          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370081'" artifacts/apk-badging.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370082'" artifacts/apk-badging.txt
           grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
           unzip -l artifacts/Metrolist-dudu7-issue140-candidate.apk > artifacts/apk-contents.txt
           grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
@@ -149,9 +149,8 @@ jobs:
             artifacts/home-scroll-*.xml
             artifacts/home-scroll-*.png
             artifacts/mood-title-visible.xml
-            artifacts/mood-genres.xml
-            artifacts/mood-genres.png
-            artifacts/selected-genre.txt
+            artifacts/selected-home-genre.json
+            artifacts/home-genre-after-tap-logcat.txt
             artifacts/browse-page.xml
             artifacts/browse-page.png
             artifacts/browse-targets-*.log
