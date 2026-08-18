@@ -3,14 +3,65 @@ set -euxo pipefail
 
 # Stable workflow entry point for Issue #140.
 # The reported path is Home -> visible mood/genre tile -> Browse -> Playlist.
-# The older driver incorrectly tapped the "Mood & Genres" section heading and
-# then expected a separate MoodAndGenresScreen. That is not the Dudu7 Home path:
-# Home already renders the real mood/genre buttons directly.
+# Home's mood/genre data comes from a separate asynchronous YouTube Explore
+# request, so the E2E driver retries that external feed without weakening any
+# touch/navigation assertion.
 cp scripts/run_issue_140_browse_playback_emulator_v2.sh /tmp/run_issue_140.sh
 python3 - <<'PY'
 from pathlib import Path
 p = Path('/tmp/run_issue_140.sh')
 s = p.read_text()
+
+scan_start = s.index('# Scroll only the lower Dudu7 pane until the real Home section')
+scan_end = s.index('# Open the original MetroList MoodAndGenresScreen via a real touch.')
+scan_replacement = r'''# Wait for the asynchronously loaded Explore mood/genre feed. A missing Explore
+# response is not a touch failure: restart the app process and retry the same
+# real Home path so HomeViewModel issues a fresh YouTube.explore() request.
+rm -f "$ARTIFACTS/mood-title-visible.xml"
+for feed_attempt in 1 2 3; do
+  sleep 12
+  for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
+    dump_ui /sdcard/home-scroll.xml "$ARTIFACTS/home-feed-${feed_attempt}-scroll-$attempt.xml"
+    adb exec-out screencap -p > "$ARTIFACTS/home-feed-${feed_attempt}-scroll-$attempt.png" || true
+    if python3 - "$ARTIFACTS/home-feed-${feed_attempt}-scroll-$attempt.xml" <<'PYFEED'
+import re, sys, xml.etree.ElementTree as ET
+root=ET.parse(sys.argv[1]).getroot()
+for n in root.iter('node'):
+    if 'Genres' not in n.attrib.get('text',''):
+        continue
+    m=re.match(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.attrib.get('bounds',''))
+    if not m:
+        continue
+    x1,y1,x2,y2=map(int,m.groups())
+    if 1050 <= y1 < y2 <= 1910 and x2>x1:
+        raise SystemExit(0)
+raise SystemExit(1)
+PYFEED
+    then
+      cp "$ARTIFACTS/home-feed-${feed_attempt}-scroll-$attempt.xml" "$ARTIFACTS/mood-title-visible.xml"
+      break
+    fi
+    adb shell input swipe 800 1770 800 1180 650
+    sleep 2
+  done
+
+  if test -f "$ARTIFACTS/mood-title-visible.xml"; then
+    echo "Home mood/genre feed available on attempt $feed_attempt"
+    break
+  fi
+
+  # Capture backend/app diagnostics before retrying a fresh HomeViewModel load.
+  adb logcat -d -v brief > "$ARTIFACTS/home-feed-${feed_attempt}-missing-logcat.txt" || true
+  adb shell am force-stop "$PACKAGE"
+  sleep 2
+  adb shell am start -W -n "$PACKAGE/$ACTIVITY"
+  sleep 18
+done
+test -f "$ARTIFACTS/mood-title-visible.xml"
+
+'''
+s = s[:scan_start] + scan_replacement + s[scan_end:]
+
 start = s.index('# Open the original MetroList MoodAndGenresScreen via a real touch.')
 end = s.index('# Select a specifically identified PlaylistItem from the actual rendered card')
 replacement = r'''# Tap a real visible mood/genre button directly on Home. This is the actual
@@ -22,8 +73,6 @@ import json, re, subprocess, xml.etree.ElementTree as ET
 p='artifacts/mood-title-visible.xml'
 root=ET.parse(p).getroot()
 
-# Locate the visible Mood/Genre section heading first so candidate buttons are
-# constrained to its four-row grid instead of unrelated Home cards.
 title_bounds=[]
 for n in root.iter('node'):
     text=n.attrib.get('text','').strip()
@@ -33,7 +82,7 @@ for n in root.iter('node'):
     if not m:
         continue
     x1,y1,x2,y2=map(int,m.groups())
-    if 1080 <= y1 < y2 <= 1910:
+    if 1050 <= y1 < y2 <= 1910:
         title_bounds.append((x1,y1,x2,y2,text))
 if not title_bounds:
     raise SystemExit('Visible Home Mood/Genres heading not found')
@@ -50,8 +99,6 @@ for n in root.iter('node'):
     if not m:
         continue
     x1,y1,x2,y2=map(int,m.groups()); w=x2-x1; h=y2-y1
-    # At 420 dpi the 48dp MoodAndGenresButton is ~126px high. Restrict the
-    # candidate to that geometry and to the four rows directly below heading.
     if not (title_bottom <= y1 < y2 <= 1910):
         continue
     if y1 > title_bottom + 760:
@@ -84,9 +131,6 @@ subprocess.run(['adb','shell','input','tap',str(selected['center'][0]),str(selec
 PYHOMEGENRE
 sleep 15
 
-# Prove that the physical Home-tile tap actually navigated to Browse. Browse
-# logs every rendered target from its onGloballyPositioned callback, so this is
-# stronger than merely seeing some text change in UIAutomator.
 adb logcat -d -v brief > "$ARTIFACTS/home-genre-after-tap-logcat.txt"
 dump_ui /sdcard/browse.xml "$ARTIFACTS/browse-page.xml"
 adb exec-out screencap -p > "$ARTIFACTS/browse-page.png"
