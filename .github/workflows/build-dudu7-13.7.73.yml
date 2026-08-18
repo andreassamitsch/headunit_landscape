@@ -18,26 +18,37 @@ jobs:
           ref: ${{ github.head_ref || github.ref }}
           fetch-depth: 0
           submodules: recursive
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
+
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Verify Issue 140 row touch implementation
+      - name: Verify Issue 140 touch implementation
         shell: bash
         run: |
           set -euxo pipefail
           grep -q 'versionCode = 1370082' app/build.gradle.kts
           grep -q 'versionName = "13.7.73"' app/build.gradle.kts
-          FILE=app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/OnlinePlaylistScreen.kt
-          grep -q 'LocalRightPaneScrollBridge' "$FILE"
-          grep -q 'rightPaneScrollBridge.register(' "$FILE"
-          grep -q 'lazyListState.dispatchRawDelta(delta)' "$FILE"
-          grep -q 'rightPaneSongTapTargets' "$FILE"
-          grep -q 'coordinates.boundsInRoot() to onSongClick' "$FILE"
-          grep -q 'Dudu7PlaylistPlayback' "$FILE"
-          grep -q 'YouTubePlaylistQueue(' "$FILE"
+
+          PLAYLIST=app/src/main/kotlin/com/metrolist/music/ui/screens/playlist/OnlinePlaylistScreen.kt
+          grep -q 'LocalRightPaneScrollBridge' "$PLAYLIST"
+          grep -q 'rightPaneScrollBridge.register(' "$PLAYLIST"
+          grep -q 'lazyListState.dispatchRawDelta(delta)' "$PLAYLIST"
+          grep -q 'rightPaneSongTapTargets' "$PLAYLIST"
+          grep -q 'coordinates.boundsInRoot() to onSongClick' "$PLAYLIST"
+          grep -q 'Dudu7PlaylistPlayback' "$PLAYLIST"
+          grep -q 'YouTubePlaylistQueue(' "$PLAYLIST"
+
+          BROWSE=app/src/main/kotlin/com/metrolist/music/ui/screens/BrowseScreen.kt
+          grep -q 'LocalRightPaneScrollBridge' "$BROWSE"
+          grep -q 'Dudu7BrowseTarget' "$BROWSE"
+          grep -q 'Dudu7BrowseTap' "$BROWSE"
+          grep -q 'Dudu7BrowseNavigate' "$BROWSE"
+          grep -q 'navController.navigate("online_playlist/${item.id}")' "$BROWSE"
+          grep -q 'userScrollEnabled = rightPaneScrollBridge == null' "$BROWSE"
           git diff --check HEAD~3 HEAD
 
       - name: Compile and unit test
@@ -75,18 +86,42 @@ jobs:
           cp app/build.gradle.kts /tmp/build.gradle.kts.production
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('app/build.gradle.kts'); s=p.read_text(); old='abiFilters += listOf("arm64-v8a", "armeabi-v7a")'
-          assert old in s
+          p=Path('app/build.gradle.kts')
+          s=p.read_text()
+          old='abiFilters += listOf("arm64-v8a", "armeabi-v7a")'
+          if old not in s:
+              raise SystemExit('production ABI filter anchor not found')
           p.write_text(s.replace(old,'abiFilters += listOf("x86_64")',1))
           PY
           rm -rf app/build/outputs/apk/gmsDudu7/debug
-          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace > artifacts/emulator-build.log
           APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
           cp "$APK" artifacts/Metrolist-dudu7-13.7.73-x86_64-test.apk
-          unzip -l artifacts/Metrolist-dudu7-13.7.73-x86_64-test.apk | grep 'lib/x86_64/'
+          cp "$APK" artifacts/Metrolist-dudu7-issue140-x86_64-test.apk
+          unzip -l artifacts/Metrolist-dudu7-issue140-x86_64-test.apk > artifacts/emulator-apk-contents.txt
+          grep -q 'lib/x86_64/' artifacts/emulator-apk-contents.txt
           cp /tmp/build.gradle.kts.production app/build.gradle.kts
 
-      - name: Publish updater release only after all blocking checks pass
+      - name: Enable KVM
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+
+      - name: Mandatory real-touch test Home to Genre to Playlist
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash scripts/run_issue_140_browse_playback_emulator.sh
+
+      - name: Publish updater release only after mandatory touch test passes
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -94,15 +129,25 @@ jobs:
           set -euxo pipefail
           cat > artifacts/release-notes.md <<'MD'
           ## MetroList dudu7 13.7.73
-          **Issue #140 – tatsächlicher Playlist-Titel-Touchpfad korrigiert**
-          - Die bisherigen Fixes erreichten nur Home/Browse und das Öffnen einer Playlist.
-          - Die Titelzeilen in `OnlinePlaylistScreen` lagen danach weiterhin unter dem festen Dudu7-Rechtsfenster-Gesture-Layer.
-          - Die Playlist-Titel registrieren nun ihre realen Bildschirmgrenzen beim vorhandenen Dudu7 `RightPaneScrollBridge`.
-          - Ein echter Touch auf eine Titelzeile ruft exakt denselben `YouTubePlaylistQueue`-Playbackpfad auf wie die funktionierende Tastenaktivierung.
-          - Standard-MetroList bleibt außerhalb der Dudu7-Rechtsansicht beim bisherigen `combinedClickable`.
+          **Issue #140 – Playlist-Touchpfad korrigiert und vor Auslieferung geprüft**
+          - Home → Genre → Playlist wird im Emulator über einen echten `adb input tap` auf die gerenderte Playlist-Karte geprüft.
+          - Die Playlist-Titel in `OnlinePlaylistScreen` werden über den vorhandenen Dudu7 `RightPaneScrollBridge` an denselben `YouTubePlaylistQueue`-Pfad wie die Tastenaktivierung geleitet.
+          - Standard-MetroList bleibt außerhalb der Dudu7-Rechtsansicht beim bisherigen Compose-Touchpfad.
+          - Die Updater-Auslieferung erfolgt erst nach Compile, Unit-Tests, ARM-/Signatur-/ABI-Prüfung und bestandenem Pflicht-Touchtest.
           MD
           TAG=dudu7-v13.7.73
-          gh release create "$TAG" artifacts/Metrolist-dudu7-13.7.73.apk artifacts/Metrolist-dudu7-13.7.73.apk.sha256 artifacts/dudu7-update.json --target "$(git rev-parse HEAD)" --title 'MetroList dudu7 13.7.73' --notes-file artifacts/release-notes.md --prerelease
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo '13.7.73 already exists; refusing to replace a same-version updater APK.'
+            exit 1
+          fi
+          gh release create "$TAG" \
+            artifacts/Metrolist-dudu7-13.7.73.apk \
+            artifacts/Metrolist-dudu7-13.7.73.apk.sha256 \
+            artifacts/dudu7-update.json \
+            --target "$(git rev-parse HEAD)" \
+            --title 'MetroList dudu7 13.7.73' \
+            --notes-file artifacts/release-notes.md \
+            --prerelease
 
       - name: Verify public updater manifest
         shell: bash
@@ -110,14 +155,18 @@ jobs:
           set -euxo pipefail
           python3 - <<'PY'
           import json, urllib.request
+          from pathlib import Path
+          local=json.loads(Path('artifacts/dudu7-update.json').read_text())
           api='https://api.github.com/repos/andreassamitsch/headunit_landscape/releases?per_page=20'
           req=urllib.request.Request(api,headers={'User-Agent':'Metrolist-dudu7-ci','Accept':'application/vnd.github+json'})
           releases=json.load(urllib.request.urlopen(req,timeout=30))
           r=next(r for r in releases if r['tag_name']=='dudu7-v13.7.73')
           assets={a['name']:a['browser_download_url'] for a in r['assets']}
           m=json.load(urllib.request.urlopen(assets['dudu7-update.json'],timeout=30))
-          assert m['versionCode']==1370082 and m['versionName']=='13.7.73' and m['sha256']
-          print('13.7.73 public updater manifest verified')
+          assert m['versionCode']==1370082
+          assert m['versionName']=='13.7.73'
+          assert m['sha256']==local['sha256']
+          print('13.7.73 public updater manifest verified against validated APK')
           PY
 
       - name: Upload validation evidence
@@ -125,5 +174,32 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Metrolist-dudu7-13.7.73-issue-140
-          path: artifacts/
+          path: |
+            artifacts/Metrolist-dudu7-13.7.73.apk
+            artifacts/Metrolist-dudu7-13.7.73.apk.sha256
+            artifacts/dudu7-update.json
+            artifacts/apk-badging.txt
+            artifacts/apk-signature.txt
+            artifacts/apk-contents.txt
+            artifacts/Metrolist-dudu7-13.7.73-x86_64-test.apk
+            artifacts/emulator-build.log
+            artifacts/emulator-apk-contents.txt
+            artifacts/system-dialog-*.xml
+            artifacts/home-tabs-*.xml
+            artifacts/home-selected.xml
+            artifacts/home-selected.png
+            artifacts/home-scroll-*.xml
+            artifacts/home-scroll-*.png
+            artifacts/mood-title-visible.xml
+            artifacts/mood-genres.xml
+            artifacts/mood-genres.png
+            artifacts/selected-genre.txt
+            artifacts/browse-page.xml
+            artifacts/browse-page.png
+            artifacts/browse-targets-*.log
+            artifacts/selected-playlist.json
+            artifacts/playlist-after-tap.xml
+            artifacts/playlist-after-tap.png
+            artifacts/playlist-after-tap-logcat.txt
+            artifacts/release-notes.md
           retention-days: 14
