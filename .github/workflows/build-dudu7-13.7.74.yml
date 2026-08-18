@@ -1,8 +1,8 @@
 name: Build Dudu7 13.7.74 Issue 150 playlist scroll fix
 
 on:
-  push:
-    branches: [agent/issue-150-online-playlist-scroll-13-7-74]
+  pull_request:
+    branches: [agent/issue-140-playlist-row-touch-13-7-73]
   workflow_dispatch:
 
 permissions:
