@@ -5,7 +5,8 @@ set -euxo pipefail
 # The reported path is Home -> visible mood/genre tile -> Browse -> Playlist.
 # Home's mood/genre data comes from a separate asynchronous YouTube Explore
 # request, so the E2E driver retries that external feed without weakening any
-# touch/navigation assertion.
+# touch/navigation assertion. Once the section is found, it is deliberately
+# scrolled away from the system-navigation edge before the real adb tap.
 cp scripts/run_issue_140_browse_playback_emulator_v2.sh /tmp/run_issue_140.sh
 python3 - <<'PY'
 from pathlib import Path
@@ -38,7 +39,13 @@ for n in root.iter('node'):
 raise SystemExit(1)
 PYFEED
     then
-      cp "$ARTIFACTS/home-feed-${feed_attempt}-scroll-$attempt.xml" "$ARTIFACTS/mood-title-visible.xml"
+      # The first visible row can still be clipped by the bottom system area.
+      # Move the whole section into the safe center of the app before selecting
+      # a tile. This keeps the test a genuine coordinate touch, not semantics.
+      adb shell input swipe 800 1740 800 1280 550
+      sleep 3
+      dump_ui /sdcard/mood-safe.xml "$ARTIFACTS/mood-title-visible.xml"
+      adb exec-out screencap -p > "$ARTIFACTS/mood-title-visible.png" || true
       break
     fi
     adb shell input swipe 800 1770 800 1180 650
@@ -50,7 +57,6 @@ PYFEED
     break
   fi
 
-  # Capture backend/app diagnostics before retrying a fresh HomeViewModel load.
   adb logcat -d -v brief > "$ARTIFACTS/home-feed-${feed_attempt}-missing-logcat.txt" || true
   adb shell am force-stop "$PACKAGE"
   sleep 2
@@ -64,9 +70,7 @@ s = s[:scan_start] + scan_replacement + s[scan_end:]
 
 start = s.index('# Open the original MetroList MoodAndGenresScreen via a real touch.')
 end = s.index('# Select a specifically identified PlaylistItem from the actual rendered card')
-replacement = r'''# Tap a real visible mood/genre button directly on Home. This is the actual
-# Dudu7 path reported in Issue #140; there is no mandatory intermediate
-# MoodAndGenresScreen when using the Home section.
+replacement = r'''# Tap a fully visible real mood/genre button directly on Home.
 adb logcat -c
 python3 - <<'PYHOMEGENRE'
 import json, re, subprocess, xml.etree.ElementTree as ET
@@ -82,10 +86,10 @@ for n in root.iter('node'):
     if not m:
         continue
     x1,y1,x2,y2=map(int,m.groups())
-    if 1050 <= y1 < y2 <= 1910:
+    if 700 <= y1 < y2 <= 1800:
         title_bounds.append((x1,y1,x2,y2,text))
 if not title_bounds:
-    raise SystemExit('Visible Home Mood/Genres heading not found')
+    raise SystemExit('Visible Home Mood/Genres heading not found in safe area')
 title=min(title_bounds,key=lambda b:b[1])
 title_bottom=title[3]
 
@@ -99,11 +103,14 @@ for n in root.iter('node'):
     if not m:
         continue
     x1,y1,x2,y2=map(int,m.groups()); w=x2-x1; h=y2-y1
-    if not (title_bottom <= y1 < y2 <= 1910):
+    center_y=(y1+y2)//2
+    if not (title_bottom <= y1 < y2 <= 1780):
         continue
     if y1 > title_bottom + 760:
         continue
-    if not (140 <= w <= 760 and 70 <= h <= 180):
+    # 48dp at 420dpi is ~126 px. Require a substantially complete tile so a
+    # clipped edge item can never be mistaken for a valid touch target.
+    if not (140 <= w <= 760 and 105 <= h <= 180 and 850 <= center_y <= 1720):
         continue
     text=n.attrib.get('text','').strip()
     if not text:
@@ -120,11 +127,11 @@ for n in root.iter('node'):
     seen.add(key)
     candidates.append((y1,x1,x2,y2,text))
 if not candidates:
-    raise SystemExit('No real Home mood/genre button found below section heading')
+    raise SystemExit('No fully visible Home mood/genre button found in safe touch area')
 candidates.sort()
 y1,x1,x2,y2,text=candidates[0]
 selected={'title':text,'bounds':[x1,y1,x2,y2],'center':[(x1+x2)//2,(y1+y2)//2]}
-print('selected Home genre tile:',selected)
+print('selected safe Home genre tile:',selected)
 with open('artifacts/selected-home-genre.json','w',encoding='utf-8') as f:
     json.dump(selected,f,ensure_ascii=False,indent=2)
 subprocess.run(['adb','shell','input','tap',str(selected['center'][0]),str(selected['center'][1])],check=True)
