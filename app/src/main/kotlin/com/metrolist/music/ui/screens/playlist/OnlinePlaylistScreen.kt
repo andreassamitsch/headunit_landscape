@@ -32,6 +32,7 @@ import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -81,18 +82,13 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import com.metrolist.innertube.models.PlaylistItem
 import com.metrolist.innertube.models.SongItem
-import com.metrolist.music.LocalDatabase
-import com.metrolist.music.LocalListenTogetherManager
-import com.metrolist.music.LocalNavController
 import com.metrolist.music.LocalPlayerAwareWindowInsets
 import com.metrolist.music.LocalPlayerConnection
-import com.metrolist.music.LocalSyncUtils
 import com.metrolist.music.R
 import com.metrolist.music.constants.HideExplicitKey
 import com.metrolist.music.db.entities.Playlist
 import com.metrolist.music.playback.queues.YouTubePlaylistQueue
 import com.metrolist.music.ui.component.ExpandableText
-import com.metrolist.music.ui.component.IconButton
 import com.metrolist.music.ui.component.LocalMenuState
 import com.metrolist.music.ui.component.LocalRightPaneScrollBridge
 import com.metrolist.music.ui.component.YouTubeListItem
@@ -200,7 +196,7 @@ fun OnlinePlaylistScreen(navController: NavController, viewModel: OnlinePlaylist
                 else if (isSearching) TextField(value = query, onValueChange = { query = it }, placeholder = { Text(stringResource(R.string.search), style = MaterialTheme.typography.titleLarge) }, singleLine = true, textStyle = MaterialTheme.typography.titleLarge, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent), modifier = Modifier.fillMaxWidth().focusRequester(focusRequester))
                 else if (lazyListState.firstVisibleItemIndex > 0) Text(playlist?.title ?: "")
             },
-            navigationIcon = { IconButton(onClick = { if (isSearching) { isSearching = false; query = TextFieldValue() } else if (inSelectMode) onExitSelectionMode() else navController.navigateUp() }, onLongClick = { if (!isSearching && !inSelectMode) navController.backToMain() }) { Icon(painterResource(if (inSelectMode) R.drawable.close else R.drawable.arrow_back), null) } },
+            navigationIcon = { com.metrolist.music.ui.component.IconButton(onClick = { if (isSearching) { isSearching = false; query = TextFieldValue() } else if (inSelectMode) onExitSelectionMode() else navController.navigateUp() }, onLongClick = { if (!isSearching && !inSelectMode) navController.backToMain() }) { Icon(painterResource(if (inSelectMode) R.drawable.close else R.drawable.arrow_back), null) } },
             actions = {
                 if (inSelectMode) {
                     Checkbox(checked = selection.size == filteredSongs.size && selection.isNotEmpty(), onCheckedChange = { if (selection.size == filteredSongs.size) selection.clear() else { selection.clear(); selection.addAll(filteredSongs.map { it.second.id }) } })
