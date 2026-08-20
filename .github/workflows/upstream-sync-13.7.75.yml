@@ -59,9 +59,16 @@ jobs:
           pick_regular() {
             local sha="$1"
             if git merge-base --is-ancestor "$sha" HEAD 2>/dev/null; then
-              echo "Already integrated: $sha"
+              echo "Already integrated by ancestry: $sha"
             else
-              git cherry-pick -x "$sha"
+              if ! git cherry-pick -x "$sha"; then
+                if git diff --quiet && git diff --cached --quiet; then
+                  echo "Already integrated by empty cherry-pick: $sha"
+                  git cherry-pick --skip
+                else
+                  exit 1
+                fi
+              fi
             fi
           }
 
@@ -71,6 +78,10 @@ jobs:
           FARADAY=0d37cc4658c18ac43123264edf48f7224b77d506
           if ! git merge-base --is-ancestor "$FARADAY" HEAD 2>/dev/null; then
             if ! git cherry-pick -x "$FARADAY"; then
+              if git diff --quiet && git diff --cached --quiet; then
+                echo "Already integrated by empty cherry-pick: $FARADAY"
+                git cherry-pick --skip
+              else
               mapfile -t conflicts < <(git diff --name-only --diff-filter=U)
               printf 'Faraday conflicts: %s\n' "${conflicts[*]}"
               if [[ "${#conflicts[@]}" -ne 1 || "${conflicts[0]}" != 'gradle/libs.versions.toml' ]]; then
@@ -85,12 +96,17 @@ jobs:
                 gradlew \
                 gradlew.bat
               GIT_EDITOR=true git cherry-pick --continue
+              fi
             fi
           fi
 
           DEEPLINK=0f316d1211c13c5f149777b2426e3be007b17619
           if ! git merge-base --is-ancestor "$DEEPLINK" HEAD 2>/dev/null; then
             if ! git cherry-pick -x "$DEEPLINK"; then
+              if git diff --quiet && git diff --cached --quiet; then
+                echo "Already integrated by empty cherry-pick: $DEEPLINK"
+                git cherry-pick --skip
+              else
               mapfile -t conflicts < <(git diff --name-only --diff-filter=U)
               printf 'Deep-link conflicts: %s\n' "${conflicts[*]}"
               unexpected=0
@@ -104,6 +120,7 @@ jobs:
               git checkout --ours -- gradle/libs.versions.toml
               git add -- gradle/libs.versions.toml
               GIT_EDITOR=true git cherry-pick --continue
+              fi
             fi
           fi
 
