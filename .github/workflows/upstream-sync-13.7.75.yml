@@ -70,9 +70,6 @@ jobs:
                 echo 'Unexpected Faraday conflict; refusing broad automatic resolution.' >&2
                 exit 1
               fi
-              # The Faraday commit also upgrades AGP/Gradle wrapper. Dudu7 already uses the
-              # known-good 13.7.74 dependency baseline, so keep all build-tool files from HEAD
-              # and carry only the cipher runtime changes from this upstream commit.
               git checkout --ours -- gradle/libs.versions.toml
               git add -- gradle/libs.versions.toml
               git restore --source=HEAD --staged --worktree -- \
@@ -89,8 +86,6 @@ jobs:
             if ! git cherry-pick -x "$DEEPLINK"; then
               mapfile -t conflicts < <(git diff --name-only --diff-filter=U)
               printf 'Deep-link conflicts: %s\n' "${conflicts[*]}"
-              # This commit's only unrelated second hunk is the dependency rollback that
-              # Dudu7 already has. If that file conflicts, keep the Dudu7 version table.
               unexpected=0
               for f in "${conflicts[@]}"; do
                 if [[ "$f" != 'gradle/libs.versions.toml' ]]; then unexpected=1; fi
@@ -150,21 +145,29 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          grep -q 'versionCode = 1370084' app/build.gradle.kts
-          grep -q 'versionName = "13.7.75"' app/build.gradle.kts
-          test -f app/src/main/kotlin/com/metrolist/music/playback/StreamUrlCache.kt
-          grep -q 'FARADAY_URL' app/src/main/kotlin/com/metrolist/music/utils/cipher/PlayerConfigStore.kt
-          grep -q 'ZEMER_URL' app/src/main/kotlin/com/metrolist/music/utils/cipher/PlayerConfigStore.kt
-          grep -q 'restoringQueue = true' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
-          grep -q 'initialBufferRecoveryJob' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
-          grep -q 'responseCode == 403 || current.responseCode == 410' app/src/main/kotlin/com/metrolist/music/playback/DownloadUtil.kt
-          grep -q 'playlistId.isNullOrBlank()' app/src/main/kotlin/com/metrolist/music/MainActivity.kt
-          test -f app/src/main/kotlin/com/metrolist/music/utils/ArtistNameAliases.kt
-          grep -q 'addVersion24ColumnsIfMissing' app/src/main/kotlin/com/metrolist/music/db/MusicDatabase.kt
-          grep -q 'androidGradlePlugin = "9.3.0"' gradle/libs.versions.toml
-          grep -q 'media3 = "1.10.1"' gradle/libs.versions.toml
-          grep -q 'e483f49f06ed235489b2a5e4647634e454ce30b3' docs/DUDU7_UPSTREAM_BASELINE.md
-          git diff --check "${{ steps.integrate.outputs.start_sha }}"..HEAD
+          exec > >(tee artifacts/source-verify.log) 2>&1
+          check() {
+            local label="$1"
+            shift
+            echo "=== CHECK: $label ==="
+            "$@"
+            echo "=== PASS: $label ==="
+          }
+          check version-code grep -Fq 'versionCode = 1370084' app/build.gradle.kts
+          check version-name grep -Fq 'versionName = "13.7.75"' app/build.gradle.kts
+          check stream-url-cache test -f app/src/main/kotlin/com/metrolist/music/playback/StreamUrlCache.kt
+          check faraday-source grep -Fq 'FARADAY_URL' app/src/main/kotlin/com/metrolist/music/utils/cipher/PlayerConfigStore.kt
+          check zemer-fallback grep -Fq 'ZEMER_URL' app/src/main/kotlin/com/metrolist/music/utils/cipher/PlayerConfigStore.kt
+          check shuffle-restore grep -Fq 'restoringQueue = true' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          check initial-buffer-recovery grep -Fq 'initialBufferRecoveryJob' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          check expired-download-recovery grep -Fq 'current.responseCode == 403 || current.responseCode == 410' app/src/main/kotlin/com/metrolist/music/playback/DownloadUtil.kt
+          check playlist-deeplink-guard grep -Fq 'playlistId.isNullOrBlank()' app/src/main/kotlin/com/metrolist/music/MainActivity.kt
+          check artist-alias-file test -f app/src/main/kotlin/com/metrolist/music/utils/ArtistNameAliases.kt
+          check migration-helper grep -Fq 'addVersion24ColumnsIfMissing' app/src/main/kotlin/com/metrolist/music/db/MusicDatabase.kt
+          check agp-baseline grep -Fq 'androidGradlePlugin = "9.3.0"' gradle/libs.versions.toml
+          check media3-baseline grep -Fq 'media3 = "1.10.1"' gradle/libs.versions.toml
+          check upstream-baseline grep -Fq 'e483f49f06ed235489b2a5e4647634e454ce30b3' docs/DUDU7_UPSTREAM_BASELINE.md
+          check diff-check git diff --check "${{ steps.integrate.outputs.start_sha }}"..HEAD
 
       - name: Compile and unit test
         shell: bash
@@ -268,11 +271,15 @@ jobs:
             echo '```'
             git status --short
             echo '```'
-            echo
-            echo '### Letzte Integrationsausgabe'
-            echo '```'
-            tail -n 100 artifacts/integration.log 2>/dev/null || true
-            echo '```'
+            for log in source-verify.log standard-compile.log dudu7-unit-tests.log dudu7-build.log integration.log; do
+              if [[ -f "artifacts/$log" ]]; then
+                echo
+                echo "### $log (tail)"
+                echo '```'
+                tail -n 120 "artifacts/$log"
+                echo '```'
+              fi
+            done
             echo
             echo 'Es wurde keine teilweise integrierte Quelle auf den Branch gepusht und kein 13.7.75-Updater-Release erzeugt.'
           } > artifacts/failure-comment.md
