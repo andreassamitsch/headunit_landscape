@@ -328,8 +328,16 @@ jobs:
           TAG=dudu7-v13.7.75
           HEAD_SHA=$(git rev-parse HEAD)
           if gh release view "$TAG" >/dev/null 2>&1; then
-            TAG_SHA=$(git rev-list -n 1 "$TAG")
-            test "$TAG_SHA" = "$HEAD_SHA" || { echo "$TAG already exists on another commit" >&2; exit 1; }
+            gh release edit "$TAG" \
+              --target "$HEAD_SHA" \
+              --title 'MetroList dudu7 13.7.75' \
+              --notes-file artifacts/release-notes.md \
+              --prerelease
+            gh release upload "$TAG" \
+              "artifacts/$DUDU7_APK_NAME" \
+              "artifacts/$DUDU7_APK_NAME.sha256" \
+              artifacts/dudu7-update.json \
+              --clobber
           else
             gh release create "$TAG" \
               "artifacts/$DUDU7_APK_NAME" \
@@ -348,7 +356,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           SHA=$(awk '{print $1}' "artifacts/$DUDU7_APK_NAME.sha256")
-          gh pr comment 161 --body "13.7.75 Upstream-Sync erfolgreich integriert und validiert. Run \`$GITHUB_RUN_ID\`. Standard-Compile, vollständige Dudu7-Unit-Tests, ARM64/ARMv7-Build, Paket/Signatur/Version geprüft. APK SHA-256: \`$SHA\`. Interner Updater-Release \`dudu7-v13.7.75\` erstellt. Reale Dudu7-Hardwareprüfung bleibt vor Issue-Abschluss erforderlich."
+          gh pr comment 161 --body "13.7.75 Upstream-Sync erfolgreich integriert und validiert. Run \`$GITHUB_RUN_ID\`. Standard-Compile, vollständige Dudu7-Unit-Tests, ARM64/ARMv7-Build, Paket/Signatur/Version geprüft. APK SHA-256: \`$SHA\`. Interner Updater-Release \`dudu7-v13.7.75\` erstellt oder aktualisiert. Reale Dudu7-Hardwareprüfung bleibt vor Issue-Abschluss erforderlich."
 
       - name: Report failure on PR
         if: failure()
@@ -378,7 +386,7 @@ jobs:
               fi
             done
             echo
-            echo 'Es wurde keine teilweise integrierte Quelle auf den Branch gepusht und kein 13.7.75-Updater-Release erzeugt.'
+            echo 'Es wurde keine teilweise integrierte Quelle auf den Branch gepusht und kein 13.7.75-Updater-Release erzeugt oder aktualisiert.'
           } > artifacts/failure-comment.md
           gh pr comment 161 --body-file artifacts/failure-comment.md || true
 
