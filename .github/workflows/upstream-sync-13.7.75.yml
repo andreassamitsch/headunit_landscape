@@ -72,6 +72,18 @@ jobs:
             fi
           }
 
+          continue_or_skip_empty() {
+            local sha="$1"
+            if ! GIT_EDITOR=true git cherry-pick --continue; then
+              if git diff --quiet && git diff --cached --quiet; then
+                echo "Already integrated after conflict resolution: $sha"
+                git cherry-pick --skip
+              else
+                exit 1
+              fi
+            fi
+          }
+
           pick_regular ad8390cdee408381a7effbb317486c515a48f0da
           pick_regular ec9a6b3ec1ac8bc6cf362cab3eee9e632598e86f
 
@@ -95,7 +107,7 @@ jobs:
                 gradle/wrapper/gradle-wrapper.properties \
                 gradlew \
                 gradlew.bat
-              GIT_EDITOR=true git cherry-pick --continue
+              continue_or_skip_empty "$FARADAY"
               fi
             fi
           fi
@@ -119,7 +131,7 @@ jobs:
               fi
               git checkout --ours -- gradle/libs.versions.toml
               git add -- gradle/libs.versions.toml
-              GIT_EDITOR=true git cherry-pick --continue
+              continue_or_skip_empty "$DEEPLINK"
               fi
             fi
           fi
