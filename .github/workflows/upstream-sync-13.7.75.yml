@@ -10,6 +10,13 @@ permissions:
   pull-requests: write
   issues: write
 
+env:
+  DUDU7_VERSION_CODE: '1370084'
+  DUDU7_VERSION_NAME: '13.7.75'
+  DUDU7_PACKAGE_NAME: com.metrolist.music.dudu7.debug
+  DUDU7_APK_NAME: Metrolist-dudu7-13.7.75.apk
+  DUDU7_REFERENCE_SIGNER_SHA256: 138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee
+
 jobs:
   integrate-test-build-release:
     if: github.actor != 'github-actions[bot]'
@@ -211,6 +218,29 @@ jobs:
           check upstream-baseline grep -Fq 'e483f49f06ed235489b2a5e4647634e454ce30b3' docs/DUDU7_UPSTREAM_BASELINE.md
           check diff-check git diff --check "${{ steps.integrate.outputs.start_sha }}"..HEAD
 
+      - name: Verify Dudu7 debug signing key
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          test -f app/persistent-debug.keystore
+          keytool -list -v \
+            -keystore app/persistent-debug.keystore \
+            -storepass android \
+            -alias androiddebugkey > artifacts/dudu7-reference-keystore.txt
+          REF_WITH_COLONS=$(echo "$DUDU7_REFERENCE_SIGNER_SHA256" | sed 's/../&:/g;s/:$//' | tr '[:lower:]' '[:upper:]')
+          grep -Fq "SHA256: $REF_WITH_COLONS" artifacts/dudu7-reference-keystore.txt
+          if [[ -n "${METROLIST_DEBUG_KEYSTORE_PATH:-}" ]]; then
+            echo "METROLIST_DEBUG_KEYSTORE_PATH must not influence the updater APK signing key." >&2
+            exit 1
+          fi
+          if [[ -f app/keystore/dudu7-debug.keystore ]]; then
+            keytool -list -v \
+              -keystore app/keystore/dudu7-debug.keystore \
+              -storepass android \
+              -alias androiddebugkey > artifacts/dudu7-ignored-workflow-keystore.txt || true
+          fi
+
       - name: Compile and unit test
         shell: bash
         run: |
@@ -232,25 +262,36 @@ jobs:
         run: |
           set +e
           set -o pipefail
+          unset METROLIST_DEBUG_KEYSTORE_PATH METROLIST_DEBUG_KEYSTORE_PASSWORD METROLIST_DEBUG_KEY_ALIAS METROLIST_DEBUG_KEY_PASSWORD
+          ./gradlew --console=plain :app:signingReport --no-daemon --stacktrace 2>&1 | tee artifacts/signing-report.log
+          status=${PIPESTATUS[0]}
+          if [[ "$status" -ne 0 ]]; then exit "$status"; fi
+          awk '/Variant: gmsDudu7Debug/{flag=1} flag{print} flag && /----------/{exit}' artifacts/signing-report.log > artifacts/gms-dudu7-debug-signing-report.txt
+          grep -Fq 'Variant: gmsDudu7Debug' artifacts/gms-dudu7-debug-signing-report.txt
+          grep -Fq 'Config: persistentDebug' artifacts/gms-dudu7-debug-signing-report.txt
+          REF_WITH_COLONS=$(echo "$DUDU7_REFERENCE_SIGNER_SHA256" | sed 's/../&:/g;s/:$//' | tr '[:lower:]' '[:upper:]')
+          grep -Fq "SHA-256: $REF_WITH_COLONS" artifacts/gms-dudu7-debug-signing-report.txt
+
           ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace 2>&1 | tee artifacts/dudu7-build.log
           status=${PIPESTATUS[0]}
           grep -nE '(^e:|^error:|FAILURE:|What went wrong|Caused by:|FAILED)' artifacts/dudu7-build.log > artifacts/dudu7-build-diagnostics.txt || true
           if [[ "$status" -ne 0 ]]; then exit "$status"; fi
           set -euxo pipefail
-          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
-          cp "$APK" artifacts/Metrolist-dudu7-13.7.75.apk
+          APK=$(find app/build/outputs/apk/gmsDudu7/debug -maxdepth 1 -type f -name '*.apk' | head -1)
+          test -n "$APK"
+          cp "$APK" "artifacts/$DUDU7_APK_NAME"
           BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
-          "$BUILD_TOOLS/aapt" dump badging artifacts/Metrolist-dudu7-13.7.75.apk > artifacts/apk-badging.txt
-          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs artifacts/Metrolist-dudu7-13.7.75.apk > artifacts/apk-signature.txt
-          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370084'" artifacts/apk-badging.txt
-          grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
-          unzip -l artifacts/Metrolist-dudu7-13.7.75.apk > artifacts/apk-contents.txt
+          "$BUILD_TOOLS/aapt" dump badging "artifacts/$DUDU7_APK_NAME" > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "artifacts/$DUDU7_APK_NAME" > artifacts/apk-signature.txt
+          grep -q "package: name='$DUDU7_PACKAGE_NAME' versionCode='$DUDU7_VERSION_CODE' versionName='$DUDU7_VERSION_NAME-dudu7'" artifacts/apk-badging.txt
+          grep -Fq "Signer #1 certificate SHA-256 digest: $DUDU7_REFERENCE_SIGNER_SHA256" artifacts/apk-signature.txt
+          unzip -l "artifacts/$DUDU7_APK_NAME" > artifacts/apk-contents.txt
           grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
           grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
-          sha256sum artifacts/Metrolist-dudu7-13.7.75.apk > artifacts/Metrolist-dudu7-13.7.75.apk.sha256
-          SHA=$(awk '{print $1}' artifacts/Metrolist-dudu7-13.7.75.apk.sha256)
+          sha256sum "artifacts/$DUDU7_APK_NAME" > "artifacts/$DUDU7_APK_NAME.sha256"
+          SHA=$(awk '{print $1}' "artifacts/$DUDU7_APK_NAME.sha256")
           cat > artifacts/dudu7-update.json <<JSON
-          {"versionCode":1370084,"versionName":"13.7.75","packageName":"com.metrolist.music.dudu7.debug","signerSha256":"138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee","apkAsset":"Metrolist-dudu7-13.7.75.apk","sha256":"$SHA"}
+          {"versionCode":$DUDU7_VERSION_CODE,"versionName":"$DUDU7_VERSION_NAME","packageName":"$DUDU7_PACKAGE_NAME","signerSha256":"$DUDU7_REFERENCE_SIGNER_SHA256","apkAsset":"$DUDU7_APK_NAME","sha256":"$SHA"}
           JSON
 
       - name: Push validated integrated source
@@ -265,7 +306,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euxo pipefail
-          SHA=$(awk '{print $1}' artifacts/Metrolist-dudu7-13.7.75.apk.sha256)
+          SHA=$(awk '{print $1}' "artifacts/$DUDU7_APK_NAME.sha256")
           cat > artifacts/release-notes.md <<MD
           ## MetroList dudu7 13.7.75
           Upstream reliability synchronization for #152, #153, #155, #157 and #159.
@@ -291,8 +332,8 @@ jobs:
             test "$TAG_SHA" = "$HEAD_SHA" || { echo "$TAG already exists on another commit" >&2; exit 1; }
           else
             gh release create "$TAG" \
-              artifacts/Metrolist-dudu7-13.7.75.apk \
-              artifacts/Metrolist-dudu7-13.7.75.apk.sha256 \
+              "artifacts/$DUDU7_APK_NAME" \
+              "artifacts/$DUDU7_APK_NAME.sha256" \
               artifacts/dudu7-update.json \
               --target "$HEAD_SHA" \
               --title 'MetroList dudu7 13.7.75' \
@@ -306,7 +347,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          SHA=$(awk '{print $1}' artifacts/Metrolist-dudu7-13.7.75.apk.sha256)
+          SHA=$(awk '{print $1}' "artifacts/$DUDU7_APK_NAME.sha256")
           gh pr comment 161 --body "13.7.75 Upstream-Sync erfolgreich integriert und validiert. Run \`$GITHUB_RUN_ID\`. Standard-Compile, vollständige Dudu7-Unit-Tests, ARM64/ARMv7-Build, Paket/Signatur/Version geprüft. APK SHA-256: \`$SHA\`. Interner Updater-Release \`dudu7-v13.7.75\` erstellt. Reale Dudu7-Hardwareprüfung bleibt vor Issue-Abschluss erforderlich."
 
       - name: Report failure on PR
