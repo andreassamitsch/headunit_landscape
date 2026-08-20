@@ -102,6 +102,41 @@ jobs:
 
           pick_regular e483f49f06ed235489b2a5e4647634e454ce30b3
 
+          # Compatibility glue required because Dudu7 has its own live-radio queue reset,
+          # while upstream #152 replaces the old map with StreamUrlCache. Also carry the
+          # resource used by the selectively backported playlist deep-link guard.
+          python3 - <<'PY'
+          from pathlib import Path
+
+          music = Path('app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt')
+          text = music.read_text()
+          old = 'songUrlCache.remove(item.mediaId)'
+          new = 'songUrlCache.invalidate(item.mediaId)'
+          if old in text:
+              if text.count(old) != 1:
+                  raise SystemExit(f'Expected exactly one Dudu7 live-radio cache remove anchor, found {text.count(old)}')
+              text = text.replace(old, new, 1)
+              music.write_text(text)
+          elif new not in text:
+              raise SystemExit('Neither old nor new Dudu7 live-radio StreamUrlCache anchor found')
+
+          strings = Path('app/src/main/res/values/metrolist_strings.xml')
+          text = strings.read_text()
+          resource = '<string name="playlist_unavailable">Playlist unavailable</string>'
+          if resource not in text:
+              anchor = '    <string name="import_csv">Import a CSV playlist</string>\n'
+              if anchor not in text:
+                  raise SystemExit('import_csv resource anchor not found')
+              text = text.replace(anchor, anchor + '    ' + resource + '\n', 1)
+              strings.write_text(text)
+          PY
+          git add -- \
+            app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt \
+            app/src/main/res/values/metrolist_strings.xml
+          if ! git diff --cached --quiet; then
+            git commit -m 'Fix: adapt upstream cache and deep-link changes to Dudu7'
+          fi
+
           python3 - <<'PY'
           from pathlib import Path
           p = Path('app/build.gradle.kts')
@@ -133,6 +168,11 @@ jobs:
           - `0f316d1211c13c5f149777b2426e3be007b17619` — invalid playlist deep-link guard; existing Dudu7 dependency versions intentionally retained
           - `e483f49f06ed235489b2a5e4647634e454ce30b3` — legacy DB migrations and artist alias persistence, including compatible pagination pieces in that commit
 
+          Dudu7 compatibility glue in this sync:
+
+          - the Dudu7 live-radio queue reset uses `StreamUrlCache.invalidate()` after the upstream cache-type migration;
+          - the `playlist_unavailable` string resource required by the selectively backported deep-link guard is carried locally.
+
           This SHA is a reviewed-through baseline, not a claim that every upstream commit before it was merged. Future synchronization analyses must start after this review point and preserve Dudu7-specific FM, WebRadio, MediaSession and vehicle integrations.
           MD
 
@@ -161,7 +201,9 @@ jobs:
           check shuffle-restore grep -Fq 'restoringQueue = true' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
           check initial-buffer-recovery grep -Fq 'initialBufferRecoveryJob' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
           check expired-download-recovery grep -Fq 'current.responseCode == 403 || current.responseCode == 410' app/src/main/kotlin/com/metrolist/music/playback/DownloadUtil.kt
+          check dudu7-radio-cache-invalidate grep -Fq 'songUrlCache.invalidate(item.mediaId)' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
           check playlist-deeplink-guard grep -Fq 'playlistId.isNullOrBlank()' app/src/main/kotlin/com/metrolist/music/MainActivity.kt
+          check playlist-unavailable-resource grep -Fq '<string name="playlist_unavailable">Playlist unavailable</string>' app/src/main/res/values/metrolist_strings.xml
           check artist-alias-file test -f app/src/main/kotlin/com/metrolist/music/utils/ArtistNameAliases.kt
           check migration-helper grep -Fq 'addVersion24ColumnsIfMissing' app/src/main/kotlin/com/metrolist/music/db/MusicDatabase.kt
           check agp-baseline grep -Fq 'androidGradlePlugin = "9.3.0"' gradle/libs.versions.toml
@@ -236,6 +278,7 @@ jobs:
           - Robust legacy DB migrations and persistent artist aliases.
           - Existing Dudu7 Gradle/dependency baseline retained; no unrelated build-tool upgrade from the Faraday commit.
           - Dudu7-specific FM/WebRadio/MediaSession/vehicle code retained.
+          - Dudu7 live-radio cache cleanup adapted to `StreamUrlCache.invalidate()`.
           - Standard compile and full Dudu7 unit suite passed before source push and release.
           - APK SHA-256: `$SHA`
 
