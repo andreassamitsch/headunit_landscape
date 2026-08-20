@@ -7,12 +7,14 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
+  issues: write
 
 jobs:
-  integrate-upstream:
+  integrate-test-build-release:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:
@@ -21,10 +23,22 @@ jobs:
           submodules: recursive
           token: ${{ github.token }}
 
-      - name: Cherry-pick selected MetroList fixes
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Integrate selected MetroList fixes locally
+        id: integrate
         shell: bash
         run: |
           set -euxo pipefail
+          mkdir -p artifacts
+          exec > >(tee artifacts/integration.log) 2>&1
+          START_SHA=$(git rev-parse HEAD)
+          echo "start_sha=$START_SHA" >> "$GITHUB_OUTPUT"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git remote add metrolist-upstream https://github.com/MetrolistGroup/Metrolist.git || true
@@ -42,75 +56,53 @@ jobs:
             0f316d1211c13c5f149777b2426e3be007b17619 \
             e483f49f06ed235489b2a5e4647634e454ce30b3
           do
-            git cherry-pick -x "$sha"
+            if git merge-base --is-ancestor "$sha" HEAD 2>/dev/null; then
+              echo "Already integrated: $sha"
+            else
+              git cherry-pick -x "$sha"
+            fi
           done
 
-      - name: Bump Dudu7 release version
-        shell: bash
-        run: |
-          set -euxo pipefail
           python3 - <<'PY'
           from pathlib import Path
           p = Path('app/build.gradle.kts')
           s = p.read_text()
+          if 'versionCode = 1370084' in s and 'versionName = "13.7.75"' in s:
+              raise SystemExit(0)
           if 'versionCode = 1370083' not in s or 'versionName = "13.7.74"' not in s:
-              raise SystemExit('13.7.74 version anchor not found')
+              raise SystemExit('Expected 13.7.74 or already-bumped 13.7.75 version anchors not found')
           s = s.replace('versionCode = 1370083', 'versionCode = 1370084', 1)
           s = s.replace('versionName = "13.7.74"', 'versionName = "13.7.75"', 1)
           p.write_text(s)
           PY
-          git add -- app/build.gradle.kts
-          git commit -m 'Build: bump Dudu7 to 13.7.75'
 
-      - name: Record reviewed upstream baseline
-        shell: bash
-        run: |
-          set -euxo pipefail
           mkdir -p docs
           cat > docs/DUDU7_UPSTREAM_BASELINE.md <<'MD'
           # Dudu7 upstream baseline
 
           Current Dudu7 synchronization review: 2026-08-20.
 
-          The Dudu7 13.7.75 integration branch is based on the device-tested Dudu7 13.7.74 branch and has selectively integrated/reviewed Original MetroList changes through:
+          Dudu7 13.7.75 is based on the device-tested Dudu7 13.7.74 branch and selectively integrates/reviews Original MetroList changes through:
 
           `e483f49f06ed235489b2a5e4647634e454ce30b3` (2026-08-19)
 
-          Explicitly integrated upstream commits in this synchronization:
+          Explicitly integrated commits:
 
           - `ad8390cdee408381a7effbb317486c515a48f0da` — persisted shuffle restore
           - `ec9a6b3ec1ac8bc6cf362cab3eee9e632598e86f` — stream URL/cache/buffer recovery
           - `0d37cc4658c18ac43123264edf48f7224b77d506` — Faraday cipher config store with Zemer fallback
           - `0f316d1211c13c5f149777b2426e3be007b17619` — invalid playlist deep-link guard
-          - `e483f49f06ed235489b2a5e4647634e454ce30b3` — legacy DB migrations and artist alias persistence (plus compatible AA pagination pieces contained in that commit)
+          - `e483f49f06ed235489b2a5e4647634e454ce30b3` — legacy DB migrations and artist alias persistence, including compatible pagination pieces in that commit
 
-          This SHA is a reviewed-through baseline, not a claim that every upstream commit before it was merged. Future sync analyses must compare newer Original MetroList changes after this review point and preserve Dudu7-specific FM/WebRadio/vehicle integrations.
+          This SHA is a reviewed-through baseline, not a claim that every upstream commit before it was merged. Future synchronization analyses must start after this review point and preserve Dudu7-specific FM, WebRadio, MediaSession and vehicle integrations.
           MD
-          git add -- docs/DUDU7_UPSTREAM_BASELINE.md
-          git commit -m 'Docs: record Dudu7 upstream review baseline'
 
-      - name: Push integrated source
-        run: git push origin HEAD:agent/upstream-sync-13-7-75
+          git add -- app/build.gradle.kts docs/DUDU7_UPSTREAM_BASELINE.md
+          if ! git diff --cached --quiet; then
+            git commit -m 'Build: prepare Dudu7 13.7.75 upstream sync'
+          fi
 
-  test-build-release:
-    if: github.actor == 'github-actions[bot]'
-    runs-on: ubuntu-22.04
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: agent/upstream-sync-13-7-75
-          fetch-depth: 0
-          submodules: recursive
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - uses: gradle/actions/setup-gradle@v4
-
-      - name: Verify upstream integration source
+      - name: Verify integrated source
         shell: bash
         run: |
           set -euxo pipefail
@@ -126,20 +118,21 @@ jobs:
           test -f app/src/main/kotlin/com/metrolist/music/utils/ArtistNameAliases.kt
           grep -q 'addVersion24ColumnsIfMissing' app/src/main/kotlin/com/metrolist/music/db/MusicDatabase.kt
           grep -q 'e483f49f06ed235489b2a5e4647634e454ce30b3' docs/DUDU7_UPSTREAM_BASELINE.md
-          git diff --check HEAD~7 HEAD
+          git diff --check "${{ steps.integrate.outputs.start_sha }}"..HEAD
 
       - name: Compile and unit test
+        shell: bash
         run: |
+          set -o pipefail
           chmod +x gradlew
-          ./gradlew --console=plain :app:compileGmsStandardDebugKotlin --no-daemon --stacktrace
-          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+          ./gradlew --console=plain :app:compileGmsStandardDebugKotlin --no-daemon --stacktrace 2>&1 | tee artifacts/standard-compile.log
+          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace 2>&1 | tee artifacts/dudu7-unit-tests.log
 
       - name: Build and verify Dudu7 ARM APK
         shell: bash
         run: |
           set -euxo pipefail
-          mkdir -p artifacts
-          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace 2>&1 | tee artifacts/dudu7-build.log
           APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
           cp "$APK" artifacts/Metrolist-dudu7-13.7.75.apk
           BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
@@ -156,7 +149,13 @@ jobs:
           {"versionCode":1370084,"versionName":"13.7.75","packageName":"com.metrolist.music.dudu7.debug","signerSha256":"138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee","apkAsset":"Metrolist-dudu7-13.7.75.apk","sha256":"$SHA"}
           JSON
 
-      - name: Publish 13.7.75 to internal updater after tests
+      - name: Push validated integrated source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git push origin HEAD:agent/upstream-sync-13-7-75
+
+      - name: Publish 13.7.75 to internal updater
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -173,7 +172,8 @@ jobs:
           - Persisted shuffle state survives queue restore.
           - Invalid YouTube playlist deep-links are rejected safely.
           - Robust legacy DB migrations and persistent artist aliases.
-          - Dudu7 FM/WebRadio/vehicle-specific code retained and covered by the full Dudu7 unit suite.
+          - Dudu7-specific FM/WebRadio/MediaSession/vehicle code retained.
+          - Standard compile and full Dudu7 unit suite passed before source push and release.
           - APK SHA-256: `$SHA`
 
           Real Dudu7 hardware validation remains required before closing the linked issues.
@@ -194,17 +194,47 @@ jobs:
               --prerelease
           fi
 
+      - name: Report success on PR
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA=$(awk '{print $1}' artifacts/Metrolist-dudu7-13.7.75.apk.sha256)
+          gh pr comment 161 --body "13.7.75 Upstream-Sync erfolgreich integriert und validiert. Standard-Compile, vollständige Dudu7-Unit-Tests, ARM64/ARMv7-Build, Paket/Signatur/Version geprüft. APK SHA-256: \`$SHA\`. Interner Updater-Release \`dudu7-v13.7.75\` erstellt. Reale Dudu7-Hardwareprüfung bleibt vor Issue-Abschluss erforderlich."
+
+      - name: Report failure on PR
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          mkdir -p artifacts
+          {
+            echo '## 13.7.75 Upstream-Sync fehlgeschlagen'
+            echo
+            echo '### Unmerged files'
+            git diff --name-only --diff-filter=U | sed 's/^/- `/' | sed 's/$/`/'
+            echo
+            echo '### Git status'
+            echo '```'
+            git status --short
+            echo '```'
+            echo
+            echo '### Letzte Integrationsausgabe'
+            echo '```'
+            tail -n 80 artifacts/integration.log 2>/dev/null || true
+            echo '```'
+            echo
+            echo 'Es wurde keine teilweise integrierte Quelle auf den Branch gepusht und kein 13.7.75-Updater-Release erzeugt.'
+          } > artifacts/failure-comment.md
+          gh pr comment 161 --body-file artifacts/failure-comment.md || true
+
       - name: Upload validation evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Metrolist-dudu7-13.7.75-upstream-sync
-          path: |
-            artifacts/Metrolist-dudu7-13.7.75.apk
-            artifacts/Metrolist-dudu7-13.7.75.apk.sha256
-            artifacts/dudu7-update.json
-            artifacts/apk-badging.txt
-            artifacts/apk-signature.txt
-            artifacts/apk-contents.txt
-            artifacts/release-notes.md
+          path: artifacts/
           retention-days: 14
