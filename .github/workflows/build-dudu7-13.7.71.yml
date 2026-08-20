@@ -1,0 +1,161 @@
+name: Verify Dudu7 Issue 140 playlist touch before release
+
+on:
+  push:
+    branches: [agent/issue-140-playlist-touch-13-7-71]
+  pull_request:
+    branches: [agent/issues-133-134-search-home]
+  workflow_dispatch:
+
+# Verification-only workflow. No updater release permission is granted until the
+# mandatory real-touch emulator path is green.
+permissions:
+  contents: read
+
+jobs:
+  test-build-gate:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify Issue 140 touch fix and release gate
+        shell: bash
+        run: |
+          set -euxo pipefail
+          grep -q 'versionCode = 1370082' app/build.gradle.kts
+          grep -q 'versionName = "13.7.73"' app/build.gradle.kts
+          python3 - <<'PY'
+          from pathlib import Path
+          browse = Path('app/src/main/kotlin/com/metrolist/music/ui/screens/BrowseScreen.kt').read_text()
+          workflow = Path('.github/workflows/build-dudu7-13.7.71.yml').read_text()
+          required = [
+              'LocalRightPaneScrollBridge',
+              'rightPaneScrollBridge.register(',
+              'handler = { delta -> lazyGridState.dispatchRawDelta(delta) }',
+              'tapHandler = { positionInRoot ->',
+              'parentOwnsPlaylistPointer = rightPaneScrollBridge != null && item is PlaylistItem',
+              'if (parentOwnsPlaylistPointer)',
+              '.focusable()',
+              '.onKeyEvent { event ->',
+              '.semantics {',
+              'Dudu7BrowseTarget',
+              'Dudu7BrowseNavigate',
+              'navController.navigate("online_playlist/${item.id}")',
+              '.then(interactionModifier)',
+              '.combinedClickable(',
+          ]
+          for needle in required:
+              assert needle in browse, needle
+          assert 'userScrollEnabled = rightPaneScrollBridge == null' in browse
+          assert ('continue-on-error' + ': true') not in workflow
+          assert ('gh ' + 'release') not in workflow
+          assert ('Publish updater ' + 'release') not in workflow
+          PY
+          git diff --check HEAD~1 HEAD
+
+      - name: Compile and unit test
+        run: |
+          chmod +x gradlew
+          ./gradlew --console=plain :app:compileGmsStandardDebugKotlin --no-daemon --stacktrace
+          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+
+      - name: Build and verify Dudu7 candidate APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          cp "$APK" artifacts/Metrolist-dudu7-issue140-candidate.apk
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$BUILD_TOOLS/aapt" dump badging artifacts/Metrolist-dudu7-issue140-candidate.apk > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs artifacts/Metrolist-dudu7-issue140-candidate.apk > artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370082'" artifacts/apk-badging.txt
+          grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
+          unzip -l artifacts/Metrolist-dudu7-issue140-candidate.apk > artifacts/apk-contents.txt
+          grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
+          grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
+          sha256sum artifacts/Metrolist-dudu7-issue140-candidate.apk > artifacts/Metrolist-dudu7-issue140-candidate.apk.sha256
+
+      - name: Prepare x86_64 emulator APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cp app/build.gradle.kts /tmp/build.gradle.kts.production
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/build.gradle.kts')
+          s = p.read_text()
+          old = 'abiFilters += listOf("arm64-v8a", "armeabi-v7a")'
+          if old not in s:
+              raise SystemExit('production ABI filter anchor not found')
+          p.write_text(s.replace(old, 'abiFilters += listOf("x86_64")', 1))
+          PY
+          rm -rf app/build/outputs/apk/gmsDudu7/debug
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace > artifacts/emulator-build.log
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          cp "$APK" artifacts/Metrolist-dudu7-issue140-x86_64-test.apk
+          unzip -l artifacts/Metrolist-dudu7-issue140-x86_64-test.apk > artifacts/emulator-apk-contents.txt
+          grep -q 'lib/x86_64/' artifacts/emulator-apk-contents.txt
+          cp /tmp/build.gradle.kts.production app/build.gradle.kts
+
+      - name: Enable KVM
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+
+      - name: Mandatory real-touch test Home to Genre to Playlist
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash scripts/run_issue_140_browse_playback_emulator.sh
+
+      - name: Upload candidate and verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-issue140-verification-${{ github.run_id }}
+          path: |
+            artifacts/Metrolist-dudu7-issue140-candidate.apk
+            artifacts/Metrolist-dudu7-issue140-candidate.apk.sha256
+            artifacts/apk-badging.txt
+            artifacts/apk-signature.txt
+            artifacts/apk-contents.txt
+            artifacts/emulator-build.log
+            artifacts/emulator-apk-contents.txt
+            artifacts/system-dialog-*.xml
+            artifacts/home-tabs-*.xml
+            artifacts/home-selected.xml
+            artifacts/home-selected.png
+            artifacts/home-scroll-*.xml
+            artifacts/home-scroll-*.png
+            artifacts/mood-title-visible.xml
+            artifacts/selected-home-genre.json
+            artifacts/home-genre-after-tap-logcat.txt
+            artifacts/browse-page.xml
+            artifacts/browse-page.png
+            artifacts/browse-targets-*.log
+            artifacts/selected-playlist.json
+            artifacts/playlist-after-tap.xml
+            artifacts/playlist-after-tap.png
+            artifacts/playlist-after-tap-logcat.txt
+          retention-days: 14

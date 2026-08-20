@@ -1,0 +1,1 @@
+Validate compile, tests, ARM APK, signature, ABI and updater manifest.
