@@ -1802,7 +1802,7 @@ class MusicService :
             currentMediaIdRetryCount.remove(item.mediaId)
             recentlyFailedSongs.remove(item.mediaId)
             if (isRadioMediaId(item.mediaId)) {
-                songUrlCache.remove(item.mediaId)
+                songUrlCache.invalidate(item.mediaId)
                 // Remove cache fragments created by older builds. Live streams
                 // are endless and must never be reused from the normal song cache.
                 runCatching { playerCache.removeResource(item.mediaId) }
