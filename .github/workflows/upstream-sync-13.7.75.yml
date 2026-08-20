@@ -172,16 +172,29 @@ jobs:
       - name: Compile and unit test
         shell: bash
         run: |
+          set +e
           set -o pipefail
           chmod +x gradlew
           ./gradlew --console=plain :app:compileGmsStandardDebugKotlin --no-daemon --stacktrace 2>&1 | tee artifacts/standard-compile.log
+          status=${PIPESTATUS[0]}
+          grep -nE '(^e:|^error:|FAILURE:|What went wrong|Caused by:.*Compilation|Unresolved reference|Conflicting overload|Cannot access|Type mismatch|No value passed|Too many arguments)' artifacts/standard-compile.log > artifacts/standard-compile-diagnostics.txt || true
+          if [[ "$status" -ne 0 ]]; then exit "$status"; fi
+
           ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace 2>&1 | tee artifacts/dudu7-unit-tests.log
+          status=${PIPESTATUS[0]}
+          grep -nE '(^e:|^error:|FAILURE:|What went wrong|Caused by:|FAILED|AssertionError)' artifacts/dudu7-unit-tests.log > artifacts/dudu7-unit-test-diagnostics.txt || true
+          exit "$status"
 
       - name: Build and verify Dudu7 ARM APK
         shell: bash
         run: |
-          set -euxo pipefail
+          set +e
+          set -o pipefail
           ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace 2>&1 | tee artifacts/dudu7-build.log
+          status=${PIPESTATUS[0]}
+          grep -nE '(^e:|^error:|FAILURE:|What went wrong|Caused by:|FAILED)' artifacts/dudu7-build.log > artifacts/dudu7-build-diagnostics.txt || true
+          if [[ "$status" -ne 0 ]]; then exit "$status"; fi
+          set -euxo pipefail
           APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
           cp "$APK" artifacts/Metrolist-dudu7-13.7.75.apk
           BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
@@ -251,7 +264,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           SHA=$(awk '{print $1}' artifacts/Metrolist-dudu7-13.7.75.apk.sha256)
-          gh pr comment 161 --body "13.7.75 Upstream-Sync erfolgreich integriert und validiert. Standard-Compile, vollständige Dudu7-Unit-Tests, ARM64/ARMv7-Build, Paket/Signatur/Version geprüft. APK SHA-256: \`$SHA\`. Interner Updater-Release \`dudu7-v13.7.75\` erstellt. Reale Dudu7-Hardwareprüfung bleibt vor Issue-Abschluss erforderlich."
+          gh pr comment 161 --body "13.7.75 Upstream-Sync erfolgreich integriert und validiert. Run \`$GITHUB_RUN_ID\`. Standard-Compile, vollständige Dudu7-Unit-Tests, ARM64/ARMv7-Build, Paket/Signatur/Version geprüft. APK SHA-256: \`$SHA\`. Interner Updater-Release \`dudu7-v13.7.75\` erstellt. Reale Dudu7-Hardwareprüfung bleibt vor Issue-Abschluss erforderlich."
 
       - name: Report failure on PR
         if: failure()
@@ -262,7 +275,7 @@ jobs:
           set +e
           mkdir -p artifacts
           {
-            echo '## 13.7.75 Upstream-Sync fehlgeschlagen'
+            echo "## 13.7.75 Upstream-Sync fehlgeschlagen (Run $GITHUB_RUN_ID)"
             echo
             echo '### Unmerged files'
             git diff --name-only --diff-filter=U | sed 's/^/- `/' | sed 's/$/`/'
@@ -271,12 +284,12 @@ jobs:
             echo '```'
             git status --short
             echo '```'
-            for log in source-verify.log standard-compile.log dudu7-unit-tests.log dudu7-build.log integration.log; do
-              if [[ -f "artifacts/$log" ]]; then
+            for log in source-verify.log standard-compile-diagnostics.txt dudu7-unit-test-diagnostics.txt dudu7-build-diagnostics.txt integration.log; do
+              if [[ -s "artifacts/$log" ]]; then
                 echo
-                echo "### $log (tail)"
+                echo "### $log"
                 echo '```'
-                tail -n 120 "artifacts/$log"
+                cat "artifacts/$log"
                 echo '```'
               fi
             done
