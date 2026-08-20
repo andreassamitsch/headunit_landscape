@@ -313,7 +313,7 @@ jobs:
           "$BUILD_TOOLS/aapt" dump badging "artifacts/$DUDU7_APK_NAME" > artifacts/apk-badging.txt
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "artifacts/$DUDU7_APK_NAME" > artifacts/apk-signature.txt
           grep -q "package: name='$DUDU7_PACKAGE_NAME' versionCode='$DUDU7_VERSION_CODE' versionName='$DUDU7_VERSION_NAME-dudu7'" artifacts/apk-badging.txt
-          grep -Fq "Signer #1 certificate SHA-256 digest: $DUDU7_REFERENCE_SIGNER_SHA256" artifacts/apk-signature.txt
+          grep -Eq "(Signer #[0-9]+|V[0-9]+ Signer): certificate SHA-256 digest: $DUDU7_REFERENCE_SIGNER_SHA256" artifacts/apk-signature.txt
           unzip -l "artifacts/$DUDU7_APK_NAME" > artifacts/apk-contents.txt
           grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
           grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
