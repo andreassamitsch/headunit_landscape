@@ -1,0 +1,210 @@
+name: Dudu7 13.7.75 upstream sync
+
+on:
+  push:
+    branches: [agent/upstream-sync-13-7-75]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  integrate-upstream:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/upstream-sync-13-7-75
+          fetch-depth: 0
+          submodules: recursive
+          token: ${{ github.token }}
+
+      - name: Cherry-pick selected MetroList fixes
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git remote add metrolist-upstream https://github.com/MetrolistGroup/Metrolist.git || true
+          git fetch --no-tags metrolist-upstream \
+            ad8390cdee408381a7effbb317486c515a48f0da \
+            ec9a6b3ec1ac8bc6cf362cab3eee9e632598e86f \
+            0d37cc4658c18ac43123264edf48f7224b77d506 \
+            0f316d1211c13c5f149777b2426e3be007b17619 \
+            e483f49f06ed235489b2a5e4647634e454ce30b3
+
+          for sha in \
+            ad8390cdee408381a7effbb317486c515a48f0da \
+            ec9a6b3ec1ac8bc6cf362cab3eee9e632598e86f \
+            0d37cc4658c18ac43123264edf48f7224b77d506 \
+            0f316d1211c13c5f149777b2426e3be007b17619 \
+            e483f49f06ed235489b2a5e4647634e454ce30b3
+          do
+            git cherry-pick -x "$sha"
+          done
+
+      - name: Bump Dudu7 release version
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/build.gradle.kts')
+          s = p.read_text()
+          if 'versionCode = 1370083' not in s or 'versionName = "13.7.74"' not in s:
+              raise SystemExit('13.7.74 version anchor not found')
+          s = s.replace('versionCode = 1370083', 'versionCode = 1370084', 1)
+          s = s.replace('versionName = "13.7.74"', 'versionName = "13.7.75"', 1)
+          p.write_text(s)
+          PY
+          git add -- app/build.gradle.kts
+          git commit -m 'Build: bump Dudu7 to 13.7.75'
+
+      - name: Record reviewed upstream baseline
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p docs
+          cat > docs/DUDU7_UPSTREAM_BASELINE.md <<'MD'
+          # Dudu7 upstream baseline
+
+          Current Dudu7 synchronization review: 2026-08-20.
+
+          The Dudu7 13.7.75 integration branch is based on the device-tested Dudu7 13.7.74 branch and has selectively integrated/reviewed Original MetroList changes through:
+
+          `e483f49f06ed235489b2a5e4647634e454ce30b3` (2026-08-19)
+
+          Explicitly integrated upstream commits in this synchronization:
+
+          - `ad8390cdee408381a7effbb317486c515a48f0da` — persisted shuffle restore
+          - `ec9a6b3ec1ac8bc6cf362cab3eee9e632598e86f` — stream URL/cache/buffer recovery
+          - `0d37cc4658c18ac43123264edf48f7224b77d506` — Faraday cipher config store with Zemer fallback
+          - `0f316d1211c13c5f149777b2426e3be007b17619` — invalid playlist deep-link guard
+          - `e483f49f06ed235489b2a5e4647634e454ce30b3` — legacy DB migrations and artist alias persistence (plus compatible AA pagination pieces contained in that commit)
+
+          This SHA is a reviewed-through baseline, not a claim that every upstream commit before it was merged. Future sync analyses must compare newer Original MetroList changes after this review point and preserve Dudu7-specific FM/WebRadio/vehicle integrations.
+          MD
+          git add -- docs/DUDU7_UPSTREAM_BASELINE.md
+          git commit -m 'Docs: record Dudu7 upstream review baseline'
+
+      - name: Push integrated source
+        run: git push origin HEAD:agent/upstream-sync-13-7-75
+
+  test-build-release:
+    if: github.actor == 'github-actions[bot]'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/upstream-sync-13-7-75
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify upstream integration source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          grep -q 'versionCode = 1370084' app/build.gradle.kts
+          grep -q 'versionName = "13.7.75"' app/build.gradle.kts
+          test -f app/src/main/kotlin/com/metrolist/music/playback/StreamUrlCache.kt
+          grep -q 'FARADAY_URL' app/src/main/kotlin/com/metrolist/music/utils/cipher/PlayerConfigStore.kt
+          grep -q 'ZEMER_URL' app/src/main/kotlin/com/metrolist/music/utils/cipher/PlayerConfigStore.kt
+          grep -q 'restoringQueue = true' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          grep -q 'initialBufferRecoveryJob' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          grep -q 'responseCode == 403 || current.responseCode == 410' app/src/main/kotlin/com/metrolist/music/playback/DownloadUtil.kt
+          grep -q 'playlistId.isNullOrBlank()' app/src/main/kotlin/com/metrolist/music/MainActivity.kt
+          test -f app/src/main/kotlin/com/metrolist/music/utils/ArtistNameAliases.kt
+          grep -q 'addVersion24ColumnsIfMissing' app/src/main/kotlin/com/metrolist/music/db/MusicDatabase.kt
+          grep -q 'e483f49f06ed235489b2a5e4647634e454ce30b3' docs/DUDU7_UPSTREAM_BASELINE.md
+          git diff --check HEAD~7 HEAD
+
+      - name: Compile and unit test
+        run: |
+          chmod +x gradlew
+          ./gradlew --console=plain :app:compileGmsStandardDebugKotlin --no-daemon --stacktrace
+          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+
+      - name: Build and verify Dudu7 ARM APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          cp "$APK" artifacts/Metrolist-dudu7-13.7.75.apk
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$BUILD_TOOLS/aapt" dump badging artifacts/Metrolist-dudu7-13.7.75.apk > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs artifacts/Metrolist-dudu7-13.7.75.apk > artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370084'" artifacts/apk-badging.txt
+          grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
+          unzip -l artifacts/Metrolist-dudu7-13.7.75.apk > artifacts/apk-contents.txt
+          grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
+          grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
+          sha256sum artifacts/Metrolist-dudu7-13.7.75.apk > artifacts/Metrolist-dudu7-13.7.75.apk.sha256
+          SHA=$(awk '{print $1}' artifacts/Metrolist-dudu7-13.7.75.apk.sha256)
+          cat > artifacts/dudu7-update.json <<JSON
+          {"versionCode":1370084,"versionName":"13.7.75","packageName":"com.metrolist.music.dudu7.debug","signerSha256":"138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee","apkAsset":"Metrolist-dudu7-13.7.75.apk","sha256":"$SHA"}
+          JSON
+
+      - name: Publish 13.7.75 to internal updater after tests
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          SHA=$(awk '{print $1}' artifacts/Metrolist-dudu7-13.7.75.apk.sha256)
+          cat > artifacts/release-notes.md <<MD
+          ## MetroList dudu7 13.7.75
+          Upstream reliability synchronization for #152, #153, #155, #157 and #159.
+
+          - Stream URL cache, request-header preservation and expired URL recovery.
+          - Initial buffering recovery and updated player configs.
+          - Faraday cipher config store with Zemer fallback.
+          - Persisted shuffle state survives queue restore.
+          - Invalid YouTube playlist deep-links are rejected safely.
+          - Robust legacy DB migrations and persistent artist aliases.
+          - Dudu7 FM/WebRadio/vehicle-specific code retained and covered by the full Dudu7 unit suite.
+          - APK SHA-256: `$SHA`
+
+          Real Dudu7 hardware validation remains required before closing the linked issues.
+          MD
+          TAG=dudu7-v13.7.75
+          HEAD_SHA=$(git rev-parse HEAD)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            TAG_SHA=$(git rev-list -n 1 "$TAG")
+            test "$TAG_SHA" = "$HEAD_SHA" || { echo "$TAG already exists on another commit" >&2; exit 1; }
+          else
+            gh release create "$TAG" \
+              artifacts/Metrolist-dudu7-13.7.75.apk \
+              artifacts/Metrolist-dudu7-13.7.75.apk.sha256 \
+              artifacts/dudu7-update.json \
+              --target "$HEAD_SHA" \
+              --title 'MetroList dudu7 13.7.75' \
+              --notes-file artifacts/release-notes.md \
+              --prerelease
+          fi
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.75-upstream-sync
+          path: |
+            artifacts/Metrolist-dudu7-13.7.75.apk
+            artifacts/Metrolist-dudu7-13.7.75.apk.sha256
+            artifacts/dudu7-update.json
+            artifacts/apk-badging.txt
+            artifacts/apk-signature.txt
+            artifacts/apk-contents.txt
+            artifacts/release-notes.md
+          retention-days: 14
