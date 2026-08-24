@@ -1019,11 +1019,13 @@ object FytPhysicalRadio {
                     if (currentRtrMatch && before.rtrStableId == stationId && before.rtrAfPredictions.isNotEmpty()) {
                         before.rtrAfPredictions
                     } else {
-                        rtrRepository?.alternativesForProgram(
-                            stableId = stationId,
-                            currentFrequency = before.frequency,
-                            location = currentPoint,
-                        ).orEmpty()
+                        withTimeoutOrNull(6_000) {
+                            rtrRepository?.alternativesForProgram(
+                                stableId = stationId,
+                                currentFrequency = before.frequency,
+                                location = currentPoint,
+                            ).orEmpty()
+                        }.orEmpty()
                     }
                 val plan =
                     FmLocalAfPlanner.plan(
@@ -1103,7 +1105,10 @@ object FytPhysicalRadio {
                             minimumImprovement = AF_RSSI_HYSTERESIS,
                         )
                     if (selected != null) {
-                        runCatching { fm.tune(selected.frequency) }
+                        val tunedSelected = runCatching { fm.tune(selected.frequency) }.getOrDefault(false)
+                        if (!tunedSelected) {
+                            error("AF-Zielfrequenz ${formatFrequency(selected.frequency)} MHz konnte nicht eingestellt werden")
+                        }
                         delay(220)
                         commitAlternativeFrequencySwitch(
                             before = before,
