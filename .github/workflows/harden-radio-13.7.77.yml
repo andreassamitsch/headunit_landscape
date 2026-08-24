@@ -1,0 +1,35 @@
+name: Harden Dudu7 13.7.77 AF implementation
+
+on:
+  push:
+    branches:
+      - agent/issues-112-164-167-168-radio-fixes-13-7-77
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    if: ${{ !contains(github.event.head_commit.message, '[af-hardened]') }}
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/issues-112-164-167-168-radio-fixes-13-7-77
+          fetch-depth: 0
+      - name: Apply robustness patch
+        run: |
+          set -euxo pipefail
+          python3 .github/scripts/harden_radio_13_7_77.py
+          git diff --check
+          grep -q 'withTimeoutOrNull(6_000)' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+          grep -q 'AF-Zielfrequenz' app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+      - name: Commit hardening
+        run: |
+          set -euxo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+          git rm .github/scripts/harden_radio_13_7_77.py .github/workflows/harden-radio-13.7.77.yml
+          git commit -m 'fix: harden manual AF candidate resolution (#112) [af-hardened]'
+          git push origin HEAD:agent/issues-112-164-167-168-radio-fixes-13-7-77
