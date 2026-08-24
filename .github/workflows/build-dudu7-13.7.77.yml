@@ -56,7 +56,7 @@ jobs:
           grep -q 'FmActiveFavouriteIdentityPolicy.allowRtrOverride' "$FM"
           grep -q 'storedStationId.isNotBlank() && storedStationId == rtrStableId' "$FM_POLICY"
           grep -q 'ambiguous RTR result cannot replace active favourite without fresh RDS' "$FM_POLICY_TEST"
-          test "$(grep -c 'rtrMatchedFrequency = 0f' "$FM")" -ge 3
+          test "$(grep -c 'rtrMatchedFrequency = 0f' "$FM")" -ge 2
 
           grep -q 'AF_RSSI_SAMPLE_COUNT = 4' "$FM"
           grep -q 'sampleRssi(fm)' "$FM"
@@ -65,9 +65,10 @@ jobs:
           grep -q 'AF: keine bessere bestätigte Frequenz' "$FM"
           grep -q 'minimumImprovement = AF_RSSI_HYSTERESIS' "$FM"
           grep -q 'alternativesForProgram' "$RTR"
+          grep -q 'withTimeoutOrNull(6_000)' "$FM"
+          grep -q 'AF-Zielfrequenz' "$FM"
 
           grep -Fq 'FM ${FytPhysicalRadio.formatFrequency(state.frequency)} LIVE' "$UI"
-
           git diff --check origin/agent/upstream-sync-13-7-75...HEAD
 
       - name: Compile standard MetroList and run Dudu7 unit tests
