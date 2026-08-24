@@ -1,0 +1,229 @@
+name: Build Dudu7 13.7.77 radio identity AF and WebRadio fixes
+
+on:
+  pull_request:
+    branches: [agent/upstream-sync-13-7-75]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dudu7-13-7-77-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-build-release:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Verify Issues 112 164 167 and 168 implementation
+        shell: bash
+        run: |
+          set -euxo pipefail
+          grep -q 'versionCode = 1370086' app/build.gradle.kts
+          grep -q 'versionName = "13.7.77"' app/build.gradle.kts
+
+          WEB=app/src/main/kotlin/com/metrolist/music/radio/RadioTrackMetadata.kt
+          WEB_TEST=app/src/test/kotlin/com/metrolist/music/radio/RadioTrackMetadataTest.kt
+          FM=app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt
+          FM_POLICY=app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmActiveFavouriteIdentityPolicy.kt
+          FM_POLICY_TEST=app/src/test/kotlin/com/metrolist/music/radio/fyt/FmActiveFavouriteIdentityPolicyTest.kt
+          RTR=app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/RtrFmRepository.kt
+          UI=app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt
+
+          grep -q 'repairRadioStreamMojibake(raw)' "$WEB"
+          grep -q 'CodingErrorAction.REPORT' "$WEB"
+          grep -q 'ISO_8859_1' "$WEB"
+          grep -q 'Schritt für Schritt' "$WEB_TEST"
+          grep -q 'Grüße aus Österreich' "$WEB_TEST"
+
+          grep -q 'FmActiveFavouriteIdentityPolicy.allowRtrOverride' "$FM"
+          grep -q 'storedStationId.isNotBlank() && storedStationId == rtrStableId' "$FM_POLICY"
+          grep -q 'ambiguous RTR result cannot replace active favourite without fresh RDS' "$FM_POLICY_TEST"
+          test "$(grep -c 'rtrMatchedFrequency = 0f' "$FM")" -ge 3
+
+          grep -q 'AF_RSSI_SAMPLE_COUNT = 4' "$FM"
+          grep -q 'sampleRssi(fm)' "$FM"
+          grep -q 'candidates.mapIndexedNotNull' "$FM"
+          grep -q 'AF prüft .*MHz' "$FM"
+          grep -q 'AF: keine bessere bestätigte Frequenz' "$FM"
+          grep -q 'minimumImprovement = AF_RSSI_HYSTERESIS' "$FM"
+          grep -q 'alternativesForProgram' "$RTR"
+
+          grep -Fq 'FM ${FytPhysicalRadio.formatFrequency(state.frequency)} LIVE' "$UI"
+
+          git diff --check origin/agent/upstream-sync-13-7-75...HEAD
+
+      - name: Compile standard MetroList and run Dudu7 unit tests
+        shell: bash
+        run: |
+          chmod +x gradlew
+          ./gradlew --console=plain :app:compileGmsStandardDebugKotlin --no-daemon --stacktrace
+          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+
+      - name: Build and verify Dudu7 ARM APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace | tee artifacts/build.log
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          test -n "$APK"
+          OUT=artifacts/Metrolist-dudu7-13.7.77.apk
+          cp "$APK" "$OUT"
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$BUILD_TOOLS/aapt" dump badging "$OUT" > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$OUT" > artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370086'" artifacts/apk-badging.txt
+          grep -q "application-label:'Metrolist dudu7'" artifacts/apk-badging.txt
+          grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
+          unzip -l "$OUT" > artifacts/apk-contents.txt
+          grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
+          grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
+          sha256sum "$OUT" > "$OUT.sha256"
+          SHA=$(awk '{print $1}' "$OUT.sha256")
+          cat > artifacts/dudu7-update.json <<JSON
+          {"versionCode":1370086,"versionName":"13.7.77","packageName":"com.metrolist.music.dudu7.debug","signerSha256":"138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee","apkAsset":"Metrolist-dudu7-13.7.77.apk","sha256":"$SHA"}
+          JSON
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+
+      - name: Publish 13.7.77 to internal updater after validation
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          SHA=$(awk '{print $1}' artifacts/Metrolist-dudu7-13.7.77.apk.sha256)
+          cat > artifacts/release-notes.md <<MD
+          ## MetroList dudu7 13.7.77
+
+          **#164 WebRadio-Umlaute**
+          - ICY/Media3-Streamtitel werden nur bei einem eindeutig erkennbaren UTF-8-als-Latin-1-Mojibake-Muster konservativ repariert.
+          - Korrekte Unicode- und ASCII-Metadaten bleiben unverändert.
+
+          **#167 FM-Senderidentität**
+          - Ein ausdrücklich gestarteter Favorit bleibt die primäre Senderidentität.
+          - Ein mehrdeutiger gleicher Frequenztreffer aus RTR darf den Favoriten ohne frische widersprechende RDS-Evidenz nicht ersetzen.
+          - Alte RTR-Zuordnungen werden beim Tuning sofort invalidiert.
+
+          **#112 manuelle AF-Prüfung**
+          - Doppeltipp prüft lokale RTR-/Empfangspfad-Kandidaten desselben Favoriten sichtbar nacheinander.
+          - Ursprungs-RSSI und Kandidaten werden über mehrere Samples gemittelt.
+          - Fremde/fehlende PI wird nicht übernommen; Wechsel benötigt mindestens 3 RSSI-Punkte Verbesserung.
+          - Ohne bessere bestätigte Alternative wird auf die Ursprungsfrequenz zurückgetunt.
+
+          **#168 aktuelle FM-Frequenz**
+          - Der Player zeigt die tatsächlich abgestimmte Frequenz dauerhaft als z. B. `FM 89,2 LIVE`.
+          - Während AF-Probes folgt die Anzeige der gerade getesteten Hardwarefrequenz.
+
+          **Validierung**
+          - Standard-MetroList-Compile
+          - vollständige Dudu7-Unit-/Regressionstests
+          - ARM64 + ARMv7 APK
+          - Paket-, Signatur- und SHA-256-Prüfung
+          - APK SHA-256: $SHA
+
+          **Bekannte Einschränkung:** echte UKW-RSSI-/PI-Werte und hörbare AF-Tunerwechsel können in GitHub Actions nicht simuliert werden. Reale Dudu7-Gerätetests bleiben vor dem Schließen der Issues erforderlich.
+          MD
+
+          TAG=dudu7-v13.7.77
+          HEAD_SHA=$(git rev-parse HEAD)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            TAG_SHA=$(git rev-list -n 1 "$TAG")
+            test "$TAG_SHA" = "$HEAD_SHA" || { echo "$TAG already points to $TAG_SHA; bump version instead of replacing it" >&2; exit 1; }
+          else
+            gh release create "$TAG" \
+              artifacts/Metrolist-dudu7-13.7.77.apk \
+              artifacts/Metrolist-dudu7-13.7.77.apk.sha256 \
+              artifacts/dudu7-update.json \
+              --target "$HEAD_SHA" \
+              --title 'MetroList dudu7 13.7.77' \
+              --notes-file artifacts/release-notes.md \
+              --prerelease
+          fi
+
+      - name: Verify public updater manifest and APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          import hashlib, json, time, urllib.error, urllib.request
+          tag='dudu7-v13.7.77'
+          api=f'https://api.github.com/repos/andreassamitsch/headunit_landscape/releases/tags/{tag}'
+          headers={'User-Agent':'Metrolist-dudu7-ci','Accept':'application/vnd.github+json'}
+          release=None
+          for attempt in range(1,13):
+              try:
+                  release=json.load(urllib.request.urlopen(urllib.request.Request(api,headers=headers),timeout=30))
+                  if release.get('tag_name')==tag and release.get('assets'):
+                      break
+              except (urllib.error.HTTPError,urllib.error.URLError):
+                  release=None
+              time.sleep(5)
+          if not release:
+              raise SystemExit('13.7.77 release did not become publicly readable')
+          assets={a['name']:a['browser_download_url'] for a in release['assets']}
+          required={'dudu7-update.json','Metrolist-dudu7-13.7.77.apk','Metrolist-dudu7-13.7.77.apk.sha256'}
+          missing=required-assets.keys()
+          if missing:
+              raise SystemExit(f'Missing updater assets: {sorted(missing)}')
+          manifest=None
+          for attempt in range(1,13):
+              try:
+                  manifest=json.load(urllib.request.urlopen(urllib.request.Request(assets['dudu7-update.json'],headers={'User-Agent':'Metrolist-dudu7-ci'}),timeout=30))
+                  break
+              except (urllib.error.HTTPError,urllib.error.URLError,json.JSONDecodeError):
+                  time.sleep(5)
+          if not manifest:
+              raise SystemExit('Public updater manifest could not be read')
+          assert manifest['versionCode']==1370086
+          assert manifest['versionName']=='13.7.77'
+          assert manifest['packageName']=='com.metrolist.music.dudu7.debug'
+          assert manifest['signerSha256']=='138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee'
+          assert manifest['apkAsset']=='Metrolist-dudu7-13.7.77.apk'
+          h=hashlib.sha256()
+          with urllib.request.urlopen(urllib.request.Request(assets['Metrolist-dudu7-13.7.77.apk'],headers={'User-Agent':'Metrolist-dudu7-ci'}),timeout=120) as response:
+              while True:
+                  chunk=response.read(1024*1024)
+                  if not chunk: break
+                  h.update(chunk)
+          assert h.hexdigest()==manifest['sha256']
+          print('13.7.77 public updater manifest and APK SHA verified:', h.hexdigest())
+          PY
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.77-radio
+          path: |
+            artifacts/Metrolist-dudu7-13.7.77.apk
+            artifacts/Metrolist-dudu7-13.7.77.apk.sha256
+            artifacts/dudu7-update.json
+            artifacts/apk-badging.txt
+            artifacts/apk-signature.txt
+            artifacts/apk-contents.txt
+            artifacts/build.log
+            artifacts/release-notes.md
+          retention-days: 14
