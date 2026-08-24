@@ -6,7 +6,6 @@ import android.os.Bundle;
 import android.util.Log;
 
 import java.lang.reflect.Method;
-import java.nio.charset.Charset;
 
 /**
  * JNI bridge to the FYT firmware-provided libfmjni.so.
@@ -28,7 +27,6 @@ public final class FmNative {
     public static final int AREA_EUROPE = 2;
 
     private static final int STREAM_FM = 10;
-    private static final Charset RDS_CHARSET = Charset.forName("ISO-8859-1");
 
     private static final FmNative INSTANCE = new FmNative();
     private static boolean libraryLoaded;
@@ -240,14 +238,14 @@ public final class FmNative {
         try {
             Bundle output = new Bundle();
             if (fmsyu_jni(CMD_RDS_GET_PS, new Bundle(), output) == 0) {
-                String value = decode(output.getByteArray("PSname"));
+                String value = RdsTextDecoder.decode(output.getByteArray("PSname"));
                 if (!value.isEmpty()) return value;
             }
         } catch (Throwable error) {
             Log.d(TAG, "PS bundle command unavailable", error);
         }
         try {
-            return decode(getPs());
+            return RdsTextDecoder.decode(getPs());
         } catch (Throwable error) {
             Log.d(TAG, "Direct PS read unavailable", error);
             return "";
@@ -259,27 +257,17 @@ public final class FmNative {
         try {
             Bundle output = new Bundle();
             if (fmsyu_jni(CMD_RDS_GET_TEXT, new Bundle(), output) == 0) {
-                String value = decode(output.getByteArray("Text"));
+                String value = RdsTextDecoder.decode(output.getByteArray("Text"));
                 if (!value.isEmpty()) return value;
             }
         } catch (Throwable error) {
             Log.d(TAG, "RT bundle command unavailable", error);
         }
         try {
-            return decode(getLrText());
+            return RdsTextDecoder.decode(getLrText());
         } catch (Throwable error) {
             Log.d(TAG, "Direct RT read unavailable", error);
             return "";
         }
-    }
-
-    private static String decode(byte[] data) {
-        if (data == null || data.length == 0) return "";
-        String value = new String(data, RDS_CHARSET)
-                .replaceAll("[\\x00-\\x1F]", "")
-                .replace('\u00A0', ' ')
-                .trim();
-        if (value.toLowerCase().contains("not support")) return "";
-        return value;
     }
 }
