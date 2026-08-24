@@ -77,8 +77,8 @@ android {
         applicationId = applicationIdOverride ?: baseApplicationId
         minSdk = 26
         targetSdk = 36
-        versionCode = 1370085
-        versionName = "13.7.76"
+        versionCode = 1370086
+        versionName = "13.7.77"
         resValue("string", "app_name", appNameOverride ?: "Metrolist dudu7")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
