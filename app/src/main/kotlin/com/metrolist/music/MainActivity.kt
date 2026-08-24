@@ -18,6 +18,7 @@ import android.os.Bundle
 import android.os.IBinder
 import android.view.View
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
@@ -195,6 +196,7 @@ import com.metrolist.music.variant.VehicleVariantConfig
 import com.metrolist.music.variant.vehicleNavigation
 import com.metrolist.music.utils.SearchRoutes
 import com.metrolist.music.utils.SyncUtils
+import com.metrolist.music.utils.ArtistNameAliases
 import com.metrolist.music.utils.Updater
 import com.metrolist.music.utils.dataStore
 import com.metrolist.music.utils.safeDataStoreEdit
@@ -995,6 +997,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                 val baseBg = if (pureBlack) Color.Black else MaterialTheme.colorScheme.surfaceContainer
+                val artistNameAliases by ArtistNameAliases.aliases.collectAsStateWithLifecycle()
 
                 CompositionLocalProvider(
                     LocalDatabase provides database,
@@ -1007,6 +1010,7 @@ class MainActivity : ComponentActivity() {
                     LocalSyncUtils provides syncUtils,
                     LocalListenTogetherManager provides listenTogetherManager,
                     LocalChangelogState provides showChangelog,
+                    LocalArtistNameAliases provides artistNameAliases,
                 ) {
                     if (showChangelog.value) {
                         ChangelogScreen(onDismiss = { showChangelog.value = false })
@@ -1496,22 +1500,26 @@ class MainActivity : ComponentActivity() {
 
         when (val path = uri.pathSegments.firstOrNull()) {
             "playlist" -> {
-                uri.getQueryParameter("list")?.let { playlistId ->
-                    if (playlistId.startsWith("OLAK5uy_")) {
-                        coroutineScope.launch(Dispatchers.IO) {
-                            YouTube
-                                .albumSongs(playlistId)
-                                .onSuccess { songs ->
-                                    songs.firstOrNull()?.album?.id?.let { browseId ->
-                                        withContext(Dispatchers.Main) {
-                                            navController.navigate("album/$browseId")
-                                        }
+                val playlistId = uri.getQueryParameter("list")
+                if (playlistId.isNullOrBlank() || playlistId.equals("null", ignoreCase = true)) {
+                    Toast.makeText(this, R.string.playlist_unavailable, Toast.LENGTH_SHORT).show()
+                    return
+                }
+
+                if (playlistId.startsWith("OLAK5uy_")) {
+                    coroutineScope.launch(Dispatchers.IO) {
+                        YouTube
+                            .albumSongs(playlistId)
+                            .onSuccess { songs ->
+                                songs.firstOrNull()?.album?.id?.let { browseId ->
+                                    withContext(Dispatchers.Main) {
+                                        navController.navigate("album/$browseId")
                                     }
-                                }.onFailure { reportException(it) }
-                        }
-                    } else {
-                        navController.navigate("online_playlist/$playlistId")
+                                }
+                            }.onFailure { reportException(it) }
                     }
+                } else {
+                    navController.navigate("online_playlist/$playlistId")
                 }
             }
 
@@ -1606,4 +1614,5 @@ val LocalDownloadUtil = staticCompositionLocalOf<DownloadUtil> { error("No Downl
 val LocalSyncUtils = staticCompositionLocalOf<SyncUtils> { error("No SyncUtils provided") }
 val LocalListenTogetherManager = staticCompositionLocalOf<com.metrolist.music.listentogether.ListenTogetherManager?> { null }
 val LocalChangelogState = staticCompositionLocalOf<MutableState<Boolean>> { error("No LocalChangelogState provided") }
+val LocalArtistNameAliases = staticCompositionLocalOf<Map<String, String>> { emptyMap() }
 val LocalIsPlayerExpanded = compositionLocalOf { false }
