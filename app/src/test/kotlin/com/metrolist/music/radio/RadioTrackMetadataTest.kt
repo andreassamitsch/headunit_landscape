@@ -47,7 +47,7 @@ class RadioTrackMetadataTest {
 
     @Test
     fun `utf8 decoded as latin1 is repaired before parsing`() {
-        val mojibake = "Schritt f" + '\u00c3' + '\u00bcr Schritt"
+        val mojibake = "Schritt f" + '\u00c3' + '\u00bc' + "r Schritt"
 
         val (_, title) = parseRadioStreamTitle(mojibake)
 
@@ -56,7 +56,9 @@ class RadioTrackMetadataTest {
 
     @Test
     fun `artist and title mojibake are both repaired`() {
-        val mojibake = "Gr" + '\u00c3' + '\u00bc' + "ße aus " + '\u00c3' + '\u0096' + "sterreich - f" + '\u00c3' + '\u00bc' + "r dich"
+        val mojibake =
+            "Gr" + '\u00c3' + '\u00bc' + "ße aus " + '\u00c3' + '\u0096' + "sterreich - f" +
+                '\u00c3' + '\u00bc' + "r dich"
 
         val (artist, title) = parseRadioStreamTitle(mojibake)
 
