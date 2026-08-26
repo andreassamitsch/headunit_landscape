@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -60,5 +61,58 @@ class Dudu7UpdateProtocolTest {
         assertTrue(isDudu7UpdateNewer(1370076, 1370077))
         assertFalse(isDudu7UpdateNewer(1370076, 1370076))
         assertFalse(isDudu7UpdateNewer(1370076, 1370000))
+    }
+
+    @Test
+    fun `trusted signer with matching package manager evidence needs no fallback`() {
+        val verification = evaluateDudu7SignerEvidence(
+            manifestSignerSha256 = DUDU7_TRUSTED_SIGNER_SHA256,
+            archiveSigners = setOf(DUDU7_TRUSTED_SIGNER_SHA256),
+            installedSigners = setOf(DUDU7_TRUSTED_SIGNER_SHA256),
+        )
+
+        assertEquals(Dudu7SignerEvidenceState.MATCH, verification.archiveEvidence)
+        assertEquals(Dudu7SignerEvidenceState.MATCH, verification.installedEvidence)
+        assertFalse(verification.usesSystemInstallerFallback)
+    }
+
+    @Test
+    fun `missing OEM signer evidence falls back to Android installer without rejecting update`() {
+        val verification = evaluateDudu7SignerEvidence(
+            manifestSignerSha256 = DUDU7_TRUSTED_SIGNER_SHA256,
+            archiveSigners = emptySet(),
+            installedSigners = emptySet(),
+        )
+
+        assertEquals(Dudu7SignerEvidenceState.MISSING, verification.archiveEvidence)
+        assertEquals(Dudu7SignerEvidenceState.MISSING, verification.installedEvidence)
+        assertTrue(verification.usesSystemInstallerFallback)
+    }
+
+    @Test
+    fun `different OEM signer evidence is diagnostic and does not false-block`() {
+        val verification = evaluateDudu7SignerEvidence(
+            manifestSignerSha256 = DUDU7_TRUSTED_SIGNER_SHA256,
+            archiveSigners = setOf("a".repeat(64)),
+            installedSigners = setOf("b".repeat(64)),
+        )
+
+        assertEquals(Dudu7SignerEvidenceState.DIFFERENT, verification.archiveEvidence)
+        assertEquals(Dudu7SignerEvidenceState.DIFFERENT, verification.installedEvidence)
+        assertTrue(verification.usesSystemInstallerFallback)
+    }
+
+    @Test
+    fun `release manifest signer must match pinned Dudu7 certificate`() {
+        try {
+            evaluateDudu7SignerEvidence(
+                manifestSignerSha256 = "0".repeat(64),
+                archiveSigners = emptySet(),
+                installedSigners = emptySet(),
+            )
+            fail("untrusted manifest signer must be rejected")
+        } catch (error: IllegalStateException) {
+            assertTrue(error.message.orEmpty().contains("vertrauenswürdigen Dudu7-Signer"))
+        }
     }
 }
