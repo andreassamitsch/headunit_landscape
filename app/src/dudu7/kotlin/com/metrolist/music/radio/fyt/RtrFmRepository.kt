@@ -137,6 +137,35 @@ class RtrFmRepository private constructor(context: Context) {
         return RtrFmMatcher.alternatives(current, match, currentFrequency, location, strengths)
     }
 
+    suspend fun alternativesForProgram(
+        stableId: String,
+        currentFrequency: Float,
+        location: FmGeoPoint?,
+    ): List<RtrAfPrediction> {
+        if (stableId.isBlank()) return emptyList()
+        val current = refreshIfNeeded() ?: return emptyList()
+        val station = current.stations.firstOrNull { it.stableProgramId == stableId } ?: return emptyList()
+        val strengths = if (location == null) emptyMap() else {
+            RtrFmMatcher.candidateCoverageCodesForProgram(current, stableId, location)
+                .associateWith { code -> sampleCoverage(current, code, location) }
+        }
+        val match =
+            RtrFmMatch(
+                stableId = stableId,
+                canonicalName = station.program,
+                confidence = 100,
+                score = 0,
+                source = "RTR Favorit",
+                stationSite = station.stationName.ifBlank { station.stationLocation },
+                coverageCode = station.coverageCode,
+                coverageName = station.coverageName,
+                coverageStrength = strengths[station.coverageCode] ?: 0,
+                distanceKm = null,
+                frequencies = emptyList(),
+            )
+        return RtrFmMatcher.alternatives(current, match, currentFrequency, location, strengths)
+    }
+
     fun cachedSnapshot(): RtrCatalogSnapshot? = snapshot
 
     private fun ensureCacheSchema() {

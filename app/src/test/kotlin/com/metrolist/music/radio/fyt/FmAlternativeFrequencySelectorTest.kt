@@ -59,4 +59,27 @@ class FmAlternativeFrequencySelectorTest {
         assertNull(cached)
         assertNull(rtrOnly)
     }
+
+    @Test
+    fun requiresConfiguredRssiHysteresisBeforeSwitching() {
+        val tooSmall =
+            FmAlternativeFrequencySelector.choose(
+                currentFrequency = 89.6f,
+                currentRssi = 34,
+                expectedPi = 0xA123,
+                measurements = listOf(FmAfMeasurement(98.7f, 36, 0xA123, false)),
+                minimumImprovement = 3,
+            )
+        val sufficient =
+            FmAlternativeFrequencySelector.choose(
+                currentFrequency = 89.6f,
+                currentRssi = 34,
+                expectedPi = 0xA123,
+                measurements = listOf(FmAfMeasurement(98.7f, 37, 0xA123, false)),
+                minimumImprovement = 3,
+            )
+
+        assertNull(tooSmall)
+        assertEquals(98.7f, sufficient?.frequency)
+    }
 }

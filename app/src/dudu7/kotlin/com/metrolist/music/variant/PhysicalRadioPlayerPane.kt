@@ -398,7 +398,7 @@ fun PhysicalRadioPlayerPane(
             }
 
             Text(
-                text = if (state.ta && state.taEnabled) "●  TA VERKEHR" else "●  FM LIVE",
+                text = if (state.ta && state.taEnabled) "●  TA VERKEHR" else "●  FM ${FytPhysicalRadio.formatFrequency(state.frequency)} LIVE",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = if (state.ta && state.taEnabled) MaterialTheme.colorScheme.error else actionColor,

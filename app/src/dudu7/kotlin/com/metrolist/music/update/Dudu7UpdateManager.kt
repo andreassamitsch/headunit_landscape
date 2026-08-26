@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import androidx.core.content.FileProvider
 import com.metrolist.music.BuildConfig
 import kotlinx.coroutines.CoroutineScope
@@ -30,6 +31,8 @@ internal const val DUDU7_RELEASES_URL =
     "https://api.github.com/repos/andreassamitsch/headunit_landscape/releases?per_page=20"
 internal const val DUDU7_RELEASE_TAG_PREFIX = "dudu7-v"
 internal const val DUDU7_MANIFEST_ASSET = "dudu7-update.json"
+internal const val DUDU7_TRUSTED_SIGNER_SHA256 =
+    "138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee"
 
 internal data class Dudu7ReleaseDescriptor(
     val tag: String,
@@ -74,6 +77,21 @@ internal data class Dudu7UpdateUiState(
     val message: String = "",
     val verifiedFile: File? = null,
 )
+
+internal enum class Dudu7SignerEvidenceState {
+    MATCH,
+    MISSING,
+    DIFFERENT,
+}
+
+internal data class Dudu7SignerVerification(
+    val archiveEvidence: Dudu7SignerEvidenceState,
+    val installedEvidence: Dudu7SignerEvidenceState,
+) {
+    val usesSystemInstallerFallback: Boolean
+        get() = archiveEvidence != Dudu7SignerEvidenceState.MATCH ||
+            installedEvidence != Dudu7SignerEvidenceState.MATCH
+}
 
 internal fun selectDudu7Release(json: String): Dudu7ReleaseDescriptor? {
     val releases = JSONArray(json)
@@ -121,6 +139,32 @@ internal fun normalizeSha256(value: String): String =
 
 internal fun isDudu7UpdateNewer(installedVersionCode: Long, remoteVersionCode: Long): Boolean =
     remoteVersionCode > installedVersionCode
+
+internal fun evaluateDudu7SignerEvidence(
+    manifestSignerSha256: String,
+    archiveSigners: Set<String>,
+    installedSigners: Set<String>,
+): Dudu7SignerVerification {
+    val trustedSigner = normalizeSha256(DUDU7_TRUSTED_SIGNER_SHA256)
+    val manifestSigner = normalizeSha256(manifestSignerSha256)
+    if (manifestSigner.length != 64 || manifestSigner != trustedSigner) {
+        error("Release-Manifest verwendet keinen vertrauenswürdigen Dudu7-Signer")
+    }
+
+    fun classify(signers: Set<String>): Dudu7SignerEvidenceState {
+        val normalized = signers.map(::normalizeSha256).filter { it.length == 64 }.toSet()
+        return when {
+            normalized.isEmpty() -> Dudu7SignerEvidenceState.MISSING
+            trustedSigner in normalized -> Dudu7SignerEvidenceState.MATCH
+            else -> Dudu7SignerEvidenceState.DIFFERENT
+        }
+    }
+
+    return Dudu7SignerVerification(
+        archiveEvidence = classify(archiveSigners),
+        installedEvidence = classify(installedSigners),
+    )
+}
 
 internal class Dudu7UpdateManager(context: Context) {
     private val appContext = context.applicationContext
@@ -199,12 +243,16 @@ internal class Dudu7UpdateManager(context: Context) {
                     progress = 1f,
                     message = "Prüfsumme, Paket und Signatur werden geprüft …",
                 )
-                verifyApk(target, candidate.manifest)
+                val signerVerification = verifyApk(target, candidate.manifest)
                 Dudu7UpdateUiState(
                     phase = Dudu7UpdatePhase.READY,
                     candidate = candidate,
                     progress = 1f,
-                    message = "Update geprüft und installationsbereit",
+                    message = if (signerVerification.usesSystemInstallerFallback) {
+                        "Update geprüft – Android bestätigt die Signatur beim Installieren erneut"
+                    } else {
+                        "Update geprüft und installationsbereit"
+                    },
                     verifiedFile = target,
                 )
             }.onSuccess { _state.value = it }
@@ -281,7 +329,7 @@ internal class Dudu7UpdateManager(context: Context) {
         }
     }
 
-    private fun verifyApk(file: File, manifest: Dudu7UpdateManifest) {
+    private fun verifyApk(file: File, manifest: Dudu7UpdateManifest): Dudu7SignerVerification {
         val actualSha = sha256(file)
         if (actualSha != manifest.sha256) error("SHA-256 stimmt nicht – Update verworfen")
         val archive = archivePackageInfo(file) ?: error("APK kann nicht gelesen werden")
@@ -293,15 +341,25 @@ internal class Dudu7UpdateManager(context: Context) {
         }
         if (archive.longVersionCode != manifest.versionCode) error("APK-VersionCode weicht vom Release ab")
 
-        val installed = installedPackageInfo()
-        val installedSigners = signerDigests(installed)
-        val archiveSigners = signerDigests(archive)
-        if (installedSigners.isEmpty() || archiveSigners.isEmpty() || installedSigners != archiveSigners) {
-            error("APK-Signatur stimmt nicht mit der installierten Dudu7-App überein")
+        val installedSigners = runCatching { signerDigests(installedPackageInfo()) }.getOrElse { emptySet() }
+        val archiveSigners = runCatching { signerDigests(archive) }.getOrElse { emptySet() }
+        val verification = evaluateDudu7SignerEvidence(
+            manifestSignerSha256 = manifest.signerSha256,
+            archiveSigners = archiveSigners,
+            installedSigners = installedSigners,
+        )
+
+        if (verification.usesSystemInstallerFallback) {
+            Log.w(
+                "Dudu7UpdateManager",
+                "PackageManager signer evidence differs or is unavailable; " +
+                    "falling back to Android package-installer compatibility check. " +
+                    "sdk=${Build.VERSION.SDK_INT}, manufacturer=${Build.MANUFACTURER}, model=${Build.MODEL}, " +
+                    "archiveEvidence=${verification.archiveEvidence}, installedEvidence=${verification.installedEvidence}, " +
+                    "archiveSigners=$archiveSigners, installedSigners=$installedSigners",
+            )
         }
-        if (manifest.signerSha256.isNotBlank() && manifest.signerSha256 !in archiveSigners) {
-            error("APK-Signatur stimmt nicht mit dem Release-Manifest überein")
-        }
+        return verification
     }
 
     @Suppress("DEPRECATION")
@@ -330,7 +388,16 @@ internal class Dudu7UpdateManager(context: Context) {
     private fun signerDigests(info: PackageInfo): Set<String> {
         val signatures =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                info.signingInfo?.apkContentsSigners?.toList().orEmpty()
+                val signingInfo = info.signingInfo
+                if (signingInfo == null) {
+                    emptyList()
+                } else if (signingInfo.hasMultipleSigners()) {
+                    signingInfo.apkContentsSigners?.toList().orEmpty()
+                } else {
+                    signingInfo.signingCertificateHistory?.toList()
+                        ?.takeIf { it.isNotEmpty() }
+                        ?: signingInfo.apkContentsSigners?.toList().orEmpty()
+                }
             } else {
                 info.signatures?.toList().orEmpty()
             }
