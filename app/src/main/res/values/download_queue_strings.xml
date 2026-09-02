@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="download_queue_title">Download queue</string>
+    <string name="download_queue_back">Back</string>
+    <string name="download_queue_open">Open download queue</string>
+    <string name="download_queue_summary">%1$d active · %2$d waiting · %3$d failed</string>
+    <string name="download_queue_waiting_requirements">Waiting for network requirements</string>
+    <string name="download_queue_empty">No downloads are currently waiting or running. Finished titles remain available under Offline.</string>
+    <string name="download_queue_recently_completed">Recently completed</string>
+    <string name="download_queue_status_downloading">Downloading</string>
+    <string name="download_queue_status_waiting">Waiting</string>
+    <string name="download_queue_status_restarting">Restarting</string>
+    <string name="download_queue_status_stopped">Stopped</string>
+    <string name="download_queue_status_failed">Failed</string>
+    <string name="download_queue_status_removing">Removing</string>
+    <string name="download_queue_status_completed">Completed</string>
+    <string name="download_queue_status_unknown">Download</string>
+    <string name="download_queue_retry">Retry</string>
+    <string name="download_queue_resume">Resume</string>
+    <string name="download_queue_cancel">Cancel</string>
+    <string name="download_queue_progress">%1$d%% · %2$s downloaded</string>
+    <string name="download_queue_bytes_downloaded">%1$s downloaded</string>
+</resources>
