@@ -20,4 +20,10 @@
     <string name="download_queue_cancel">Cancel</string>
     <string name="download_queue_progress">%1$d%% · %2$s downloaded</string>
     <string name="download_queue_bytes_downloaded">%1$s downloaded</string>
+    <string name="download_queue_current_rate">Current: %1$.2f MB/s</string>
+    <string name="download_queue_diagnostics">Diagnostics</string>
+    <string name="download_queue_diagnostics_title">Download diagnostics</string>
+    <string name="download_queue_diagnostics_copy">Copy</string>
+    <string name="download_queue_diagnostics_close">Close</string>
+    <string name="download_queue_diagnostics_copied">Diagnostics copied</string>
 </resources>
