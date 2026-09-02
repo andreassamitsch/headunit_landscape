@@ -1,10 +1,15 @@
-/**
+/*
  * Metrolist Project (C) 2026
  * Licensed under GPL-3.0 | See git history for contributors
  */
 
 package com.metrolist.music.ui.screens.library
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.os.SystemClock
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +23,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
@@ -34,22 +42,31 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.util.Util
 import androidx.media3.exoplayer.offline.Download
 import androidx.media3.exoplayer.offline.DownloadService
+import com.metrolist.music.BuildConfig
 import com.metrolist.music.LocalDownloadUtil
 import com.metrolist.music.LocalPlayerAwareWindowInsets
 import com.metrolist.music.R
 import com.metrolist.music.playback.ExoDownloadService
 import kotlinx.coroutines.delay
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 private const val PROGRESS_REFRESH_MS = 750L
 private const val RECENT_COMPLETED_LIMIT = 5
+private const val MIN_RATE_SAMPLE_MS = 250L
+private val SAFE_DIAGNOSTIC_QUERY_VALUE = Regex("[A-Za-z0-9_.-]{1,32}")
+private val DIAGNOSTIC_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS XXX")
 
 @Composable
 fun DownloadQueueScreen(onBack: () -> Unit) {
@@ -245,6 +262,10 @@ private fun DownloadQueueRow(
     @Suppress("UNUSED_VARIABLE")
     val progressRefresh = refreshToken
 
+    val context = LocalContext.current
+    val copiedMessage = stringResource(R.string.download_queue_diagnostics_copied)
+    var showDiagnostics by remember(download.request.id) { mutableStateOf(false) }
+
     val title = remember(download.request.id, download.request.data.contentHashCode()) {
         if (download.request.data.isNotEmpty()) {
             Util.fromUtf8Bytes(download.request.data)
@@ -254,6 +275,31 @@ private fun DownloadQueueRow(
     }
     val percent = download.percentDownloaded
     val bytesDownloaded = download.bytesDownloaded.coerceAtLeast(0L)
+
+    var previousSampleBytes by remember(download.request.id) { mutableStateOf(bytesDownloaded) }
+    var previousSampleElapsedMs by remember(download.request.id) { mutableStateOf(SystemClock.elapsedRealtime()) }
+    var sampledBytesPerSecond by remember(download.request.id) { mutableStateOf<Double?>(null) }
+    var sampleWindowMs by remember(download.request.id) { mutableStateOf<Long?>(null) }
+
+    LaunchedEffect(refreshToken, download.request.id, download.state) {
+        val nowElapsedMs = SystemClock.elapsedRealtime()
+        val elapsedMs = nowElapsedMs - previousSampleElapsedMs
+        val deltaBytes = bytesDownloaded - previousSampleBytes
+        sampledBytesPerSecond =
+            if (
+                download.state == Download.STATE_DOWNLOADING &&
+                elapsedMs >= MIN_RATE_SAMPLE_MS &&
+                deltaBytes >= 0L
+            ) {
+                deltaBytes * 1000.0 / elapsedMs
+            } else {
+                null
+            }
+        sampleWindowMs = if (sampledBytesPerSecond != null) elapsedMs else null
+        previousSampleBytes = bytesDownloaded
+        previousSampleElapsedMs = nowElapsedMs
+    }
+
     val status =
         when (download.state) {
             Download.STATE_DOWNLOADING -> stringResource(R.string.download_queue_status_downloading)
@@ -285,6 +331,49 @@ private fun DownloadQueueRow(
             null
         }
 
+    if (showDiagnostics) {
+        val report =
+            buildDownloadDiagnosticReport(
+                download = download,
+                title = title,
+                notMetRequirements = notMetRequirements,
+                sampledBytesPerSecond = sampledBytesPerSecond,
+                sampleWindowMs = sampleWindowMs,
+                nowMs = System.currentTimeMillis(),
+            )
+        AlertDialog(
+            onDismissRequest = { showDiagnostics = false },
+            title = { Text(stringResource(R.string.download_queue_diagnostics_title)) },
+            text = {
+                Text(
+                    text = report,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 440.dp)
+                            .verticalScroll(rememberScrollState()),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        copyDiagnosticReport(context, report)
+                        Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
+                    },
+                ) {
+                    Text(stringResource(R.string.download_queue_diagnostics_copy))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiagnostics = false }) {
+                    Text(stringResource(R.string.download_queue_diagnostics_close))
+                }
+            },
+        )
+    }
+
     ListItem(
         modifier =
             Modifier
@@ -315,6 +404,17 @@ private fun DownloadQueueRow(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                if (download.state == Download.STATE_DOWNLOADING && sampledBytesPerSecond != null) {
+                    Text(
+                        text =
+                            stringResource(
+                                R.string.download_queue_current_rate,
+                                sampledBytesPerSecond!! / 1_000_000.0,
+                            ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 if (
                     download.state == Download.STATE_DOWNLOADING ||
                     download.state == Download.STATE_QUEUED ||
@@ -333,43 +433,164 @@ private fun DownloadQueueRow(
             }
         },
         trailingContent = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                when (download.state) {
-                    Download.STATE_FAILED -> {
-                        TextButton(
-                            onClick = onRetry,
-                            modifier = Modifier.heightIn(min = 48.dp),
-                        ) {
-                            Text(stringResource(R.string.download_queue_retry))
-                        }
-                    }
-                    Download.STATE_STOPPED -> {
-                        TextButton(
-                            onClick = onResume,
-                            modifier = Modifier.heightIn(min = 48.dp),
-                        ) {
-                            Text(stringResource(R.string.download_queue_resume))
-                        }
-                    }
-                }
-
-                if (
-                    download.state == Download.STATE_QUEUED ||
-                    download.state == Download.STATE_DOWNLOADING ||
-                    download.state == Download.STATE_RESTARTING ||
-                    download.state == Download.STATE_STOPPED ||
-                    download.state == Download.STATE_FAILED
+            Column(horizontalAlignment = Alignment.End) {
+                TextButton(
+                    onClick = { showDiagnostics = true },
+                    modifier = Modifier.heightIn(min = 44.dp),
                 ) {
-                    TextButton(
-                        onClick = onCancel,
-                        modifier = Modifier.heightIn(min = 48.dp),
+                    Text(stringResource(R.string.download_queue_diagnostics))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    when (download.state) {
+                        Download.STATE_FAILED -> {
+                            TextButton(
+                                onClick = onRetry,
+                                modifier = Modifier.heightIn(min = 48.dp),
+                            ) {
+                                Text(stringResource(R.string.download_queue_retry))
+                            }
+                        }
+                        Download.STATE_STOPPED -> {
+                            TextButton(
+                                onClick = onResume,
+                                modifier = Modifier.heightIn(min = 48.dp),
+                            ) {
+                                Text(stringResource(R.string.download_queue_resume))
+                            }
+                        }
+                    }
+
+                    if (
+                        download.state == Download.STATE_QUEUED ||
+                        download.state == Download.STATE_DOWNLOADING ||
+                        download.state == Download.STATE_RESTARTING ||
+                        download.state == Download.STATE_STOPPED ||
+                        download.state == Download.STATE_FAILED
                     ) {
-                        Text(stringResource(R.string.download_queue_cancel))
+                        TextButton(
+                            onClick = onCancel,
+                            modifier = Modifier.heightIn(min = 48.dp),
+                        ) {
+                            Text(stringResource(R.string.download_queue_cancel))
+                        }
                     }
                 }
             }
         },
     )
+}
+
+private fun buildDownloadDiagnosticReport(
+    download: Download,
+    title: String,
+    notMetRequirements: Int,
+    sampledBytesPerSecond: Double?,
+    sampleWindowMs: Long?,
+    nowMs: Long,
+): String {
+    val bytesDownloaded = download.bytesDownloaded.coerceAtLeast(0L)
+    val endTimeMs =
+        if (
+            download.state == Download.STATE_COMPLETED ||
+            download.state == Download.STATE_FAILED ||
+            download.state == Download.STATE_STOPPED
+        ) {
+            max(download.updateTimeMs, download.startTimeMs)
+        } else {
+            nowMs
+        }
+    val lifetimeElapsedMs = (endTimeMs - download.startTimeMs).coerceAtLeast(0L)
+    val lifetimeBytesPerSecond =
+        if (bytesDownloaded > 0L && lifetimeElapsedMs > 0L) {
+            bytesDownloaded * 1000.0 / lifetimeElapsedMs
+        } else {
+            null
+        }
+    val contentLength = download.contentLength.takeIf { it > 0L }
+    val progress = download.percentDownloaded.takeIf { it >= 0f && it.isFinite() }
+    val mimeType = download.request.mimeType?.let(::sanitizeDiagnosticValue) ?: "not_available"
+    val streamClient = safeWhitelistedQueryValue(download, "c") ?: "not_available"
+    val itag = safeNumericQueryValue(download, "itag") ?: "not_available"
+    val nParameter = safeQueryParameterPresence(download, "n")
+
+    return buildString {
+        appendLine("MetroList dudu7 download diagnostics")
+        appendLine("app_version_name=${sanitizeDiagnosticValue(BuildConfig.VERSION_NAME)}")
+        appendLine("app_version_code=${BuildConfig.VERSION_CODE}")
+        appendLine(
+            "timestamp=${DIAGNOSTIC_TIME_FORMATTER.format(Instant.ofEpochMilli(nowMs).atZone(ZoneId.systemDefault()))}",
+        )
+        appendLine("media_id=${sanitizeDiagnosticValue(download.request.id)}")
+        appendLine("title=${sanitizeDiagnosticValue(title)}")
+        appendLine("state=${downloadStateName(download.state)}")
+        appendLine("progress_percent=${progress?.let { String.format(Locale.US, "%.1f", it) } ?: "not_available"}")
+        appendLine("bytes_downloaded=$bytesDownloaded")
+        appendLine("content_length_bytes=${contentLength ?: "not_available"}")
+        appendLine("start_time_ms=${download.startTimeMs}")
+        appendLine("update_time_ms=${download.updateTimeMs}")
+        appendLine("lifetime_elapsed_ms=$lifetimeElapsedMs")
+        appendLine("current_rate_MBps=${formatRateMBps(sampledBytesPerSecond)}")
+        appendLine("current_rate_Mbps=${formatRateMbps(sampledBytesPerSecond)}")
+        appendLine("current_rate_sample_window_ms=${sampleWindowMs ?: "not_available"}")
+        appendLine("lifetime_average_MBps=${formatRateMBps(lifetimeBytesPerSecond)}")
+        appendLine("not_met_requirements=$notMetRequirements")
+        appendLine("failure_reason=${download.failureReason}")
+        appendLine("stop_reason=${download.stopReason}")
+        appendLine("stream_client=$streamClient")
+        appendLine("itag=$itag")
+        appendLine("mime_type=$mimeType")
+        appendLine("codec=not_available")
+        appendLine("bitrate_bps=not_available")
+        appendLine("n_parameter=$nParameter")
+        appendLine("resolver_recovery_events=not_available_in_media3_download_snapshot")
+        appendLine("rate_note=current rate is sampled from Media3 byte progress; lifetime average includes waiting/retry time")
+        append("privacy=stream URL, token, signature, cookie and authorization-header values are intentionally excluded")
+    }
+}
+
+private fun safeQueryParameterPresence(download: Download, name: String): String =
+    runCatching {
+        if (download.request.uri.queryParameterNames.contains(name)) "present" else "absent"
+    }.getOrElse { "unknown" }
+
+private fun safeNumericQueryValue(download: Download, name: String): String? =
+    runCatching { download.request.uri.getQueryParameter(name) }
+        .getOrNull()
+        ?.takeIf { value -> value.length in 1..6 && value.all(Char::isDigit) }
+
+private fun safeWhitelistedQueryValue(download: Download, name: String): String? =
+    runCatching { download.request.uri.getQueryParameter(name) }
+        .getOrNull()
+        ?.takeIf { SAFE_DIAGNOSTIC_QUERY_VALUE.matches(it) }
+
+private fun sanitizeDiagnosticValue(value: String): String =
+    value
+        .replace('\r', ' ')
+        .replace('\n', ' ')
+        .replace('\t', ' ')
+        .take(240)
+
+private fun formatRateMBps(bytesPerSecond: Double?): String =
+    bytesPerSecond?.let { String.format(Locale.US, "%.2f", it / 1_000_000.0) } ?: "not_available"
+
+private fun formatRateMbps(bytesPerSecond: Double?): String =
+    bytesPerSecond?.let { String.format(Locale.US, "%.2f", it * 8.0 / 1_000_000.0) } ?: "not_available"
+
+private fun downloadStateName(state: Int): String =
+    when (state) {
+        Download.STATE_QUEUED -> "QUEUED"
+        Download.STATE_STOPPED -> "STOPPED"
+        Download.STATE_DOWNLOADING -> "DOWNLOADING"
+        Download.STATE_COMPLETED -> "COMPLETED"
+        Download.STATE_FAILED -> "FAILED"
+        Download.STATE_REMOVING -> "REMOVING"
+        Download.STATE_RESTARTING -> "RESTARTING"
+        else -> "UNKNOWN($state)"
+    }
+
+private fun copyDiagnosticReport(context: Context, report: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText("MetroList download diagnostics", report))
 }
 
 private fun downloadPriority(download: Download): Int =
