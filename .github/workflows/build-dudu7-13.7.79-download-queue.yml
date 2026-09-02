@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: dudu7-13-7-79-download-queue-${{ github.ref }}
@@ -66,7 +66,7 @@ jobs:
           ./gradlew --console=plain :app:compileGmsStandardDebugKotlin --no-daemon --stacktrace
           ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
 
-      - name: Build and verify Dudu7 test APK
+      - name: Build and verify Dudu7 updater APK
         shell: bash
         env:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
@@ -77,7 +77,7 @@ jobs:
           ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace | tee artifacts/build.log
           APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
           test -n "$APK"
-          OUT=artifacts/Metrolist-dudu7-13.7.79-download-queue-test.apk
+          OUT=artifacts/Metrolist-dudu7-13.7.79.apk
           cp "$APK" "$OUT"
           BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
           "$BUILD_TOOLS/aapt" dump badging "$OUT" > artifacts/apk-badging.txt
@@ -89,26 +89,128 @@ jobs:
           grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
           grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
           sha256sum "$OUT" | tee "$OUT.sha256"
+          SHA=$(awk '{print $1}' "$OUT.sha256")
+          cat > artifacts/dudu7-update.json <<JSON
+          {"versionCode":1370088,"versionName":"13.7.79","packageName":"com.metrolist.music.dudu7.debug","signerSha256":"138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee","apkAsset":"Metrolist-dudu7-13.7.79.apk","sha256":"$SHA"}
+          JSON
           cat > artifacts/implementation-summary.txt <<EOF
           Issue: #172 central download queue
           Version: 13.7.79
           VersionCode: 1370088
           Base: agent/issues-112-164-167-168-radio-fixes-13-7-77 (13.7.78 head)
           Architecture: existing Media3 DownloadManager / DownloadUtil remains source of truth
+          Integrated updater release: dudu7-v13.7.79
           Device test: pending
           EOF
+
+      - name: Publish 13.7.79 to integrated Dudu7 updater
+        if: github.event_name != 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          SHA=$(awk '{print $1}' artifacts/Metrolist-dudu7-13.7.79.apk.sha256)
+          cat > artifacts/release-notes.md <<MD
+          ## MetroList dudu7 13.7.79
+
+          **Download-Zentrale / Warteschlange – #172**
+          - Neue zentrale Übersicht für aktive, wartende, gestoppte und fehlgeschlagene Downloads.
+          - Live-Fortschritt pro Download mit Prozent und übertragenen Bytes.
+          - Schneller Einstieg aus der Bibliothek inklusive Queue-Zähler.
+          - Retry für fehlgeschlagene Downloads sowie Fortsetzen und Abbrechen über den bestehenden Media3 `DownloadService`.
+          - Nicht erfüllte Media3-Anforderungen werden sichtbar angezeigt.
+          - Der originale MetroList-/Media3-Download-Unterbau bleibt alleinige Quelle der Wahrheit; kein zweiter DownloadManager und keine zweite Download-Datenbank.
+          - Bestehender 403/410-Recovery-Pfad für abgelaufene Stream-URLs bleibt erhalten.
+
+          **Validierung**
+          - Standard-MetroList-Compile
+          - vollständige Dudu7-Unit-/Regressionstests
+          - ARM64 + ARMv7 APK
+          - Paket-, Signatur- und SHA-256-Prüfung
+          - APK SHA-256: $SHA
+
+          **Status**
+          - Vorabversion für den realen Dudu7-Headunit-Test gemäß #179.
+          - Playlist-/Album-Gruppierung und erweiterte Diagnose bleiben als getrennte Folgepunkte offen.
+          MD
+
+          TAG=dudu7-v13.7.79
+          HEAD_SHA=$(git rev-parse HEAD)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            TAG_SHA=$(git rev-list -n 1 "$TAG")
+            test "$TAG_SHA" = "$HEAD_SHA" || { echo "$TAG already exists on a different commit" >&2; exit 1; }
+            gh release upload "$TAG" \
+              artifacts/Metrolist-dudu7-13.7.79.apk \
+              artifacts/Metrolist-dudu7-13.7.79.apk.sha256 \
+              artifacts/dudu7-update.json \
+              --clobber
+          else
+            gh release create "$TAG" \
+              artifacts/Metrolist-dudu7-13.7.79.apk \
+              artifacts/Metrolist-dudu7-13.7.79.apk.sha256 \
+              artifacts/dudu7-update.json \
+              --target "$HEAD_SHA" \
+              --title 'MetroList dudu7 13.7.79' \
+              --notes-file artifacts/release-notes.md \
+              --prerelease
+          fi
+
+      - name: Verify public updater manifest and APK
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          import hashlib, json, time, urllib.error, urllib.request
+          tag='dudu7-v13.7.79'
+          api=f'https://api.github.com/repos/andreassamitsch/headunit_landscape/releases/tags/{tag}'
+          headers={'User-Agent':'Metrolist-dudu7-ci','Accept':'application/vnd.github+json'}
+          release=None
+          for _ in range(12):
+              try:
+                  release=json.load(urllib.request.urlopen(urllib.request.Request(api,headers=headers),timeout=30))
+                  if release.get('tag_name')==tag and release.get('assets'):
+                      break
+              except (urllib.error.HTTPError, urllib.error.URLError):
+                  release=None
+              time.sleep(5)
+          if not release:
+              raise SystemExit('13.7.79 release did not become publicly readable')
+          assets={a['name']:a['browser_download_url'] for a in release['assets']}
+          required={'dudu7-update.json','Metrolist-dudu7-13.7.79.apk','Metrolist-dudu7-13.7.79.apk.sha256'}
+          missing=required-assets.keys()
+          if missing:
+              raise SystemExit(f'Missing updater assets: {sorted(missing)}')
+          manifest=json.load(urllib.request.urlopen(urllib.request.Request(assets['dudu7-update.json'],headers={'User-Agent':'Metrolist-dudu7-ci'}),timeout=30))
+          assert manifest['versionCode']==1370088
+          assert manifest['versionName']=='13.7.79'
+          assert manifest['packageName']=='com.metrolist.music.dudu7.debug'
+          assert manifest['signerSha256']=='138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee'
+          assert manifest['apkAsset']=='Metrolist-dudu7-13.7.79.apk'
+          h=hashlib.sha256()
+          with urllib.request.urlopen(urllib.request.Request(assets['Metrolist-dudu7-13.7.79.apk'],headers={'User-Agent':'Metrolist-dudu7-ci'}),timeout=120) as response:
+              while True:
+                  chunk=response.read(1024*1024)
+                  if not chunk: break
+                  h.update(chunk)
+          assert h.hexdigest()==manifest['sha256']
+          print('13.7.79 public updater manifest and APK SHA verified:', h.hexdigest())
+          PY
 
       - name: Upload validation evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Metrolist-dudu7-13.7.79-download-queue-test
+          name: Metrolist-dudu7-13.7.79-download-queue
           path: |
-            artifacts/Metrolist-dudu7-13.7.79-download-queue-test.apk
-            artifacts/Metrolist-dudu7-13.7.79-download-queue-test.apk.sha256
+            artifacts/Metrolist-dudu7-13.7.79.apk
+            artifacts/Metrolist-dudu7-13.7.79.apk.sha256
+            artifacts/dudu7-update.json
             artifacts/apk-badging.txt
             artifacts/apk-signature.txt
             artifacts/apk-contents.txt
             artifacts/build.log
             artifacts/implementation-summary.txt
+            artifacts/release-notes.md
           retention-days: 14
