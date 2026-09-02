@@ -367,6 +367,25 @@ private fun DownloadQueueRow(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (
                         BuildConfig.IS_DUDU7 &&
+                        download.state != Download.STATE_COMPLETED &&
+                        download.state != Download.STATE_REMOVING
+                    ) {
+                        TextButton(
+                            onClick = {
+                                val enabled = downloadUtil.toggleDiagnosticHttpChunking(download.request.id)
+                                Toast.makeText(
+                                    context,
+                                    if (enabled) "HTTP: 10 MiB Chunked" else "HTTP: Standard",
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                                showDiagnostics = false
+                            },
+                        ) {
+                            Text("HTTP A/B")
+                        }
+                    }
+                    if (
+                        BuildConfig.IS_DUDU7 &&
                         resolverDiagnostics?.candidateClients?.distinct()?.size?.let { it > 1 } == true &&
                         download.state != Download.STATE_COMPLETED &&
                         download.state != Download.STATE_REMOVING
@@ -576,6 +595,9 @@ private fun buildDownloadDiagnosticReport(
         appendLine("not_met_requirements=$notMetRequirements")
         appendLine("failure_reason=${download.failureReason}")
         appendLine("stop_reason=${download.stopReason}")
+        appendLine("http_chunking=${resolverDiagnostics?.let { if (it.httpChunkingEnabled) "on" else "off" } ?: "not_available"}")
+        appendLine("http_chunk_size_bytes=${resolverDiagnostics?.httpChunkSizeBytes ?: "not_available"}")
+        appendLine("http_chunks_completed=${resolverDiagnostics?.httpChunksCompleted ?: "not_available"}")
         appendLine("stream_client=$streamClient")
         appendLine("stream_client_index=${resolverDiagnostics?.selectedClientIndex ?: "not_available"}")
         appendLine("stream_client_override=${resolverDiagnostics?.preferredClient?.let(::sanitizeDiagnosticValue) ?: "default"}")

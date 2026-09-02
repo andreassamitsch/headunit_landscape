@@ -1,0 +1,229 @@
+name: Build Dudu7 13.7.83 HTTP chunking
+
+on:
+  push:
+    branches:
+      - feature/download-http-chunking-208
+  pull_request:
+    branches:
+      - feature/download-resolver-diagnostics-204
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dudu7-13-7-83-http-chunking-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-build-publish:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Verify issue 208 boundaries
+        shell: bash
+        run: |
+          set -euxo pipefail
+          grep -q 'versionCode = 1370092' app/build.gradle.kts
+          grep -q 'versionName = "13.7.83"' app/build.gradle.kts
+          CHUNKER=app/src/main/kotlin/com/metrolist/music/playback/HttpRangeChunkingDataSource.kt
+          DOWNLOAD=app/src/main/kotlin/com/metrolist/music/playback/DownloadUtil.kt
+          QUEUE=app/src/main/kotlin/com/metrolist/music/ui/screens/library/DownloadQueueScreen.kt
+          TEST=app/src/test/kotlin/com/metrolist/music/playback/HttpRangeChunkingDataSourceTest.kt
+          test -f "$CHUNKER"
+          test -f "$TEST"
+          grep -q 'HTTP_DOWNLOAD_CHUNK_SIZE_BYTES = 10L \* 1024L \* 1024L' "$DOWNLOAD"
+          grep -q 'HttpRangeChunkingDataSource.Factory' "$DOWNLOAD"
+          grep -q 'BuildConfig.IS_DUDU7' "$DOWNLOAD"
+          grep -q 'toggleDiagnosticHttpChunking' "$DOWNLOAD"
+          grep -q 'http_chunking=' "$QUEUE"
+          grep -q 'http_chunk_size_bytes=' "$QUEUE"
+          grep -q 'http_chunks_completed=' "$QUEUE"
+          grep -q 'HTTP A/B' "$QUEUE"
+          grep -q 'base.subrange(bytesReadTotal, chunkLength)' "$CHUNKER"
+          grep -q 'Server did not confirm requested byte range' "$CHUNKER"
+          grep -q 'C.LENGTH_UNSET.toLong()' "$CHUNKER"
+          if grep -q 'yt-dlp' app/build.gradle.kts; then
+            echo 'yt-dlp dependency must not be added' >&2
+            exit 1
+          fi
+          git diff --check origin/feature/download-resolver-diagnostics-204...HEAD
+
+      - name: Compile standard MetroList and run Dudu7 regression tests
+        shell: bash
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --console=plain :app:compileGmsStandardDebugKotlin --no-daemon --stacktrace
+          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+
+      - name: Build and verify Dudu7 updater APK
+        shell: bash
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace | tee artifacts/build.log
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          test -n "$APK"
+          OUT=artifacts/Metrolist-dudu7-13.7.83.apk
+          cp "$APK" "$OUT"
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$BUILD_TOOLS/aapt" dump badging "$OUT" > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$OUT" > artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370092'" artifacts/apk-badging.txt
+          grep -q "application-label:'Metrolist dudu7'" artifacts/apk-badging.txt
+          grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
+          unzip -l "$OUT" > artifacts/apk-contents.txt
+          grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
+          grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
+          sha256sum "$OUT" | tee "$OUT.sha256"
+          SHA=$(awk '{print $1}' "$OUT.sha256")
+          cat > artifacts/dudu7-update.json <<JSON
+          {"versionCode":1370092,"versionName":"13.7.83","packageName":"com.metrolist.music.dudu7.debug","signerSha256":"138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee","apkAsset":"Metrolist-dudu7-13.7.83.apk","sha256":"$SHA"}
+          JSON
+          cat > artifacts/implementation-summary.txt <<EOF
+          Issue: #208 yt-dlp-style HTTP chunking for progressive YouTube downloads
+          Supports: #198 long-form download throttle investigation
+          Version: 13.7.83
+          VersionCode: 1370092
+          Base: feature/download-resolver-diagnostics-204 / 13.7.82
+          Transfer: transparent sequential HTTP Range chunks of 10 MiB for Dudu7 progressive download path
+          A/B: per-session HTTP A/B control switches between 10 MiB chunked and original standard transfer
+          Architecture: existing MetroList / Media3 DownloadManager remains the only downloader and source of truth
+          Persistence: no second downloader, no new download database, Media3 cache/progress/resume retained
+          Diagnostics: sanitized http_chunking, http_chunk_size_bytes and http_chunks_completed; no stream URLs or tokens
+          Recovery: existing resolver and Media3 recovery remains in place; chunk layer rejects unconfirmed ranged responses for non-zero positions
+          Standard MetroList compile: validated by workflow
+          Dudu7 regression/unit tests: validated by workflow
+          Device performance A/B test: pending
+          Known limitation: real Headunit speed improvement and restart/network-interruption behavior still require device validation before issue closure
+          EOF
+
+      - name: Publish 13.7.83 to integrated Dudu7 updater
+        if: github.event_name != 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          SHA=$(awk '{print $1}' artifacts/Metrolist-dudu7-13.7.83.apk.sha256)
+          cat > artifacts/release-notes.md <<MD
+          ## MetroList dudu7 13.7.83
+
+          **HTTP-Range-Chunking für Long-Form-Downloads – #208**
+          - Progressive YouTube-Audiodownloads können auf Dudu7 innerhalb des bestehenden Media3-Downloadpfads in fortlaufenden **10-MiB-HTTP-Range-Chunks** geladen werden.
+          - Es gibt weiterhin nur den originalen Media3 DownloadManager und dessen Cache/Resume-Persistenz; kein yt-dlp, keine zweite Downloadengine und keine zusätzliche Downloaddatenbank.
+          - In der Download-Diagnose kann mit **HTTP A/B** zwischen dem neuen 10-MiB-Chunking und dem bisherigen Standardtransfer umgeschaltet werden.
+          - Der Diagnosebericht enthält sanitisiert `http_chunking`, `http_chunk_size_bytes` und `http_chunks_completed`; Stream-URLs, Tokens und Signaturen werden nicht ausgegeben.
+          - Die bestehende Resolver-/403-/410-/416-Logik bleibt erhalten; der Chunk-Layer akzeptiert für nicht-null Startpositionen keinen Server-Response, der den angeforderten Bytebereich nicht bestätigt.
+
+          **Validierung**
+          - Standard-MetroList-Compile
+          - Dudu7-Unit-/Regressionstests inklusive Chunk-Planung
+          - ARM64 + ARMv7 APK
+          - Paket-, Version-, Signatur- und SHA-256-Prüfung
+          - APK SHA-256: $SHA
+
+          **Bekannte Einschränkung / Status**
+          - Die reale Geschwindigkeitsverbesserung auf der Dudu7-Headunit ist noch nicht bestätigt. #208 bleibt bis zum A/B-Gerätetest offen.
+          MD
+
+          TAG=dudu7-v13.7.83
+          HEAD_SHA=$(git rev-parse HEAD)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            TAG_SHA=$(git rev-list -n 1 "$TAG")
+            test "$TAG_SHA" = "$HEAD_SHA" || { echo "$TAG already exists on a different commit" >&2; exit 1; }
+            gh release upload "$TAG" \
+              artifacts/Metrolist-dudu7-13.7.83.apk \
+              artifacts/Metrolist-dudu7-13.7.83.apk.sha256 \
+              artifacts/dudu7-update.json \
+              --clobber
+          else
+            gh release create "$TAG" \
+              artifacts/Metrolist-dudu7-13.7.83.apk \
+              artifacts/Metrolist-dudu7-13.7.83.apk.sha256 \
+              artifacts/dudu7-update.json \
+              --target "$HEAD_SHA" \
+              --title 'MetroList dudu7 13.7.83' \
+              --notes-file artifacts/release-notes.md \
+              --prerelease
+          fi
+
+      - name: Verify public updater manifest and APK
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          import hashlib, json, time, urllib.error, urllib.request
+          tag='dudu7-v13.7.83'
+          api=f'https://api.github.com/repos/andreassamitsch/headunit_landscape/releases/tags/{tag}'
+          headers={'User-Agent':'Metrolist-dudu7-ci','Accept':'application/vnd.github+json'}
+          release=None
+          for _ in range(12):
+              try:
+                  release=json.load(urllib.request.urlopen(urllib.request.Request(api,headers=headers),timeout=30))
+                  if release.get('tag_name')==tag and release.get('assets'):
+                      break
+              except (urllib.error.HTTPError, urllib.error.URLError):
+                  release=None
+              time.sleep(5)
+          if not release:
+              raise SystemExit('13.7.83 release did not become publicly readable')
+          assets={a['name']:a['browser_download_url'] for a in release['assets']}
+          required={'dudu7-update.json','Metrolist-dudu7-13.7.83.apk','Metrolist-dudu7-13.7.83.apk.sha256'}
+          missing=required-assets.keys()
+          if missing:
+              raise SystemExit(f'Missing updater assets: {sorted(missing)}')
+          manifest=json.load(urllib.request.urlopen(urllib.request.Request(assets['dudu7-update.json'],headers={'User-Agent':'Metrolist-dudu7-ci'}),timeout=30))
+          assert manifest['versionCode']==1370092
+          assert manifest['versionName']=='13.7.83'
+          assert manifest['packageName']=='com.metrolist.music.dudu7.debug'
+          assert manifest['signerSha256']=='138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee'
+          assert manifest['apkAsset']=='Metrolist-dudu7-13.7.83.apk'
+          h=hashlib.sha256()
+          with urllib.request.urlopen(urllib.request.Request(assets['Metrolist-dudu7-13.7.83.apk'],headers={'User-Agent':'Metrolist-dudu7-ci'}),timeout=120) as response:
+              while True:
+                  chunk=response.read(1024*1024)
+                  if not chunk: break
+                  h.update(chunk)
+          assert h.hexdigest()==manifest['sha256']
+          print('13.7.83 public updater manifest and APK SHA verified:', h.hexdigest())
+          PY
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.83-http-chunking
+          path: |
+            artifacts/Metrolist-dudu7-13.7.83.apk
+            artifacts/Metrolist-dudu7-13.7.83.apk.sha256
+            artifacts/dudu7-update.json
+            artifacts/apk-badging.txt
+            artifacts/apk-signature.txt
+            artifacts/apk-contents.txt
+            artifacts/build.log
+            artifacts/implementation-summary.txt
+            artifacts/release-notes.md
+          retention-days: 14
