@@ -1,0 +1,111 @@
+name: Build Dudu7 13.7.79 download queue
+
+on:
+  push:
+    branches:
+      - feature/download-queue-172
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dudu7-13-7-79-download-queue-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Verify Issue 172 implementation boundaries
+        shell: bash
+        run: |
+          set -euxo pipefail
+          grep -q 'versionCode = 1370088' app/build.gradle.kts
+          grep -q 'versionName = "13.7.79"' app/build.gradle.kts
+          SCREEN=app/src/main/kotlin/com/metrolist/music/ui/screens/library/DownloadQueueScreen.kt
+          LIBRARY=app/src/main/kotlin/com/metrolist/music/ui/screens/library/LibraryScreen.kt
+          UTIL=app/src/main/kotlin/com/metrolist/music/playback/DownloadUtil.kt
+          test -f "$SCREEN"
+          grep -q 'LocalDownloadUtil.current' "$SCREEN"
+          grep -q 'downloadUtil.downloads' "$SCREEN"
+          grep -q 'DownloadService.sendRemoveDownload' "$SCREEN"
+          grep -q 'DownloadService.sendAddDownload' "$SCREEN"
+          grep -q 'downloadManager.notMetRequirements' "$SCREEN"
+          grep -q 'DownloadQueueScreen' "$LIBRARY"
+          grep -q 'LocalDownloadUtil.current.downloads' "$LIBRARY"
+          grep -q 'val downloads = MutableStateFlow<Map<String, Download>>' "$UTIL"
+          ! grep -q 'DownloadManager(' "$SCREEN"
+          git diff --check origin/agent/issues-112-164-167-168-radio-fixes-13-7-77...HEAD
+
+      - name: Compile standard MetroList and run Dudu7 regression tests
+        shell: bash
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --console=plain :app:compileGmsStandardDebugKotlin --no-daemon --stacktrace
+          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+
+      - name: Build and verify Dudu7 test APK
+        shell: bash
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace | tee artifacts/build.log
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          test -n "$APK"
+          OUT=artifacts/Metrolist-dudu7-13.7.79-download-queue-test.apk
+          cp "$APK" "$OUT"
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$BUILD_TOOLS/aapt" dump badging "$OUT" > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$OUT" > artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370088'" artifacts/apk-badging.txt
+          grep -q "application-label:'Metrolist dudu7'" artifacts/apk-badging.txt
+          grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
+          unzip -l "$OUT" > artifacts/apk-contents.txt
+          grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
+          grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
+          sha256sum "$OUT" | tee "$OUT.sha256"
+          cat > artifacts/implementation-summary.txt <<EOF
+          Issue: #172 central download queue
+          Version: 13.7.79
+          VersionCode: 1370088
+          Base: agent/issues-112-164-167-168-radio-fixes-13-7-77 (13.7.78 line)
+          Architecture: existing Media3 DownloadManager / DownloadUtil remains source of truth
+          Device test: pending
+          EOF
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.79-download-queue-test
+          path: |
+            artifacts/Metrolist-dudu7-13.7.79-download-queue-test.apk
+            artifacts/Metrolist-dudu7-13.7.79-download-queue-test.apk.sha256
+            artifacts/apk-badging.txt
+            artifacts/apk-signature.txt
+            artifacts/apk-contents.txt
+            artifacts/build.log
+            artifacts/implementation-summary.txt
+          retention-days: 14
