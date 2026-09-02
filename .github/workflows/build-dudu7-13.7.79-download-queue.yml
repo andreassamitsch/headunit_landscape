@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feature/download-queue-172
+  pull_request:
+    branches:
+      - agent/issues-112-164-167-168-radio-fixes-13-7-77
   workflow_dispatch:
 
 permissions:
