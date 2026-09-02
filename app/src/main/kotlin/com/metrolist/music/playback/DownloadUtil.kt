@@ -20,6 +20,7 @@ import androidx.media3.exoplayer.offline.DownloadManager
 import androidx.media3.exoplayer.offline.DownloadNotificationHelper
 import com.metrolist.innertube.YouTube
 import com.metrolist.innertube.strategy.ContentHints
+import com.metrolist.music.BuildConfig
 import com.metrolist.music.constants.AudioQuality
 import com.metrolist.music.constants.AudioQualityKey
 import com.metrolist.music.db.MusicDatabase
@@ -74,6 +75,9 @@ data class DownloadResolverDiagnostics(
     val signatureCipherPresent: Boolean,
     val validationResult: String,
     val resolverRecoveryEvents: List<String> = emptyList(),
+    val httpChunkingEnabled: Boolean = false,
+    val httpChunkSizeBytes: Long = 0L,
+    val httpChunksCompleted: Int = 0,
 )
 
 @Singleton
@@ -91,6 +95,8 @@ constructor(
     private val audioQuality by enumPreference(context, AudioQualityKey, AudioQuality.AUTO)
     private val songUrlCache = StreamUrlCache()
     private val diagnosticClientOverrides = ConcurrentHashMap<String, String>()
+    private val diagnosticHttpChunkingOverrides = ConcurrentHashMap<String, Boolean>()
+    private val httpChunksCompleted = ConcurrentHashMap<String, Int>()
     private val recoveryEvents = ConcurrentHashMap<String, ArrayDeque<String>>()
     private val streamHttpClient =
         OkHttpClient.Builder()
@@ -118,7 +124,14 @@ constructor(
                 // network bytes into playerCache as well; this matches current MetroList upstream.
                 .setCacheWriteDataSinkFactory(null)
                 .setUpstreamDataSourceFactory(
-                    OkHttpDataSource.Factory(streamHttpClient),
+                    HttpRangeChunkingDataSource.Factory(
+                        upstreamFactory = OkHttpDataSource.Factory(streamHttpClient),
+                        chunkSizeBytes = HTTP_DOWNLOAD_CHUNK_SIZE_BYTES,
+                        enabledForKey = { mediaId -> mediaId != null && isHttpChunkingEnabled(mediaId) },
+                        onChunkCompleted = { mediaId ->
+                            if (mediaId != null) recordHttpChunkCompleted(mediaId)
+                        },
+                    ),
                 ),
         ) { dataSpec ->
             val mediaId = dataSpec.key ?: error("No media id")
@@ -212,6 +225,9 @@ constructor(
                             signatureCipherPresent = resolverSnapshot.signatureCipherPresent,
                             validationResult = resolverSnapshot.validationResult,
                             resolverRecoveryEvents = recoveryEventsFor(mediaId),
+                            httpChunkingEnabled = isHttpChunkingEnabled(mediaId),
+                            httpChunkSizeBytes = if (isHttpChunkingEnabled(mediaId)) HTTP_DOWNLOAD_CHUNK_SIZE_BYTES else 0L,
+                            httpChunksCompleted = httpChunksCompleted[mediaId] ?: 0,
                         ),
                     )
                 }
@@ -323,6 +339,8 @@ constructor(
                         val downloadId = download.request.id
                         songUrlCache.invalidate(downloadId)
                         diagnosticClientOverrides.remove(downloadId)
+                        diagnosticHttpChunkingOverrides.remove(downloadId)
+                        httpChunksCompleted.remove(downloadId)
                         recoveryEvents.remove(downloadId)
                         resolverDiagnostics.update { it - downloadId }
 
@@ -374,6 +392,46 @@ constructor(
         recordResolverRecoveryEvent(mediaId, "ab_override_reset:$removed")
         restartWithFreshResolver(mediaId)
         return true
+    }
+
+    fun toggleDiagnosticHttpChunking(mediaId: String): Boolean {
+        val enabled = !isHttpChunkingEnabled(mediaId)
+        diagnosticHttpChunkingOverrides[mediaId] = enabled
+        httpChunksCompleted.remove(mediaId)
+        resolverDiagnostics.update { current ->
+            current[mediaId]?.let { existing ->
+                current + (
+                    mediaId to existing.copy(
+                        httpChunkingEnabled = enabled,
+                        httpChunkSizeBytes = if (enabled) HTTP_DOWNLOAD_CHUNK_SIZE_BYTES else 0L,
+                        httpChunksCompleted = 0,
+                    )
+                )
+            } ?: current
+        }
+        recordResolverRecoveryEvent(mediaId, "http_chunking:${if (enabled) "on" else "off"}")
+        restartHttpTransfer(mediaId)
+        return enabled
+    }
+
+    private fun isHttpChunkingEnabled(mediaId: String): Boolean =
+        BuildConfig.IS_DUDU7 && (diagnosticHttpChunkingOverrides[mediaId] ?: true)
+
+    private fun recordHttpChunkCompleted(mediaId: String) {
+        val count = httpChunksCompleted.compute(mediaId) { _, current -> (current ?: 0) + 1 } ?: 1
+        resolverDiagnostics.update { current ->
+            current[mediaId]?.let { existing ->
+                current + (mediaId to existing.copy(httpChunksCompleted = count))
+            } ?: current
+        }
+    }
+
+    private fun restartHttpTransfer(mediaId: String) {
+        scope.launch {
+            downloadManager.setStopReason(mediaId, DIAGNOSTIC_HTTP_CHUNK_SWITCH_STOP_REASON)
+            delay(300L)
+            downloadManager.setStopReason(mediaId, Download.STOP_REASON_NONE)
+        }
     }
 
     private fun restartWithFreshResolver(mediaId: String) {
@@ -445,7 +503,9 @@ internal fun downloadContentLength(
     return if (statusCode == 200) contentLength?.toLongOrNull()?.takeIf { it > 0L } else null
 }
 
+internal const val HTTP_DOWNLOAD_CHUNK_SIZE_BYTES = 10L * 1024L * 1024L
 private const val DIAGNOSTIC_CLIENT_SWITCH_STOP_REASON = 8204
+private const val DIAGNOSTIC_HTTP_CHUNK_SWITCH_STOP_REASON = 8208
 private const val MAX_RECOVERY_EVENTS = 8
 
 private val PARTIAL_CONTENT_RANGE = Regex("""bytes\s+0-0/(\d+)""", RegexOption.IGNORE_CASE)
