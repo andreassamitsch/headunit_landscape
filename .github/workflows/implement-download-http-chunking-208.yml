@@ -50,6 +50,8 @@ jobs:
                   continue
               text = p.read_text(encoding='utf-8')
               text = re.sub(r'C\.LENGTH_UNSET(?!\.toLong\(\))', 'C.LENGTH_UNSET.toLong()', text)
+              if name.endswith('HttpRangeChunkingDataSourceTest.kt'):
+                  text = text.replace('5_836_352L', '5_836_592L')
               p.write_text(text, encoding='utf-8')
           PY
           git diff --check
@@ -69,6 +71,7 @@ jobs:
           CHUNKER=app/src/main/kotlin/com/metrolist/music/playback/HttpRangeChunkingDataSource.kt
           DOWNLOAD=app/src/main/kotlin/com/metrolist/music/playback/DownloadUtil.kt
           QUEUE=app/src/main/kotlin/com/metrolist/music/ui/screens/library/DownloadQueueScreen.kt
+          TEST=app/src/test/kotlin/com/metrolist/music/playback/HttpRangeChunkingDataSourceTest.kt
           test -f "$CHUNKER"
           grep -q 'HTTP_DOWNLOAD_CHUNK_SIZE_BYTES = 10L \* 1024L \* 1024L' "$DOWNLOAD"
           grep -q 'HttpRangeChunkingDataSource.Factory' "$DOWNLOAD"
@@ -81,6 +84,7 @@ jobs:
           grep -q 'base.subrange(bytesReadTotal, chunkLength)' "$CHUNKER"
           grep -q 'Server did not confirm requested byte range' "$CHUNKER"
           grep -q 'C.LENGTH_UNSET.toLong()' "$CHUNKER"
+          grep -q '5_836_592L' "$TEST"
           if grep -q 'yt-dlp' app/build.gradle.kts; then
             echo 'yt-dlp dependency must not be added' >&2
             exit 1
