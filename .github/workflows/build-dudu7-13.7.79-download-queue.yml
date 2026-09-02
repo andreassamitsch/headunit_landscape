@@ -6,7 +6,7 @@ on:
       - feature/download-queue-172
   pull_request:
     branches:
-      - integration/dudu7-13.7.78-download-base
+      - agent/issues-112-164-167-168-radio-fixes-13-7-77
   workflow_dispatch:
 
 permissions:
@@ -54,7 +54,7 @@ jobs:
           grep -q 'LocalDownloadUtil.current.downloads' "$LIBRARY"
           grep -q 'val downloads = MutableStateFlow<Map<String, Download>>' "$UTIL"
           ! grep -q 'DownloadManager(' "$SCREEN"
-          git diff --check origin/integration/dudu7-13.7.78-download-base...HEAD
+          git diff --check origin/agent/issues-112-164-167-168-radio-fixes-13-7-77...HEAD
 
       - name: Compile standard MetroList and run Dudu7 regression tests
         shell: bash
@@ -93,7 +93,7 @@ jobs:
           Issue: #172 central download queue
           Version: 13.7.79
           VersionCode: 1370088
-          Base: integration/dudu7-13.7.78-download-base
+          Base: agent/issues-112-164-167-168-radio-fixes-13-7-77 (13.7.78 head)
           Architecture: existing Media3 DownloadManager / DownloadUtil remains source of truth
           Device test: pending
           EOF
