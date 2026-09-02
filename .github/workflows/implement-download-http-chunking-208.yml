@@ -38,6 +38,20 @@ jobs:
         run: |
           set -euxo pipefail
           python3 tools/apply_download_http_chunking_208.py
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          for name in (
+              'app/src/main/kotlin/com/metrolist/music/playback/HttpRangeChunkingDataSource.kt',
+              'app/src/test/kotlin/com/metrolist/music/playback/HttpRangeChunkingDataSourceTest.kt',
+          ):
+              p = Path(name)
+              if not p.exists():
+                  continue
+              text = p.read_text(encoding='utf-8')
+              text = re.sub(r'C\.LENGTH_UNSET(?!\.toLong\(\))', 'C.LENGTH_UNSET.toLong()', text)
+              p.write_text(text, encoding='utf-8')
+          PY
           git diff --check
           if git diff --quiet; then
             echo 'changed=false' >> "$GITHUB_OUTPUT"
@@ -66,6 +80,7 @@ jobs:
           grep -q 'HTTP A/B' "$QUEUE"
           grep -q 'base.subrange(bytesReadTotal, chunkLength)' "$CHUNKER"
           grep -q 'Server did not confirm requested byte range' "$CHUNKER"
+          grep -q 'C.LENGTH_UNSET.toLong()' "$CHUNKER"
           if grep -q 'yt-dlp' app/build.gradle.kts; then
             echo 'yt-dlp dependency must not be added' >&2
             exit 1
