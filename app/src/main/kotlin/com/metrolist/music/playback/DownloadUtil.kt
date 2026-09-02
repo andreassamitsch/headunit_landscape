@@ -36,6 +36,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Runnable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -46,9 +47,34 @@ import okhttp3.OkHttpClient
 import timber.log.Timber
 import java.io.IOException
 import java.time.LocalDateTime
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executor
 import javax.inject.Inject
 import javax.inject.Singleton
+
+data class DownloadResolverDiagnostics(
+    val resolvedAtMs: Long,
+    val selectedClient: String,
+    val selectedClientIndex: Int?,
+    val preferredClient: String?,
+    val candidateClients: List<String>,
+    val itag: Int,
+    val mimeType: String,
+    val codec: String,
+    val bitrate: Int,
+    val contentLength: Long,
+    val nParameterBeforeTransform: String,
+    val nParameterAfterTransform: String,
+    val nTransformRequired: Boolean,
+    val nTransformAttempted: Boolean,
+    val nTransformResult: String,
+    val poTokenRequired: Boolean,
+    val poTokenAvailable: Boolean,
+    val poTokenAppended: Boolean,
+    val signatureCipherPresent: Boolean,
+    val validationResult: String,
+    val resolverRecoveryEvents: List<String> = emptyList(),
+)
 
 @Singleton
 class DownloadUtil
@@ -64,6 +90,8 @@ constructor(
     private val connectivityManager = context.getSystemService<ConnectivityManager>()!!
     private val audioQuality by enumPreference(context, AudioQualityKey, AudioQuality.AUTO)
     private val songUrlCache = StreamUrlCache()
+    private val diagnosticClientOverrides = ConcurrentHashMap<String, String>()
+    private val recoveryEvents = ConcurrentHashMap<String, ArrayDeque<String>>()
     private val streamHttpClient =
         OkHttpClient.Builder()
             .proxy(YouTube.proxy)
@@ -79,6 +107,7 @@ constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     val downloads = MutableStateFlow<Map<String, Download>>(emptyMap())
+    val resolverDiagnostics = MutableStateFlow<Map<String, DownloadResolverDiagnostics>>(emptyMap())
 
     private val dataSourceFactory =
         ResolvingDataSource.Factory(
@@ -116,6 +145,7 @@ constructor(
                         isExplicit = song?.explicit,
                         isUploaded = song?.isUploaded,
                     ),
+                    preferredStreamClient = diagnosticClientOverrides[mediaId],
                 )
             }.getOrThrow()
             val format = playbackData.format
@@ -149,6 +179,43 @@ constructor(
                         }
                     probedLength ?: error("Failed to retrieve content length")
                 }
+
+            val resolverSnapshot = playbackData.resolverDiagnostics
+            val codec = format.mimeType
+                .substringAfter("codecs=", "unknown")
+                .trim()
+                .removeSurrounding("\"")
+            recordResolverRecoveryEvent(mediaId, "resolved:${resolverSnapshot.selectedClient}")
+            resolverDiagnostics.update { current ->
+                current.toMutableMap().apply {
+                    set(
+                        mediaId,
+                        DownloadResolverDiagnostics(
+                            resolvedAtMs = System.currentTimeMillis(),
+                            selectedClient = resolverSnapshot.selectedClient,
+                            selectedClientIndex = resolverSnapshot.selectedClientIndex,
+                            preferredClient = resolverSnapshot.preferredClient,
+                            candidateClients = resolverSnapshot.candidateClients,
+                            itag = format.itag,
+                            mimeType = format.mimeType.substringBefore(';'),
+                            codec = codec,
+                            bitrate = format.bitrate,
+                            contentLength = actualContentLength,
+                            nParameterBeforeTransform = resolverSnapshot.nParameterBeforeTransform,
+                            nParameterAfterTransform = resolverSnapshot.nParameterAfterTransform,
+                            nTransformRequired = resolverSnapshot.nTransformRequired,
+                            nTransformAttempted = resolverSnapshot.nTransformAttempted,
+                            nTransformResult = resolverSnapshot.nTransformResult,
+                            poTokenRequired = resolverSnapshot.poTokenRequired,
+                            poTokenAvailable = resolverSnapshot.poTokenAvailable,
+                            poTokenAppended = resolverSnapshot.poTokenAppended,
+                            signatureCipherPresent = resolverSnapshot.signatureCipherPresent,
+                            validationResult = resolverSnapshot.validationResult,
+                            resolverRecoveryEvents = recoveryEventsFor(mediaId),
+                        ),
+                    )
+                }
+            }
 
             database.query {
                 upsert(
@@ -223,6 +290,7 @@ constructor(
                         finalException: Exception?,
                     ) {
                         if (download.state == Download.STATE_FAILED && finalException.isExpiredStreamError()) {
+                            recordResolverRecoveryEvent(download.request.id, "media3_expired_stream_invalidated")
                             songUrlCache.invalidate(download.request.id)
                         }
 
@@ -254,6 +322,9 @@ constructor(
                     ) {
                         val downloadId = download.request.id
                         songUrlCache.invalidate(downloadId)
+                        diagnosticClientOverrides.remove(downloadId)
+                        recoveryEvents.remove(downloadId)
+                        resolverDiagnostics.update { it - downloadId }
 
                         runCatching {
                             database.updateDownloadedInfo(downloadId, false, null)
@@ -282,6 +353,56 @@ constructor(
     }
 
     fun getDownload(songId: String): Flow<Download?> = downloads.map { it[songId] }
+
+    fun rotateDiagnosticStreamClient(mediaId: String): String? {
+        val snapshot = resolverDiagnostics.value[mediaId] ?: return null
+        val candidates = snapshot.candidateClients.distinct()
+        if (candidates.size < 2) return null
+        val current = diagnosticClientOverrides[mediaId] ?: snapshot.selectedClient
+        val currentIndex = candidates.indexOf(current).takeIf { it >= 0 }
+            ?: snapshot.selectedClientIndex?.takeIf { it in candidates.indices }
+            ?: -1
+        val next = candidates[(currentIndex + 1).mod(candidates.size)]
+        diagnosticClientOverrides[mediaId] = next
+        recordResolverRecoveryEvent(mediaId, "ab_override:$next")
+        restartWithFreshResolver(mediaId)
+        return next
+    }
+
+    fun resetDiagnosticStreamClient(mediaId: String): Boolean {
+        val removed = diagnosticClientOverrides.remove(mediaId) ?: return false
+        recordResolverRecoveryEvent(mediaId, "ab_override_reset:$removed")
+        restartWithFreshResolver(mediaId)
+        return true
+    }
+
+    private fun restartWithFreshResolver(mediaId: String) {
+        songUrlCache.invalidate(mediaId)
+        scope.launch {
+            downloadManager.setStopReason(mediaId, DIAGNOSTIC_CLIENT_SWITCH_STOP_REASON)
+            delay(300L)
+            downloadManager.setStopReason(mediaId, Download.STOP_REASON_NONE)
+        }
+    }
+
+    private fun recordResolverRecoveryEvent(mediaId: String, event: String) {
+        val events = recoveryEvents.computeIfAbsent(mediaId) { ArrayDeque() }
+        val snapshot = synchronized(events) {
+            events.addLast(event.take(80))
+            while (events.size > MAX_RECOVERY_EVENTS) events.removeFirst()
+            events.toList()
+        }
+        resolverDiagnostics.update { current ->
+            current[mediaId]?.let { existing ->
+                current + (mediaId to existing.copy(resolverRecoveryEvents = snapshot))
+            } ?: current
+        }
+    }
+
+    private fun recoveryEventsFor(mediaId: String): List<String> {
+        val events = recoveryEvents[mediaId] ?: return emptyList()
+        return synchronized(events) { events.toList() }
+    }
 
     fun release() {
         scope.cancel()
@@ -323,6 +444,9 @@ internal fun downloadContentLength(
     }
     return if (statusCode == 200) contentLength?.toLongOrNull()?.takeIf { it > 0L } else null
 }
+
+private const val DIAGNOSTIC_CLIENT_SWITCH_STOP_REASON = 8204
+private const val MAX_RECOVERY_EVENTS = 8
 
 private val PARTIAL_CONTENT_RANGE = Regex("""bytes\s+0-0/(\d+)""", RegexOption.IGNORE_CASE)
 private val UNSATISFIED_CONTENT_RANGE = Regex("""bytes\s+\*/(\d+)""", RegexOption.IGNORE_CASE)

@@ -53,6 +53,7 @@ import com.metrolist.music.BuildConfig
 import com.metrolist.music.LocalDownloadUtil
 import com.metrolist.music.LocalPlayerAwareWindowInsets
 import com.metrolist.music.R
+import com.metrolist.music.playback.DownloadResolverDiagnostics
 import com.metrolist.music.playback.ExoDownloadService
 import kotlinx.coroutines.delay
 import java.time.Instant
@@ -75,6 +76,7 @@ fun DownloadQueueScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val downloadUtil = LocalDownloadUtil.current
     val downloads by downloadUtil.downloads.collectAsStateWithLifecycle()
+    val resolverDiagnostics by downloadUtil.resolverDiagnostics.collectAsStateWithLifecycle()
 
     val hasLiveDownloads = downloads.values.any {
         it.state == Download.STATE_QUEUED ||
@@ -191,6 +193,7 @@ fun DownloadQueueScreen(onBack: () -> Unit) {
             ) { download ->
                 DownloadQueueRow(
                     download = download,
+                    resolverDiagnostics = resolverDiagnostics[download.request.id],
                     notMetRequirements = notMetRequirements,
                     refreshToken = refreshTick,
                     onRetry = {
@@ -237,6 +240,7 @@ fun DownloadQueueScreen(onBack: () -> Unit) {
             ) { download ->
                 DownloadQueueRow(
                     download = download,
+                    resolverDiagnostics = resolverDiagnostics[download.request.id],
                     notMetRequirements = 0,
                     refreshToken = refreshTick,
                     onRetry = {},
@@ -252,6 +256,7 @@ fun DownloadQueueScreen(onBack: () -> Unit) {
 @Composable
 private fun DownloadQueueRow(
     download: Download,
+    resolverDiagnostics: DownloadResolverDiagnostics?,
     notMetRequirements: Int,
     refreshToken: Long,
     onRetry: () -> Unit,
@@ -263,6 +268,7 @@ private fun DownloadQueueRow(
     val progressRefresh = refreshToken
 
     val context = LocalContext.current
+    val downloadUtil = LocalDownloadUtil.current
     val copiedMessage = stringResource(R.string.download_queue_diagnostics_copied)
     var showDiagnostics by remember(download.request.id) { mutableStateOf(false) }
 
@@ -339,6 +345,7 @@ private fun DownloadQueueRow(
                 notMetRequirements = notMetRequirements,
                 sampledBytesPerSecond = sampledBytesPerSecond,
                 sampleWindowMs = sampleWindowMs,
+                resolverDiagnostics = resolverDiagnostics,
                 nowMs = System.currentTimeMillis(),
             )
         AlertDialog(
@@ -357,13 +364,45 @@ private fun DownloadQueueRow(
                 )
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        copyDiagnosticReport(context, report)
-                        Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
-                    },
-                ) {
-                    Text(stringResource(R.string.download_queue_diagnostics_copy))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (
+                        BuildConfig.IS_DUDU7 &&
+                        resolverDiagnostics?.candidateClients?.distinct()?.size?.let { it > 1 } == true &&
+                        download.state != Download.STATE_COMPLETED &&
+                        download.state != Download.STATE_REMOVING
+                    ) {
+                        TextButton(
+                            onClick = {
+                                val next = downloadUtil.rotateDiagnosticStreamClient(download.request.id)
+                                if (next != null) {
+                                    Toast.makeText(context, "A/B: $next", Toast.LENGTH_SHORT).show()
+                                    showDiagnostics = false
+                                }
+                            },
+                        ) {
+                            Text("A/B")
+                        }
+                    }
+                    if (BuildConfig.IS_DUDU7 && resolverDiagnostics?.preferredClient != null) {
+                        TextButton(
+                            onClick = {
+                                if (downloadUtil.resetDiagnosticStreamClient(download.request.id)) {
+                                    Toast.makeText(context, "A/B: Standard", Toast.LENGTH_SHORT).show()
+                                    showDiagnostics = false
+                                }
+                            },
+                        ) {
+                            Text("Standard")
+                        }
+                    }
+                    TextButton(
+                        onClick = {
+                            copyDiagnosticReport(context, report)
+                            Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
+                        },
+                    ) {
+                        Text(stringResource(R.string.download_queue_diagnostics_copy))
+                    }
                 }
             },
             dismissButton = {
@@ -486,6 +525,7 @@ private fun buildDownloadDiagnosticReport(
     notMetRequirements: Int,
     sampledBytesPerSecond: Double?,
     sampleWindowMs: Long?,
+    resolverDiagnostics: DownloadResolverDiagnostics?,
     nowMs: Long,
 ): String {
     val bytesDownloaded = download.bytesDownloaded.coerceAtLeast(0L)
@@ -508,10 +548,10 @@ private fun buildDownloadDiagnosticReport(
         }
     val contentLength = download.contentLength.takeIf { it > 0L }
     val progress = download.percentDownloaded.takeIf { it >= 0f && it.isFinite() }
-    val mimeType = download.request.mimeType?.let(::sanitizeDiagnosticValue) ?: "not_available"
-    val streamClient = safeWhitelistedQueryValue(download, "c") ?: "not_available"
-    val itag = safeNumericQueryValue(download, "itag") ?: "not_available"
-    val nParameter = safeQueryParameterPresence(download, "n")
+    val mimeType = resolverDiagnostics?.mimeType?.let(::sanitizeDiagnosticValue) ?: "not_available"
+    val streamClient = resolverDiagnostics?.selectedClient?.let(::sanitizeDiagnosticValue) ?: "not_available"
+    val itag = resolverDiagnostics?.itag?.toString() ?: "not_available"
+    val nParameter = resolverDiagnostics?.nParameterAfterTransform ?: "not_available"
 
     return buildString {
         appendLine("MetroList dudu7 download diagnostics")
@@ -537,12 +577,27 @@ private fun buildDownloadDiagnosticReport(
         appendLine("failure_reason=${download.failureReason}")
         appendLine("stop_reason=${download.stopReason}")
         appendLine("stream_client=$streamClient")
+        appendLine("stream_client_index=${resolverDiagnostics?.selectedClientIndex ?: "not_available"}")
+        appendLine("stream_client_override=${resolverDiagnostics?.preferredClient?.let(::sanitizeDiagnosticValue) ?: "default"}")
+        appendLine("stream_client_candidates=${resolverDiagnostics?.candidateClients?.joinToString(",") { sanitizeDiagnosticValue(it) } ?: "not_available"}")
+        appendLine("resolver_snapshot_age_ms=${resolverDiagnostics?.let { (nowMs - it.resolvedAtMs).coerceAtLeast(0L) } ?: "not_available"}")
         appendLine("itag=$itag")
         appendLine("mime_type=$mimeType")
-        appendLine("codec=not_available")
-        appendLine("bitrate_bps=not_available")
+        appendLine("codec=${resolverDiagnostics?.codec?.let(::sanitizeDiagnosticValue) ?: "not_available"}")
+        appendLine("bitrate_bps=${resolverDiagnostics?.bitrate ?: "not_available"}")
+        appendLine("resolver_content_length_bytes=${resolverDiagnostics?.contentLength ?: "not_available"}")
         appendLine("n_parameter=$nParameter")
-        appendLine("resolver_recovery_events=not_available_in_media3_download_snapshot")
+        appendLine("n_parameter_before_transform=${resolverDiagnostics?.nParameterBeforeTransform ?: "not_available"}")
+        appendLine("n_parameter_after_transform=${resolverDiagnostics?.nParameterAfterTransform ?: "not_available"}")
+        appendLine("n_transform_required=${resolverDiagnostics?.nTransformRequired ?: "not_available"}")
+        appendLine("n_transform_attempted=${resolverDiagnostics?.nTransformAttempted ?: "not_available"}")
+        appendLine("n_transform_result=${resolverDiagnostics?.nTransformResult?.let(::sanitizeDiagnosticValue) ?: "not_available"}")
+        appendLine("potoken_required=${resolverDiagnostics?.poTokenRequired ?: "not_available"}")
+        appendLine("potoken_available=${resolverDiagnostics?.poTokenAvailable ?: "not_available"}")
+        appendLine("potoken_appended=${resolverDiagnostics?.poTokenAppended ?: "not_available"}")
+        appendLine("signature_cipher_present=${resolverDiagnostics?.signatureCipherPresent ?: "not_available"}")
+        appendLine("stream_validation=${resolverDiagnostics?.validationResult?.let(::sanitizeDiagnosticValue) ?: "not_available"}")
+        appendLine("resolver_recovery_events=${resolverDiagnostics?.resolverRecoveryEvents?.joinToString(",") { sanitizeDiagnosticValue(it) }?.takeIf { it.isNotEmpty() } ?: "none"}")
         appendLine("rate_note=current rate is sampled from Media3 byte progress; lifetime average includes waiting/retry time")
         append("privacy=stream URL, token, signature, cookie and authorization-header values are intentionally excluded")
     }
