@@ -1,0 +1,67 @@
+name: Cleanup Actions artifacts
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "27 */4 * * *"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/artifact-cleanup.yml"
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      KEEP_NEWEST: "5"
+      GRACE_MINUTES: "120"
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Delete old Actions artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | [.id, .created_at, .name, .size_in_bytes] | @tsv' > /tmp/artifacts.tsv
+
+          python3 - <<'PY' > /tmp/delete-artifacts.txt
+          import os
+          from datetime import datetime, timezone, timedelta
+
+          keep_newest = int(os.environ["KEEP_NEWEST"])
+          grace = timedelta(minutes=int(os.environ["GRACE_MINUTES"]))
+          now = datetime.now(timezone.utc)
+          rows = []
+          with open('/tmp/artifacts.tsv', encoding='utf-8') as f:
+              for line in f:
+                  line = line.rstrip('\n')
+                  if not line:
+                      continue
+                  artifact_id, created_at, name, size = line.split('\t', 3)
+                  created = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                  rows.append((created, artifact_id, name, int(size)))
+
+          rows.sort(reverse=True)
+          keep_ids = {row[1] for row in rows[:keep_newest]}
+          for created, artifact_id, name, size in rows:
+              if artifact_id in keep_ids or now - created < grace:
+                  continue
+              print(artifact_id)
+          PY
+
+          deleted=0
+          while IFS= read -r artifact_id; do
+            [ -n "$artifact_id" ] || continue
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
+            deleted=$((deleted + 1))
+          done < /tmp/delete-artifacts.txt
+
+          total=$(wc -l < /tmp/artifacts.tsv | tr -d ' ')
+          echo "Artifacts before cleanup: ${total}"
+          echo "Artifacts deleted: ${deleted}"
+          echo "Policy: keep newest ${KEEP_NEWEST}; additionally protect artifacts younger than ${GRACE_MINUTES} minutes."
