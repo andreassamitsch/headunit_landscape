@@ -2,8 +2,17 @@ name: Cleanup Actions artifacts
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - "Build Dudu7 APK"
+      - "Quick Dudu7 Build"
+      - "Bump to new version"
+      - "Build Dudu7 HLS Logo Fix APK"
+      - "Build Dudu7 13.7.2 Regression Fix"
+      - "Dudu7 UI Smoke Test"
+    types: [completed]
   schedule:
-    - cron: "27 */4 * * *"
+    - cron: "27 3 * * *"
   push:
     branches: [main]
     paths:
