@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      KEEP_NEWEST: "5"
+      KEEP_NEWEST: "1"
       GRACE_MINUTES: "120"
       GH_TOKEN: ${{ github.token }}
     steps:
