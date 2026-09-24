@@ -27,7 +27,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git fetch origin main feature/download-http-chunking-208
-          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+          git merge-base --is-ancestor origin/main HEAD
           git merge --no-commit --no-ff -X theirs origin/feature/download-http-chunking-208 || true
           if test -n "$(git ls-files -u)"; then
             echo 'Unresolved merge paths:'
