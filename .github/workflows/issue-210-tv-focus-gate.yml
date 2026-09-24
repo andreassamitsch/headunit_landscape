@@ -1,0 +1,53 @@
+name: Issue 210 Google TV D-pad integration and regression
+
+on:
+  push:
+    branches: [feature/google-tv-dpad-210]
+    paths:
+      - '.github/workflows/issue-210-tv-focus-gate.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  integrate-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - name: Check out the confirmed Dudu7 release-based branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+      - name: Apply guarded TV-only source changes
+        run: |
+          python3 scripts/apply_issue_210_tv_dpad.py
+          git diff --check
+          git diff -- app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+      - name: Commit implementation to the issue branch only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+          git commit -m 'feat(tv): isolate visible D-pad focus groups on Google TV (#210)'
+          git push origin HEAD:feature/google-tv-dpad-210
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Build standard and Dudu7 flavors and run Dudu7 unit regressions
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:compileGmsStandardDebugKotlin :app:testGmsDudu7DebugUnitTest :app:assembleGmsDudu7Debug --no-daemon --stacktrace
+      - name: Upload candidate APK for review (not a published release)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue-210-dudu7-tv-focus-unreleased
+          path: app/build/outputs/apk/gmsDudu7/debug/*.apk
+          if-no-files-found: warn
+          retention-days: 7
