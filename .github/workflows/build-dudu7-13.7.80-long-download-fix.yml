@@ -1,0 +1,215 @@
+name: Build Dudu7 13.7.80 long download fix
+
+on:
+  push:
+    branches:
+      - fix/long-download-throttle-198
+  pull_request:
+    branches:
+      - feature/download-queue-172
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dudu7-13-7-80-long-download-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Verify Issue 198 implementation boundaries
+        shell: bash
+        run: |
+          set -euxo pipefail
+          grep -q 'versionCode = 1370089' app/build.gradle.kts
+          grep -q 'versionName = "13.7.80"' app/build.gradle.kts
+          UTIL=app/src/main/kotlin/com/metrolist/music/playback/DownloadUtil.kt
+          TEST=app/src/test/kotlin/com/metrolist/music/playback/DownloadContentLengthTest.kt
+          test -f "$UTIL"
+          test -f "$TEST"
+          grep -q 'header("Range", "bytes=0-0")' "$UTIL"
+          grep -q 'setCacheWriteDataSinkFactory(null)' "$UTIL"
+          grep -q 'responseCode == 416' "$UTIL"
+          grep -q 'val streamUrl = playbackData.streamUrl' "$UTIL"
+          grep -q 'downloadContentLength(' "$TEST"
+          if grep -Fq 'range=0-${actualContentLength}' "$UTIL"; then
+            echo 'Legacy full-file URL range is still present' >&2
+            exit 1
+          fi
+          git diff --check origin/feature/download-queue-172...HEAD
+
+      - name: Compile standard MetroList and run Dudu7 regression tests
+        shell: bash
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --console=plain :app:compileGmsStandardDebugKotlin --no-daemon --stacktrace
+          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+
+      - name: Build and verify Dudu7 updater APK
+        shell: bash
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace | tee artifacts/build.log
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          test -n "$APK"
+          OUT=artifacts/Metrolist-dudu7-13.7.80.apk
+          cp "$APK" "$OUT"
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$BUILD_TOOLS/aapt" dump badging "$OUT" > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$OUT" > artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370089'" artifacts/apk-badging.txt
+          grep -q "application-label:'Metrolist dudu7'" artifacts/apk-badging.txt
+          grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
+          unzip -l "$OUT" > artifacts/apk-contents.txt
+          grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
+          grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
+          sha256sum "$OUT" | tee "$OUT.sha256"
+          SHA=$(awk '{print $1}' "$OUT.sha256")
+          cat > artifacts/dudu7-update.json <<JSON
+          {"versionCode":1370089,"versionName":"13.7.80","packageName":"com.metrolist.music.dudu7.debug","signerSha256":"138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee","apkAsset":"Metrolist-dudu7-13.7.80.apk","sha256":"$SHA"}
+          JSON
+          cat > artifacts/implementation-summary.txt <<EOF
+          Issue: #198 long downloads / live sets throttled
+          Version: 13.7.80
+          VersionCode: 1370089
+          Base: feature/download-queue-172 (13.7.79)
+          Fix: remove forced full-file URL range; one-byte content-length probe; no player-cache mirroring; 416 recovery
+          Architecture: existing MetroList / Media3 DownloadManager remains source of truth
+          Integrated updater release: dudu7-v13.7.80
+          Device performance test: pending
+          EOF
+
+      - name: Publish 13.7.80 to integrated Dudu7 updater
+        if: github.event_name != 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          SHA=$(awk '{print $1}' artifacts/Metrolist-dudu7-13.7.80.apk.sha256)
+          cat > artifacts/release-notes.md <<MD
+          ## MetroList dudu7 13.7.80
+
+          **Long-Form-/Live-Set-Download-Fix – #198**
+          - Entfernt die alte Full-File-URL-Range `range=0-<gesamte Datei>`, die bei großen Googlevideo-Audiodateien zu starker Drosselung führen kann.
+          - Media3 darf Position und Range des progressiven Downloads wieder selbst steuern.
+          - Fehlende Dateigröße wird upstream-nah nur mit `Range: bytes=0-0` ermittelt.
+          - Offline-Downloadbytes werden nicht zusätzlich vollständig in den Player-Cache gespiegelt.
+          - HTTP 416 wird wie 403/410 als erneuerbare Stream-URL behandelt.
+          - Die bestehende Download-Warteschlange aus 13.7.79 bleibt unverändert erhalten.
+
+          **Validierung**
+          - Standard-MetroList-Compile
+          - vollständige Dudu7-Unit-/Regressionstests inkl. Content-Range-Test
+          - ARM64 + ARMv7 APK
+          - Paket-, Signatur- und SHA-256-Prüfung
+          - APK SHA-256: $SHA
+
+          **Status**
+          - Vorabversion für den realen Dudu7-Headunit-Vergleich desselben Long-Form-Titels aus #198.
+          MD
+
+          TAG=dudu7-v13.7.80
+          HEAD_SHA=$(git rev-parse HEAD)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            TAG_SHA=$(git rev-list -n 1 "$TAG")
+            test "$TAG_SHA" = "$HEAD_SHA" || { echo "$TAG already exists on a different commit" >&2; exit 1; }
+            gh release upload "$TAG" \
+              artifacts/Metrolist-dudu7-13.7.80.apk \
+              artifacts/Metrolist-dudu7-13.7.80.apk.sha256 \
+              artifacts/dudu7-update.json \
+              --clobber
+          else
+            gh release create "$TAG" \
+              artifacts/Metrolist-dudu7-13.7.80.apk \
+              artifacts/Metrolist-dudu7-13.7.80.apk.sha256 \
+              artifacts/dudu7-update.json \
+              --target "$HEAD_SHA" \
+              --title 'MetroList dudu7 13.7.80' \
+              --notes-file artifacts/release-notes.md \
+              --prerelease
+          fi
+
+      - name: Verify public updater manifest and APK
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          import hashlib, json, time, urllib.error, urllib.request
+          tag='dudu7-v13.7.80'
+          api=f'https://api.github.com/repos/andreassamitsch/headunit_landscape/releases/tags/{tag}'
+          headers={'User-Agent':'Metrolist-dudu7-ci','Accept':'application/vnd.github+json'}
+          release=None
+          for _ in range(12):
+              try:
+                  release=json.load(urllib.request.urlopen(urllib.request.Request(api,headers=headers),timeout=30))
+                  if release.get('tag_name')==tag and release.get('assets'):
+                      break
+              except (urllib.error.HTTPError, urllib.error.URLError):
+                  release=None
+              time.sleep(5)
+          if not release:
+              raise SystemExit('13.7.80 release did not become publicly readable')
+          assets={a['name']:a['browser_download_url'] for a in release['assets']}
+          required={'dudu7-update.json','Metrolist-dudu7-13.7.80.apk','Metrolist-dudu7-13.7.80.apk.sha256'}
+          missing=required-assets.keys()
+          if missing:
+              raise SystemExit(f'Missing updater assets: {sorted(missing)}')
+          manifest=json.load(urllib.request.urlopen(urllib.request.Request(assets['dudu7-update.json'],headers={'User-Agent':'Metrolist-dudu7-ci'}),timeout=30))
+          assert manifest['versionCode']==1370089
+          assert manifest['versionName']=='13.7.80'
+          assert manifest['packageName']=='com.metrolist.music.dudu7.debug'
+          assert manifest['signerSha256']=='138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee'
+          assert manifest['apkAsset']=='Metrolist-dudu7-13.7.80.apk'
+          h=hashlib.sha256()
+          with urllib.request.urlopen(urllib.request.Request(assets['Metrolist-dudu7-13.7.80.apk'],headers={'User-Agent':'Metrolist-dudu7-ci'}),timeout=120) as response:
+              while True:
+                  chunk=response.read(1024*1024)
+                  if not chunk: break
+                  h.update(chunk)
+          assert h.hexdigest()==manifest['sha256']
+          print('13.7.80 public updater manifest and APK SHA verified:', h.hexdigest())
+          PY
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.80-long-download-fix
+          path: |
+            artifacts/Metrolist-dudu7-13.7.80.apk
+            artifacts/Metrolist-dudu7-13.7.80.apk.sha256
+            artifacts/dudu7-update.json
+            artifacts/apk-badging.txt
+            artifacts/apk-signature.txt
+            artifacts/apk-contents.txt
+            artifacts/build.log
+            artifacts/implementation-summary.txt
+            artifacts/release-notes.md
+          retention-days: 14

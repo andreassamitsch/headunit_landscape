@@ -1,0 +1,50 @@
+name: Inspect Issue 104 FM Glass
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: false
+
+      - name: Inspect FM surfaces and overlays
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inspection/source
+          {
+            echo '=== PHYSICAL RADIO FILES ==='
+            find app/src -type f \( -iname '*PhysicalRadio*' -o -iname '*Fm*Screen*.kt' -o -iname '*Favourite*.kt' \) -print | sort
+            echo
+            echo '=== FM COMPOSABLES / SURFACES / ALPHA ==='
+            grep -RInE 'PhysicalRadioScreen|FmFavourite|FmSearch|Surface\(|Card\(|\.background\(|\.alpha\(|copy\(alpha|surfaceVariant|surfaceContainer|primaryContainer|selected|isActive|isCurrent' \
+              app/src/main app/src/dudu7 --include='*.kt' || true
+          } > inspection/report.txt
+          while IFS= read -r file; do
+            [ -f "$file" ] || continue
+            mkdir -p "inspection/source/$(dirname "$file")"
+            cp "$file" "inspection/source/$file"
+          done < <(find app/src -type f \( -iname '*PhysicalRadio*' -o -iname '*Fm*Screen*.kt' -o -iname '*Favourite*.kt' \) -print)
+          for dir in \
+            app/src/main/kotlin/com/metrolist/music/radio/fyt \
+            app/src/main/kotlin/com/metrolist/music/ui/screens/radio \
+            app/src/dudu7/kotlin/com/metrolist/music/variant; do
+            if [ -d "$dir" ]; then
+              mkdir -p "inspection/source/$dir"
+              cp -R "$dir"/. "inspection/source/$dir/"
+            fi
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: issue-104-fm-glass-source
+          path: inspection/
+          retention-days: 2

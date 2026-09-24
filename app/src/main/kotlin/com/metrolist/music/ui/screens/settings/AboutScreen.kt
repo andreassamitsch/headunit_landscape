@@ -80,6 +80,7 @@ import com.metrolist.music.ui.component.IconButton
 import com.metrolist.music.ui.component.Material3SettingsGroup
 import com.metrolist.music.ui.component.Material3SettingsItem
 import com.metrolist.music.ui.utils.backToMain
+import com.metrolist.music.variant.Dudu7UpdaterCard
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -329,6 +330,10 @@ fun AboutScreen(
                 }
             }
         }
+
+        Spacer(Modifier.height(20.dp))
+
+        Dudu7UpdaterCard()
 
         Spacer(Modifier.height(24.dp))
 

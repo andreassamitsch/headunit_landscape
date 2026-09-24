@@ -6,7 +6,6 @@ import android.os.Bundle;
 import android.util.Log;
 
 import java.lang.reflect.Method;
-import java.nio.charset.Charset;
 
 /**
  * JNI bridge to the FYT firmware-provided libfmjni.so.
@@ -28,7 +27,6 @@ public final class FmNative {
     public static final int AREA_EUROPE = 2;
 
     private static final int STREAM_FM = 10;
-    private static final Charset RDS_CHARSET = Charset.forName("ISO-8859-1");
 
     private static final FmNative INSTANCE = new FmNative();
     private static boolean libraryLoaded;
@@ -96,6 +94,11 @@ public final class FmNative {
 
     public native int setmonostero(int mode);
     public native int getmonostero(int mode);
+    public native boolean stereoMono();
+    public native int readRssi();
+    public native short getPI();
+    public native byte getECC();
+    public native short[] getAFList();
     public native int switchAntenna(int antenna);
     public native short activeAf();
     public native int setconfig(String config);
@@ -105,11 +108,19 @@ public final class FmNative {
     public int getRssi() {
         if (!libraryLoaded) return 0;
         try {
+            int direct = readRssi();
+            if (direct != 0) return direct;
+        } catch (Throwable error) {
+            Log.d(TAG, "Direct RSSI command unavailable", error);
+        }
+        try {
             Bundle output = new Bundle();
             int result = fmsyu_jni(CMD_GET_RSSI, new Bundle(), output);
-            if (result == 0) return output.getInt("rssilevel", 0);
+            if (result == 0 && output.containsKey("rssilevel")) {
+                return output.getInt("rssilevel");
+            }
         } catch (Throwable error) {
-            Log.d(TAG, "RSSI command unavailable", error);
+            Log.d(TAG, "RSSI bundle command unavailable", error);
         }
         return 0;
     }
@@ -126,18 +137,100 @@ public final class FmNative {
         }
     }
 
-    public boolean isStereoReceiving() {
-        if (!libraryLoaded) return false;
+    /**
+     * @return 1 for stereo, 0 for confirmed mono, -1 when the firmware exposes
+     *         no reliable stereo state. Unknown must never be rendered as Mono.
+     */
+    public int getStereoState() {
+        if (!libraryLoaded) return -1;
+        try {
+            return stereoMono() ? 1 : 0;
+        } catch (Throwable error) {
+            Log.d(TAG, "Direct stereoMono command unavailable", error);
+        }
         try {
             Bundle output = new Bundle();
             int result = fmsyu_jni(CMD_GET_MONO_STEREO, new Bundle(), output);
             if (result == 0) {
-                return output.getInt("status", output.getInt("value", 0)) == 1;
+                String[] keys = {"stereo", "isStereo", "monoStereo", "monostereo", "value"};
+                for (String key : keys) {
+                    if (!output.containsKey(key)) continue;
+                    Object raw = output.get(key);
+                    if (raw instanceof Boolean) return ((Boolean) raw) ? 1 : 0;
+                    if (raw instanceof Number) {
+                        int value = ((Number) raw).intValue();
+                        if (value == 0 || value == 1) return value;
+                        if (value == 2) return 1;
+                    }
+                }
             }
         } catch (Throwable error) {
-            Log.d(TAG, "Stereo command unavailable", error);
+            Log.d(TAG, "Stereo bundle command unavailable", error);
         }
-        return false;
+        try {
+            int value = getmonostero(0);
+            if (value == 0 || value == 1) return value;
+            if (value == 2) return 1;
+        } catch (Throwable error) {
+            Log.d(TAG, "Legacy mono/stereo command unavailable", error);
+        }
+        return -1;
+    }
+
+    public boolean isStereoReceiving() {
+        return getStereoState() == 1;
+    }
+
+    public int getProgramIdentifier() {
+        if (!libraryLoaded) return 0;
+        try {
+            return getPI() & 0xffff;
+        } catch (Throwable error) {
+            Log.d(TAG, "Direct PI command unavailable", error);
+            return 0;
+        }
+    }
+
+    public String getExtendedCountryCode() {
+        if (!libraryLoaded) return "";
+        try {
+            int value = getECC() & 0xff;
+            return value == 0 ? "" : String.format(java.util.Locale.ROOT, "%02x", value);
+        } catch (Throwable error) {
+            Log.d(TAG, "Direct ECC command unavailable", error);
+            return "";
+        }
+    }
+
+    public float[] getAlternativeFrequencies() {
+        if (!libraryLoaded) return new float[0];
+        try {
+            short[] raw = getAFList();
+            if (raw == null || raw.length == 0) return new float[0];
+            java.util.ArrayList<Float> values = new java.util.ArrayList<>();
+            for (short item : raw) {
+                float value = item & 0xffff;
+                float decoded;
+                if (value >= 875f && value <= 1080f) {
+                    decoded = value / 10f;
+                } else if (value >= 8750f && value <= 10800f) {
+                    decoded = value / 100f;
+                } else if (value >= 87500f && value <= 108000f) {
+                    decoded = value / 1000f;
+                } else {
+                    continue;
+                }
+                if (decoded >= 87.5f && decoded <= 108.0f && !values.contains(decoded)) {
+                    values.add(decoded);
+                }
+            }
+            float[] result = new float[values.size()];
+            for (int index = 0; index < values.size(); index++) result[index] = values.get(index);
+            return result;
+        } catch (Throwable error) {
+            Log.d(TAG, "AF list command unavailable", error);
+            return new float[0];
+        }
     }
 
     public String getPsString() {
@@ -145,14 +238,14 @@ public final class FmNative {
         try {
             Bundle output = new Bundle();
             if (fmsyu_jni(CMD_RDS_GET_PS, new Bundle(), output) == 0) {
-                String value = decode(output.getByteArray("PSname"));
+                String value = RdsTextDecoder.decode(output.getByteArray("PSname"));
                 if (!value.isEmpty()) return value;
             }
         } catch (Throwable error) {
             Log.d(TAG, "PS bundle command unavailable", error);
         }
         try {
-            return decode(getPs());
+            return RdsTextDecoder.decode(getPs());
         } catch (Throwable error) {
             Log.d(TAG, "Direct PS read unavailable", error);
             return "";
@@ -164,27 +257,17 @@ public final class FmNative {
         try {
             Bundle output = new Bundle();
             if (fmsyu_jni(CMD_RDS_GET_TEXT, new Bundle(), output) == 0) {
-                String value = decode(output.getByteArray("Text"));
+                String value = RdsTextDecoder.decode(output.getByteArray("Text"));
                 if (!value.isEmpty()) return value;
             }
         } catch (Throwable error) {
             Log.d(TAG, "RT bundle command unavailable", error);
         }
         try {
-            return decode(getLrText());
+            return RdsTextDecoder.decode(getLrText());
         } catch (Throwable error) {
             Log.d(TAG, "Direct RT read unavailable", error);
             return "";
         }
-    }
-
-    private static String decode(byte[] data) {
-        if (data == null || data.length == 0) return "";
-        String value = new String(data, RDS_CHARSET)
-                .replaceAll("[\\x00-\\x1F]", "")
-                .replace('\u00A0', ' ')
-                .trim();
-        if (value.toLowerCase().contains("not support")) return "";
-        return value;
     }
 }

@@ -1,0 +1,1 @@
+Do not publish updater release unless all blocking validation steps pass.

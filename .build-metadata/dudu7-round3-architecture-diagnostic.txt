@@ -1,0 +1,10 @@
+Applied WebRadio reliability round 3 patches
+webradio_patch=0
+Applied Dudu7 embedded artist-items round 3 patches
+artist_patch=0
+Applied Dudu7 FM artwork and fingerprint recognition round 3 patches
+fm_patch=0
+Updated Dudu7 architecture checks for round 3
+architecture_patch=0
+Dudu7 architecture verification passed
+architecture_verify=0

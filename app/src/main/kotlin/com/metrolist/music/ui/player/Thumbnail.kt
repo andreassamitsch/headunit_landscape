@@ -204,6 +204,7 @@ fun Thumbnail(
     isLandscape: Boolean = false,
     landscapeHorizontalPadding: Dp = PlayerHorizontalPadding,
     isListenTogetherGuest: Boolean = false,
+    showRadioStationLogoOverlay: Boolean = false,
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
     val context = LocalContext.current
@@ -407,7 +408,8 @@ fun Thumbnail(
                                 landscapeHorizontalPadding = landscapeHorizontalPadding,
                                 isListenTogetherGuest = isListenTogetherGuest,
                                 currentMediaId = mediaMetadata?.id,
-                                currentMediaThumbnail = mediaMetadata?.thumbnailUrl
+                                currentMediaThumbnail = mediaMetadata?.thumbnailUrl,
+                                showRadioStationLogoOverlay = showRadioStationLogoOverlay,
                             )
                         }
                     }
@@ -506,6 +508,7 @@ private fun ThumbnailItem(
     isListenTogetherGuest: Boolean = false,
     currentMediaId: String? = null,
     currentMediaThumbnail: String? = null,
+    showRadioStationLogoOverlay: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val incrementalSeekSkipEnabled by rememberPreference(SeekExtraSeconds, defaultValue = false)
@@ -569,16 +572,55 @@ private fun ThumbnailItem(
             if (hidePlayerThumbnail) {
                 HiddenThumbnailPlaceholder(textBackgroundColor = textBackgroundColor)
             } else {
-                val artworkUriToUse = if (item.mediaId == currentMediaId && !currentMediaThumbnail.isNullOrBlank()) {
-                    currentMediaThumbnail
-                } else {
-                    item.mediaMetadata.artworkUri?.toString()
-                }
+                val stableRadioArtwork =
+                    if (com.metrolist.music.radio.isRadioMediaId(item.mediaId)) {
+                        (item.localConfiguration?.tag as? com.metrolist.music.models.MediaMetadata)
+                            ?.thumbnailUrl
+                            ?.takeIf { it.isNotBlank() }
+                            ?: item.mediaMetadata.extras
+                                ?.getString("radio_favicon")
+                                ?.takeIf { it.isNotBlank() }
+                    } else {
+                        null
+                    }
+                val artworkUriToUse =
+                    when {
+                        item.mediaId == currentMediaId && !currentMediaThumbnail.isNullOrBlank() ->
+                            currentMediaThumbnail
+                        stableRadioArtwork != null -> stableRadioArtwork
+                        else -> item.mediaMetadata.artworkUri?.toString()
+                    }
 
                 ThumbnailImage(
                     artworkUri = artworkUriToUse,
-                    cropArtwork = cropAlbumArt
+                    fallbackArtworkUri = stableRadioArtwork?.takeIf { it != artworkUriToUse },
+                    cropArtwork = cropAlbumArt,
                 )
+
+                val showStationLogoOverlay =
+                    showRadioStationLogoOverlay &&
+                        VehicleVariantConfig.isDudu7 &&
+                        isLandscape &&
+                        com.metrolist.music.radio.isRadioMediaId(item.mediaId) &&
+                        item.mediaId == currentMediaId &&
+                        !currentMediaThumbnail.isNullOrBlank() &&
+                        !stableRadioArtwork.isNullOrBlank()
+                if (showStationLogoOverlay) {
+                    AsyncImage(
+                        model = stableRadioArtwork,
+                        contentDescription = "Senderlogo",
+                        contentScale = ContentScale.Fit,
+                        modifier =
+                            Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(10.dp)
+                                .size(56.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.White.copy(alpha = 0.78f))
+                                .padding(4.dp)
+                                .graphicsLayer { alpha = 0.86f },
+                    )
+                }
             }
             
             if (!VehicleVariantConfig.isDudu7) {
@@ -621,8 +663,9 @@ private fun HiddenThumbnailPlaceholder(
 @Composable
 private fun ThumbnailImage(
     artworkUri: String?,
+    fallbackArtworkUri: String? = null,
     cropArtwork: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Box(
         modifier = modifier
@@ -633,17 +676,34 @@ private fun ThumbnailImage(
             }
             .background(MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(artworkUri)
-                .memoryCachePolicy(CachePolicy.ENABLED)
-                .diskCachePolicy(CachePolicy.ENABLED)
-                .networkCachePolicy(CachePolicy.ENABLED)
-                .build(),
-            contentDescription = null,
-            contentScale = if (cropArtwork) ContentScale.Crop else ContentScale.Fit,
-            modifier = Modifier.fillMaxSize()
-        )
+        if (!fallbackArtworkUri.isNullOrBlank()) {
+            AsyncImage(
+                model =
+                    ImageRequest.Builder(LocalContext.current)
+                        .data(fallbackArtworkUri)
+                        .memoryCachePolicy(CachePolicy.ENABLED)
+                        .diskCachePolicy(CachePolicy.ENABLED)
+                        .networkCachePolicy(CachePolicy.ENABLED)
+                        .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        if (!artworkUri.isNullOrBlank()) {
+            AsyncImage(
+                model =
+                    ImageRequest.Builder(LocalContext.current)
+                        .data(artworkUri)
+                        .memoryCachePolicy(CachePolicy.ENABLED)
+                        .diskCachePolicy(CachePolicy.ENABLED)
+                        .networkCachePolicy(CachePolicy.ENABLED)
+                        .build(),
+                contentDescription = null,
+                contentScale = if (cropArtwork) ContentScale.Crop else ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 

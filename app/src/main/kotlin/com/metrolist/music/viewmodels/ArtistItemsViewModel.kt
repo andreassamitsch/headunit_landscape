@@ -42,21 +42,38 @@ constructor(
 
     val title = MutableStateFlow("")
     val itemsPage = MutableStateFlow<ItemsPage?>(null)
+    val isLoading = MutableStateFlow(false)
+    val errorMessage = MutableStateFlow<String?>(null)
 
     init {
+        loadInitial()
+    }
+
+    private fun loadInitial() {
         viewModelScope.launch {
-            if (browseId.isBlank() || browseId == "__artist_songs__") {
-                loadArtistSongFallback()
-            } else {
-                loadEndpoint(
-                    endpoint =
-                        BrowseEndpoint(
-                            browseId = browseId,
-                            params = params,
-                        ),
-                )
+            isLoading.value = true
+            errorMessage.value = null
+            try {
+                if (browseId.isBlank() || browseId == "__artist_songs__") {
+                    loadArtistSongFallback()
+                } else {
+                    loadEndpoint(
+                        endpoint =
+                            BrowseEndpoint(
+                                browseId = browseId,
+                                params = params,
+                            ),
+                    )
+                }
+            } finally {
+                isLoading.value = false
             }
         }
+    }
+
+    fun retry() {
+        itemsPage.value = null
+        loadInitial()
     }
 
     private suspend fun filteredItems(items: List<YTItem>): List<YTItem> {
@@ -77,9 +94,11 @@ constructor(
         val artistItemsPage = result.getOrNull()
         if (artistItemsPage == null) {
             result.exceptionOrNull()?.let(::reportException)
+            errorMessage.value = result.exceptionOrNull()?.message ?: "Künstler-Inhalte konnten nicht geladen werden"
             return false
         }
 
+        errorMessage.value = null
         title.value = artistItemsPage.title.ifBlank { fallbackTitle }
         itemsPage.value =
             ItemsPage(
@@ -101,19 +120,25 @@ constructor(
         val artistPage = result.getOrNull()
         if (artistPage == null) {
             result.exceptionOrNull()?.let(::reportException)
+            errorMessage.value = result.exceptionOrNull()?.message ?: "Künstler konnte nicht geladen werden"
             return
         }
 
         val songSection =
             artistPage.sections.firstOrNull { section ->
-                section.items.firstOrNull() is SongItem
-            } ?: return
+                section.items.any { it is SongItem }
+            }
+        if (songSection == null) {
+            errorMessage.value = "Für diesen Künstler wurden keine Titel gefunden"
+            return
+        }
 
         val moreEndpoint = songSection.moreEndpoint
         if (moreEndpoint != null && loadEndpoint(moreEndpoint, songSection.title)) {
             return
         }
 
+        errorMessage.value = null
         title.value = songSection.title.ifBlank { artistPage.artist.title }
         itemsPage.value =
             ItemsPage(
@@ -134,6 +159,8 @@ constructor(
         viewModelScope.launch {
             val oldItemsPage = itemsPage.value ?: return@launch
             val continuation = oldItemsPage.continuation ?: return@launch
+            isLoading.value = true
+            errorMessage.value = null
             YouTube
                 .artistItemsContinuation(continuation)
                 .onSuccess { artistItemsContinuationPage ->
@@ -152,7 +179,9 @@ constructor(
                     }
                 }.onFailure {
                     reportException(it)
+                    errorMessage.value = it.message ?: "Weitere Inhalte konnten nicht geladen werden"
                 }
+            isLoading.value = false
         }
     }
 

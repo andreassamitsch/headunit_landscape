@@ -1,0 +1,2 @@
+Build Metrolist dudu7 13.7.14 with update-compatible versionCode 1370023.
+Compatible predecessor: 13.7.12 versionCode 1370022.

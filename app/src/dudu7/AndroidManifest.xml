@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <queries>
         <package android:name="com.syu.ms" />
         <package android:name="com.syu.music" />
@@ -16,6 +18,26 @@
     <application>
         <activity
             android:name=".MainActivity"
-            android:screenOrientation="landscape" />
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout" />
+
+        <activity
+            android:name=".playback.MediaKeyDiagnosticsActivity"
+            android:exported="false"
+            android:label="Metrolist Media-Key-Diagnose"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.Metrolist" />
+
+        <receiver
+            android:name="androidx.media3.session.MediaButtonReceiver"
+            tools:node="remove" />
+
+        <receiver
+            android:name=".playback.Dudu7MediaButtonReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

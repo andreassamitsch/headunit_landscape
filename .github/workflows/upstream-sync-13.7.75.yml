@@ -1,0 +1,428 @@
+name: Dudu7 13.7.75 upstream sync
+
+on:
+  push:
+    branches: [agent/upstream-sync-13-7-75]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+env:
+  DUDU7_VERSION_CODE: '1370084'
+  DUDU7_VERSION_NAME: '13.7.75'
+  DUDU7_PACKAGE_NAME: com.metrolist.music.dudu7.debug
+  DUDU7_APK_NAME: Metrolist-dudu7-13.7.75.apk
+  DUDU7_REFERENCE_SIGNER_SHA256: 138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee
+
+jobs:
+  integrate-test-build-release:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/upstream-sync-13-7-75
+          fetch-depth: 0
+          submodules: recursive
+          token: ${{ github.token }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Integrate selected MetroList fixes locally
+        id: integrate
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          exec > >(tee artifacts/integration.log) 2>&1
+          START_SHA=$(git rev-parse HEAD)
+          echo "start_sha=$START_SHA" >> "$GITHUB_OUTPUT"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git remote add metrolist-upstream https://github.com/MetrolistGroup/Metrolist.git || true
+          git fetch --no-tags metrolist-upstream \
+            ad8390cdee408381a7effbb317486c515a48f0da \
+            ec9a6b3ec1ac8bc6cf362cab3eee9e632598e86f \
+            0d37cc4658c18ac43123264edf48f7224b77d506 \
+            0f316d1211c13c5f149777b2426e3be007b17619 \
+            e483f49f06ed235489b2a5e4647634e454ce30b3
+
+          pick_regular() {
+            local sha="$1"
+            if git merge-base --is-ancestor "$sha" HEAD 2>/dev/null; then
+              echo "Already integrated by ancestry: $sha"
+            else
+              if ! git cherry-pick -x "$sha"; then
+                if git diff --quiet && git diff --cached --quiet; then
+                  echo "Already integrated by empty cherry-pick: $sha"
+                  git cherry-pick --skip
+                else
+                  exit 1
+                fi
+              fi
+            fi
+          }
+
+          continue_or_skip_empty() {
+            local sha="$1"
+            if ! GIT_EDITOR=true git cherry-pick --continue; then
+              if git diff --quiet && git diff --cached --quiet; then
+                echo "Already integrated after conflict resolution: $sha"
+                git cherry-pick --skip
+              else
+                exit 1
+              fi
+            fi
+          }
+
+          pick_regular ad8390cdee408381a7effbb317486c515a48f0da
+          pick_regular ec9a6b3ec1ac8bc6cf362cab3eee9e632598e86f
+
+          FARADAY=0d37cc4658c18ac43123264edf48f7224b77d506
+          if ! git merge-base --is-ancestor "$FARADAY" HEAD 2>/dev/null; then
+            if ! git cherry-pick -x "$FARADAY"; then
+              if git diff --quiet && git diff --cached --quiet; then
+                echo "Already integrated by empty cherry-pick: $FARADAY"
+                git cherry-pick --skip
+              else
+              mapfile -t conflicts < <(git diff --name-only --diff-filter=U)
+              printf 'Faraday conflicts: %s\n' "${conflicts[*]}"
+              if [[ "${#conflicts[@]}" -ne 1 || "${conflicts[0]}" != 'gradle/libs.versions.toml' ]]; then
+                echo 'Unexpected Faraday conflict; refusing broad automatic resolution.' >&2
+                exit 1
+              fi
+              git checkout --ours -- gradle/libs.versions.toml
+              git add -- gradle/libs.versions.toml
+              git restore --source=HEAD --staged --worktree -- \
+                gradle/wrapper/gradle-wrapper.jar \
+                gradle/wrapper/gradle-wrapper.properties \
+                gradlew \
+                gradlew.bat
+              continue_or_skip_empty "$FARADAY"
+              fi
+            fi
+          fi
+
+          DEEPLINK=0f316d1211c13c5f149777b2426e3be007b17619
+          if ! git merge-base --is-ancestor "$DEEPLINK" HEAD 2>/dev/null; then
+            if ! git cherry-pick -x "$DEEPLINK"; then
+              if git diff --quiet && git diff --cached --quiet; then
+                echo "Already integrated by empty cherry-pick: $DEEPLINK"
+                git cherry-pick --skip
+              else
+              mapfile -t conflicts < <(git diff --name-only --diff-filter=U)
+              printf 'Deep-link conflicts: %s\n' "${conflicts[*]}"
+              unexpected=0
+              for f in "${conflicts[@]}"; do
+                if [[ "$f" != 'gradle/libs.versions.toml' ]]; then unexpected=1; fi
+              done
+              if [[ "$unexpected" -ne 0 ]]; then
+                echo 'Unexpected deep-link conflict; refusing broad automatic resolution.' >&2
+                exit 1
+              fi
+              git checkout --ours -- gradle/libs.versions.toml
+              git add -- gradle/libs.versions.toml
+              continue_or_skip_empty "$DEEPLINK"
+              fi
+            fi
+          fi
+
+          pick_regular e483f49f06ed235489b2a5e4647634e454ce30b3
+
+          # Compatibility glue required because Dudu7 has its own live-radio queue reset,
+          # while upstream #152 replaces the old map with StreamUrlCache. Also carry the
+          # resource used by the selectively backported playlist deep-link guard.
+          python3 - <<'PY'
+          from pathlib import Path
+
+          music = Path('app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt')
+          text = music.read_text()
+          old = 'songUrlCache.remove(item.mediaId)'
+          new = 'songUrlCache.invalidate(item.mediaId)'
+          if old in text:
+              if text.count(old) != 1:
+                  raise SystemExit(f'Expected exactly one Dudu7 live-radio cache remove anchor, found {text.count(old)}')
+              text = text.replace(old, new, 1)
+              music.write_text(text)
+          elif new not in text:
+              raise SystemExit('Neither old nor new Dudu7 live-radio StreamUrlCache anchor found')
+
+          strings = Path('app/src/main/res/values/metrolist_strings.xml')
+          text = strings.read_text()
+          resource = '<string name="playlist_unavailable">Playlist unavailable</string>'
+          if resource not in text:
+              anchor = '    <string name="import_csv">Import a CSV playlist</string>\n'
+              if anchor not in text:
+                  raise SystemExit('import_csv resource anchor not found')
+              text = text.replace(anchor, anchor + '    ' + resource + '\n', 1)
+              strings.write_text(text)
+          PY
+          git add -- \
+            app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt \
+            app/src/main/res/values/metrolist_strings.xml
+          if ! git diff --cached --quiet; then
+            git commit -m 'Fix: adapt upstream cache and deep-link changes to Dudu7'
+          fi
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/build.gradle.kts')
+          s = p.read_text()
+          if 'versionCode = 1370084' in s and 'versionName = "13.7.75"' in s:
+              raise SystemExit(0)
+          if 'versionCode = 1370083' not in s or 'versionName = "13.7.74"' not in s:
+              raise SystemExit('Expected 13.7.74 or already-bumped 13.7.75 version anchors not found')
+          s = s.replace('versionCode = 1370083', 'versionCode = 1370084', 1)
+          s = s.replace('versionName = "13.7.74"', 'versionName = "13.7.75"', 1)
+          p.write_text(s)
+          PY
+
+          mkdir -p docs
+          cat > docs/DUDU7_UPSTREAM_BASELINE.md <<'MD'
+          # Dudu7 upstream baseline
+
+          Current Dudu7 synchronization review: 2026-08-20.
+
+          Dudu7 13.7.75 is based on the device-tested Dudu7 13.7.74 branch and selectively integrates/reviews Original MetroList changes through:
+
+          `e483f49f06ed235489b2a5e4647634e454ce30b3` (2026-08-19)
+
+          Explicitly integrated commits:
+
+          - `ad8390cdee408381a7effbb317486c515a48f0da` — persisted shuffle restore
+          - `ec9a6b3ec1ac8bc6cf362cab3eee9e632598e86f` — stream URL/cache/buffer recovery
+          - `0d37cc4658c18ac43123264edf48f7224b77d506` — Faraday cipher config store with Zemer fallback; Dudu7 build-tool files intentionally retained
+          - `0f316d1211c13c5f149777b2426e3be007b17619` — invalid playlist deep-link guard; existing Dudu7 dependency versions intentionally retained
+          - `e483f49f06ed235489b2a5e4647634e454ce30b3` — legacy DB migrations and artist alias persistence, including compatible pagination pieces in that commit
+
+          Dudu7 compatibility glue in this sync:
+
+          - the Dudu7 live-radio queue reset uses `StreamUrlCache.invalidate()` after the upstream cache-type migration;
+          - the `playlist_unavailable` string resource required by the selectively backported deep-link guard is carried locally.
+
+          This SHA is a reviewed-through baseline, not a claim that every upstream commit before it was merged. Future synchronization analyses must start after this review point and preserve Dudu7-specific FM, WebRadio, MediaSession and vehicle integrations.
+          MD
+
+          git add -- app/build.gradle.kts docs/DUDU7_UPSTREAM_BASELINE.md
+          if ! git diff --cached --quiet; then
+            git commit -m 'Build: prepare Dudu7 13.7.75 upstream sync'
+          fi
+
+      - name: Verify integrated source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          exec > >(tee artifacts/source-verify.log) 2>&1
+          check() {
+            local label="$1"
+            shift
+            echo "=== CHECK: $label ==="
+            "$@"
+            echo "=== PASS: $label ==="
+          }
+          check version-code grep -Fq 'versionCode = 1370084' app/build.gradle.kts
+          check version-name grep -Fq 'versionName = "13.7.75"' app/build.gradle.kts
+          check stream-url-cache test -f app/src/main/kotlin/com/metrolist/music/playback/StreamUrlCache.kt
+          check faraday-source grep -Fq 'FARADAY_URL' app/src/main/kotlin/com/metrolist/music/utils/cipher/PlayerConfigStore.kt
+          check zemer-fallback grep -Fq 'ZEMER_URL' app/src/main/kotlin/com/metrolist/music/utils/cipher/PlayerConfigStore.kt
+          check shuffle-restore grep -Fq 'restoringQueue = true' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          check initial-buffer-recovery grep -Fq 'initialBufferRecoveryJob' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          check expired-download-recovery grep -Fq 'current.responseCode == 403 || current.responseCode == 410' app/src/main/kotlin/com/metrolist/music/playback/DownloadUtil.kt
+          check dudu7-radio-cache-invalidate grep -Fq 'songUrlCache.invalidate(item.mediaId)' app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt
+          check playlist-deeplink-guard grep -Fq 'playlistId.isNullOrBlank()' app/src/main/kotlin/com/metrolist/music/MainActivity.kt
+          check playlist-unavailable-resource grep -Fq '<string name="playlist_unavailable">Playlist unavailable</string>' app/src/main/res/values/metrolist_strings.xml
+          check artist-alias-file test -f app/src/main/kotlin/com/metrolist/music/utils/ArtistNameAliases.kt
+          check migration-helper grep -Fq 'addVersion24ColumnsIfMissing' app/src/main/kotlin/com/metrolist/music/db/MusicDatabase.kt
+          check agp-baseline grep -Fq 'androidGradlePlugin = "9.3.0"' gradle/libs.versions.toml
+          check media3-baseline grep -Fq 'media3 = "1.10.1"' gradle/libs.versions.toml
+          check upstream-baseline grep -Fq 'e483f49f06ed235489b2a5e4647634e454ce30b3' docs/DUDU7_UPSTREAM_BASELINE.md
+          check diff-check git diff --check "${{ steps.integrate.outputs.start_sha }}"..HEAD
+
+      - name: Verify Dudu7 debug signing key
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          test -f app/persistent-debug.keystore
+          keytool -list -v \
+            -keystore app/persistent-debug.keystore \
+            -storepass android \
+            -alias androiddebugkey > artifacts/dudu7-reference-keystore.txt
+          REF_WITH_COLONS=$(echo "$DUDU7_REFERENCE_SIGNER_SHA256" | sed 's/../&:/g;s/:$//' | tr '[:lower:]' '[:upper:]')
+          grep -Fq "SHA256: $REF_WITH_COLONS" artifacts/dudu7-reference-keystore.txt
+          if [[ -n "${METROLIST_DEBUG_KEYSTORE_PATH:-}" ]]; then
+            echo "METROLIST_DEBUG_KEYSTORE_PATH must not influence the updater APK signing key." >&2
+            exit 1
+          fi
+          if [[ -f app/keystore/dudu7-debug.keystore ]]; then
+            keytool -list -v \
+              -keystore app/keystore/dudu7-debug.keystore \
+              -storepass android \
+              -alias androiddebugkey > artifacts/dudu7-ignored-workflow-keystore.txt || true
+          fi
+
+      - name: Compile and unit test
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          chmod +x gradlew
+          ./gradlew --console=plain :app:compileGmsStandardDebugKotlin --no-daemon --stacktrace 2>&1 | tee artifacts/standard-compile.log
+          status=${PIPESTATUS[0]}
+          grep -nE '(^e:|^error:|FAILURE:|What went wrong|Caused by:.*Compilation|Unresolved reference|Conflicting overload|Cannot access|Type mismatch|No value passed|Too many arguments)' artifacts/standard-compile.log > artifacts/standard-compile-diagnostics.txt || true
+          if [[ "$status" -ne 0 ]]; then exit "$status"; fi
+
+          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace 2>&1 | tee artifacts/dudu7-unit-tests.log
+          status=${PIPESTATUS[0]}
+          grep -nE '(^e:|^error:|FAILURE:|What went wrong|Caused by:|FAILED|AssertionError)' artifacts/dudu7-unit-tests.log > artifacts/dudu7-unit-test-diagnostics.txt || true
+          exit "$status"
+
+      - name: Build and verify Dudu7 ARM APK
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          unset METROLIST_DEBUG_KEYSTORE_PATH METROLIST_DEBUG_KEYSTORE_PASSWORD METROLIST_DEBUG_KEY_ALIAS METROLIST_DEBUG_KEY_PASSWORD
+          ./gradlew --console=plain :app:signingReport --no-daemon --stacktrace 2>&1 | tee artifacts/signing-report.log
+          status=${PIPESTATUS[0]}
+          if [[ "$status" -ne 0 ]]; then exit "$status"; fi
+          awk '/Variant: gmsDudu7Debug/{flag=1} flag{print} flag && /----------/{exit}' artifacts/signing-report.log > artifacts/gms-dudu7-debug-signing-report.txt
+          grep -Fq 'Variant: gmsDudu7Debug' artifacts/gms-dudu7-debug-signing-report.txt
+          grep -Fq 'Config: persistentDebug' artifacts/gms-dudu7-debug-signing-report.txt
+          REF_WITH_COLONS=$(echo "$DUDU7_REFERENCE_SIGNER_SHA256" | sed 's/../&:/g;s/:$//' | tr '[:lower:]' '[:upper:]')
+          grep -Fq "SHA-256: $REF_WITH_COLONS" artifacts/gms-dudu7-debug-signing-report.txt
+
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace 2>&1 | tee artifacts/dudu7-build.log
+          status=${PIPESTATUS[0]}
+          grep -nE '(^e:|^error:|FAILURE:|What went wrong|Caused by:|FAILED)' artifacts/dudu7-build.log > artifacts/dudu7-build-diagnostics.txt || true
+          if [[ "$status" -ne 0 ]]; then exit "$status"; fi
+          set -euxo pipefail
+          APK=$(find app/build/outputs/apk/gmsDudu7/debug -maxdepth 1 -type f -name '*.apk' | head -1)
+          test -n "$APK"
+          cp "$APK" "artifacts/$DUDU7_APK_NAME"
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$BUILD_TOOLS/aapt" dump badging "artifacts/$DUDU7_APK_NAME" > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "artifacts/$DUDU7_APK_NAME" > artifacts/apk-signature.txt
+          grep -q "package: name='$DUDU7_PACKAGE_NAME' versionCode='$DUDU7_VERSION_CODE' versionName='$DUDU7_VERSION_NAME-dudu7'" artifacts/apk-badging.txt
+          grep -Eq "(Signer #[0-9]+|V[0-9]+ Signer): certificate SHA-256 digest: $DUDU7_REFERENCE_SIGNER_SHA256" artifacts/apk-signature.txt
+          unzip -l "artifacts/$DUDU7_APK_NAME" > artifacts/apk-contents.txt
+          grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
+          grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
+          sha256sum "artifacts/$DUDU7_APK_NAME" > "artifacts/$DUDU7_APK_NAME.sha256"
+          SHA=$(awk '{print $1}' "artifacts/$DUDU7_APK_NAME.sha256")
+          cat > artifacts/dudu7-update.json <<JSON
+          {"versionCode":$DUDU7_VERSION_CODE,"versionName":"$DUDU7_VERSION_NAME","packageName":"$DUDU7_PACKAGE_NAME","signerSha256":"$DUDU7_REFERENCE_SIGNER_SHA256","apkAsset":"$DUDU7_APK_NAME","sha256":"$SHA"}
+          JSON
+
+      - name: Push validated integrated source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git push origin HEAD:agent/upstream-sync-13-7-75
+
+      - name: Publish 13.7.75 to internal updater
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          SHA=$(awk '{print $1}' "artifacts/$DUDU7_APK_NAME.sha256")
+          cat > artifacts/release-notes.md <<MD
+          ## MetroList dudu7 13.7.75
+          Upstream reliability synchronization for #152, #153, #155, #157 and #159.
+
+          - Stream URL cache, request-header preservation and expired URL recovery.
+          - Initial buffering recovery and updated player configs.
+          - Faraday cipher config store with Zemer fallback.
+          - Persisted shuffle state survives queue restore.
+          - Invalid YouTube playlist deep-links are rejected safely.
+          - Robust legacy DB migrations and persistent artist aliases.
+          - Existing Dudu7 Gradle/dependency baseline retained; no unrelated build-tool upgrade from the Faraday commit.
+          - Dudu7-specific FM/WebRadio/MediaSession/vehicle code retained.
+          - Dudu7 live-radio cache cleanup adapted to `StreamUrlCache.invalidate()`.
+          - Standard compile and full Dudu7 unit suite passed before source push and release.
+          - APK SHA-256: `$SHA`
+
+          Real Dudu7 hardware validation remains required before closing the linked issues.
+          MD
+          TAG=dudu7-v13.7.75
+          HEAD_SHA=$(git rev-parse HEAD)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" \
+              --target "$HEAD_SHA" \
+              --title 'MetroList dudu7 13.7.75' \
+              --notes-file artifacts/release-notes.md \
+              --prerelease
+            gh release upload "$TAG" \
+              "artifacts/$DUDU7_APK_NAME" \
+              "artifacts/$DUDU7_APK_NAME.sha256" \
+              artifacts/dudu7-update.json \
+              --clobber
+          else
+            gh release create "$TAG" \
+              "artifacts/$DUDU7_APK_NAME" \
+              "artifacts/$DUDU7_APK_NAME.sha256" \
+              artifacts/dudu7-update.json \
+              --target "$HEAD_SHA" \
+              --title 'MetroList dudu7 13.7.75' \
+              --notes-file artifacts/release-notes.md \
+              --prerelease
+          fi
+
+      - name: Report success on PR
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA=$(awk '{print $1}' "artifacts/$DUDU7_APK_NAME.sha256")
+          gh pr comment 161 --body "13.7.75 Upstream-Sync erfolgreich integriert und validiert. Run \`$GITHUB_RUN_ID\`. Standard-Compile, vollständige Dudu7-Unit-Tests, ARM64/ARMv7-Build, Paket/Signatur/Version geprüft. APK SHA-256: \`$SHA\`. Interner Updater-Release \`dudu7-v13.7.75\` erstellt oder aktualisiert. Reale Dudu7-Hardwareprüfung bleibt vor Issue-Abschluss erforderlich."
+
+      - name: Report failure on PR
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          mkdir -p artifacts
+          {
+            echo "## 13.7.75 Upstream-Sync fehlgeschlagen (Run $GITHUB_RUN_ID)"
+            echo
+            echo '### Unmerged files'
+            git diff --name-only --diff-filter=U | sed 's/^/- `/' | sed 's/$/`/'
+            echo
+            echo '### Git status'
+            echo '```'
+            git status --short
+            echo '```'
+            for log in source-verify.log standard-compile-diagnostics.txt dudu7-unit-test-diagnostics.txt dudu7-build-diagnostics.txt integration.log; do
+              if [[ -s "artifacts/$log" ]]; then
+                echo
+                echo "### $log"
+                echo '```'
+                cat "artifacts/$log"
+                echo '```'
+              fi
+            done
+            echo
+            echo 'Es wurde keine teilweise integrierte Quelle auf den Branch gepusht und kein 13.7.75-Updater-Release erzeugt oder aktualisiert.'
+          } > artifacts/failure-comment.md
+          gh pr comment 161 --body-file artifacts/failure-comment.md || true
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.75-upstream-sync
+          path: artifacts/
+          retention-days: 14
