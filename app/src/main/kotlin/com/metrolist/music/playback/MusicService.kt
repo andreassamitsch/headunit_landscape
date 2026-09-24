@@ -62,6 +62,7 @@ import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_FOR_UNSET_LENGTH_REQUESTS
 import androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -337,6 +338,7 @@ class MusicService :
     private lateinit var audioQuality: com.metrolist.music.constants.AudioQuality
 
     private var currentQueue: Queue = EmptyQueue
+    private val explicitQueueRequestGate = LatestRequestGate()
     var queueTitle: String? = null
 
     val currentMediaMetadata = MutableStateFlow<com.metrolist.music.models.MediaMetadata?>(null)
@@ -400,6 +402,9 @@ class MusicService :
     private var isRunning = false
     private var mediaSession: MediaLibrarySession? = null
     private var controllerFuture: com.google.common.util.concurrent.ListenableFuture<MediaController>? = null
+    private var removePhysicalFmSessionObserver: (() -> Unit)? = null
+    private var physicalFmSessionJob: Job? = null
+    private var physicalFmController: PhysicalFmSessionBridge.Controller? = null
 
     private val playerInitialized = MutableStateFlow(false)
     val isPlayerReady: kotlinx.coroutines.flow.StateFlow<Boolean> = playerInitialized.asStateFlow()
@@ -472,6 +477,8 @@ class MusicService :
     private var consecutivePlaybackErr = 0
     private var retryJob: Job? = null
     private var retryCount = 0
+    private var initialBufferRecoveryJob: Job? = null
+    private var initialBufferRecoveryAttemptedMediaId: String? = null
     // True only when stopOnError() paused playback purely because of a network outage
     // (waitOnNetworkError exhausting its attempts). Lets triggerRetry() know it's safe —
     // and necessary — to explicitly resume playback once connectivity returns, rather than
@@ -496,13 +503,7 @@ class MusicService :
     private var cachedAutoLoadMore = true
 
     // URL cache for stream URLs - class-level so it can be invalidated on errors
-    private val songUrlCache = Collections.synchronizedMap(
-        object : LinkedHashMap<String, Pair<String, Long>>(0, 0.75f, true) {
-            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<String, Long>>): Boolean {
-                return size > 500
-            }
-        }
-    )
+    private val songUrlCache = StreamUrlCache()
 
     // Tracks mediaIds for which a recoverSong() coroutine is currently in flight.
     //
@@ -710,6 +711,7 @@ class MusicService :
                     ),
                 ).setBitmapLoader(CoilBitmapLoader(this, scope))
                 .build()
+        observePhysicalFmSession()
         player.repeatMode = startupPrefs!![RepeatModeKey] ?: REPEAT_MODE_OFF
 
         if (startupPrefs!![RememberShuffleAndRepeatKey] ?: true) {
@@ -812,7 +814,7 @@ class MusicService :
 
                     Timber.tag(TAG).i("RELOADING STREAM: $mediaId at position ${currentPosition}ms")
 
-                    songUrlCache.remove(mediaId)
+                    songUrlCache.invalidate(mediaId)
 
                     // CRITICAL: Clear caches synchronously to prevent format parsing errors
                     runBlocking(Dispatchers.IO) {
@@ -976,7 +978,9 @@ class MusicService :
                 sleepTimer?.player = newPlayer
 
                 try {
-                    mediaSession?.let { (it as MediaSession).player = newPlayer }
+                    if (!PhysicalFmSessionBridge.isActive()) {
+                        mediaSession?.let { (it as MediaSession).player = newPlayer }
+                    }
                 } catch (e: Exception) {
                     Timber.tag(TAG).e(e, "Failed to swap player in MediaSession")
                 }
@@ -1210,6 +1214,7 @@ class MusicService :
                                 playQueue(
                                     queue = restoredQueue,
                                     playWhenReady = false,
+                                    restoringQueue = true,
                                 )
                             }
                         }
@@ -1797,7 +1802,7 @@ class MusicService :
             currentMediaIdRetryCount.remove(item.mediaId)
             recentlyFailedSongs.remove(item.mediaId)
             if (isRadioMediaId(item.mediaId)) {
-                songUrlCache.remove(item.mediaId)
+                songUrlCache.invalidate(item.mediaId)
                 // Remove cache fragments created by older builds. Live streams
                 // are endless and must never be reused from the normal song cache.
                 runCatching { playerCache.removeResource(item.mediaId) }
@@ -1816,6 +1821,7 @@ class MusicService :
     fun playQueue(
         queue: Queue,
         playWhenReady: Boolean = true,
+        restoringQueue: Boolean = false,
     ) {
         if (!playerInitialized.value) {
             Timber.tag(TAG).w("playQueue called before player initialization, queuing request")
@@ -1826,11 +1832,11 @@ class MusicService :
             return
         }
 
+        val queueRequestToken = explicitQueueRequestGate.issue()
         currentQueue = queue
         queueTitle = null
         val persistShuffleAcrossQueues = dataStore.get(PersistentShuffleAcrossQueuesKey, false)
-        val previousShuffleEnabled = player.shuffleModeEnabled
-        if (!persistShuffleAcrossQueues) {
+        if (!persistShuffleAcrossQueues && !restoringQueue) {
             player.shuffleModeEnabled = false
         }
         originalQueueSize = 0
@@ -1847,6 +1853,10 @@ class MusicService :
                         .filterExplicit(dataStore.get(HideExplicitKey, false))
                         .filterVideoSongs(dataStore.get(HideVideoSongsKey, false))
                 }
+            if (!explicitQueueRequestGate.isCurrent(queueRequestToken)) {
+                Timber.tag(TAG).d("Ignoring stale explicit queue request %d", queueRequestToken)
+                return@launch
+            }
             if (queue.preloadItem != null && player.playbackState == STATE_IDLE) return@launch
             if (initialStatus.title != null) {
                 queueTitle = initialStatus.title
@@ -1867,17 +1877,18 @@ class MusicService :
                     ),
                 )
             } else {
-                player.setMediaItems(
-                    initialStatus.items,
-                    if (initialStatus.mediaItemIndex >
-                        0
-                    ) {
-                        initialStatus.mediaItemIndex
+                val startIndex =
+                    if (initialStatus.mediaItemIndex > 0) initialStatus.mediaItemIndex else 0
+                val startPosition =
+                    if (isRadioMediaId(initialStatus.items.getOrNull(startIndex)?.mediaId)) {
+                        // Position zero is the beginning of a live HLS DVR window, not
+                        // the live edge. TIME_UNSET selects the media-defined default,
+                        // which is the current live position for a live stream.
+                        C.TIME_UNSET
                     } else {
-                        0
-                    },
-                    initialStatus.position,
-                )
+                        initialStatus.position
+                    }
+                player.setMediaItems(initialStatus.items, startIndex, startPosition)
                 player.prepare()
                 player.playWhenReady = playWhenReady
             }
@@ -2536,6 +2547,12 @@ class MusicService :
             }
         }
         lastTransitionedMediaId = mediaItem?.mediaId
+        initialBufferRecoveryJob?.cancel()
+        initialBufferRecoveryJob = null
+        initialBufferRecoveryAttemptedMediaId = null
+        retryJob?.cancel()
+        retryJob = null
+        updateInitialBufferRecovery(player.playbackState)
 
         previousEpisodeId?.let { episodeId ->
             if (previousEpisodePosition > 0) {
@@ -2621,6 +2638,8 @@ class MusicService :
     override fun onPlaybackStateChanged(
         @Player.State playbackState: Int,
     ) {
+        updateInitialBufferRecovery(playbackState)
+
         if (playbackState == Player.STATE_ENDED) {
             // Check sleep timer guard - don't autoplay/repeat if sleep timer will pause
             val timer = sleepTimer ?: return
@@ -2686,6 +2705,10 @@ class MusicService :
             return
         }
 
+        if (playWhenReady && PhysicalFmSessionBridge.isActive()) {
+            PhysicalFmSessionBridge.deactivate()
+        }
+
         if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST) {
             if (playWhenReady) {
                 isPausedByVolumeMute = false
@@ -2707,6 +2730,54 @@ class MusicService :
         if (playWhenReady) {
             applyCachedAudioNormalizationNow()
         }
+
+        updateInitialBufferRecovery(player.playbackState)
+    }
+
+    private fun updateInitialBufferRecovery(
+        @Player.State playbackState: Int,
+    ) {
+        val mediaId = player.currentMediaItem?.mediaId
+        val shouldWatch =
+            playbackState == Player.STATE_BUFFERING &&
+                player.playWhenReady &&
+                player.currentPosition < INITIAL_BUFFER_RECOVERY_POSITION_MS &&
+                mediaId != null &&
+                initialBufferRecoveryAttemptedMediaId != mediaId
+
+        if (!shouldWatch) {
+            initialBufferRecoveryJob?.cancel()
+            initialBufferRecoveryJob = null
+            return
+        }
+        if (initialBufferRecoveryJob?.isActive == true) return
+
+        initialBufferRecoveryJob =
+            scope.launch {
+                delay(INITIAL_BUFFER_RECOVERY_DELAY_MS)
+                if (player.playbackState != Player.STATE_BUFFERING ||
+                    !player.playWhenReady ||
+                    player.currentPosition >= INITIAL_BUFFER_RECOVERY_POSITION_MS ||
+                    player.currentMediaItem?.mediaId != mediaId
+                ) {
+                    return@launch
+                }
+
+                initialBufferRecoveryAttemptedMediaId = mediaId
+                val failedStreamClient = songUrlCache.clientName(mediaId)
+                Timber.tag(TAG).w(
+                    "Initial stream stalled, refreshing mediaId=%s client=%s",
+                    mediaId,
+                    failedStreamClient ?: "unknown",
+                )
+                performAggressiveCacheClear(mediaId)
+                refreshStreamAndRetry(
+                    mediaId = mediaId,
+                    failedStreamClient = failedStreamClient,
+                    refreshCipherConfig = false,
+                    retryReason = "initial buffer stall",
+                )
+            }
     }
 
     override fun onEvents(
@@ -2736,7 +2807,8 @@ class MusicService :
                 player.currentMediaItem?.localConfiguration?.tag as? com.metrolist.music.models.MediaMetadata
             val previousMetadata = currentMediaMetadata.value
             currentMediaMetadata.value =
-                if (resolvedMetadata != null &&
+                if (
+                    resolvedMetadata != null &&
                     isRadioMediaId(resolvedMetadata.id) &&
                     resolvedMetadata.thumbnailUrl.isNullOrBlank()
                 ) {
@@ -2899,12 +2971,12 @@ class MusicService :
     }
 
     /**
-     * Checks if the error is caused by an expired/forbidden URL (HTTP 403).
+     * Checks if the error is caused by an expired/forbidden URL (HTTP 403 or 410).
      * This typically happens when a YouTube stream URL expires.
      */
     private fun isExpiredUrlError(error: PlaybackException): Boolean {
         val responseCode = getHttpResponseCode(error)
-        return responseCode == 403
+        return responseCode == 403 || responseCode == 410
     }
 
     /**
@@ -2995,6 +3067,7 @@ class MusicService :
         }
 
         val mediaId = player.currentMediaItem?.mediaId
+        val failedStreamClient = mediaId?.let(songUrlCache::clientName)
         Timber
             .tag(TAG)
             .w(error, "Player error occurred for $mediaId: errorCode=${error.errorCode}, message=${error.message}")
@@ -3031,8 +3104,8 @@ class MusicService :
             }
 
             isExpiredUrlError(error) -> {
-                Timber.tag(TAG).d("Expired URL (403) detected, refreshing stream URL")
-                handleExpiredUrlError(mediaId)
+                Timber.tag(TAG).d("Expired URL (403/410) detected, refreshing stream URL")
+                handleExpiredUrlError(mediaId, failedStreamClient)
                 return
             }
 
@@ -3044,7 +3117,7 @@ class MusicService :
 
             isRemotePlaybackError(error) -> {
                 Timber.tag(TAG).d("Remote playback error detected (${error.errorCode}), refreshing stream URL")
-                handleExpiredUrlError(mediaId)
+                handleExpiredUrlError(mediaId, failedStreamClient)
                 return
             }
 
@@ -3061,10 +3134,9 @@ class MusicService :
             }
         }
 
-        // For IO_UNSPECIFIED and IO_BAD_HTTP_STATUS, try recovery first
-        if (error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED ||
-            error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
-        ) {
+        // For IO_BAD_HTTP_STATUS, try recovery first. IO_UNSPECIFIED may require
+        // client fallback instead of repeatedly reloading the same authenticated URL.
+        if (error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS) {
             Timber.tag(TAG).d("IO error detected (${error.errorCode}), attempting recovery")
             handleGenericIOError(mediaId)
             return
@@ -3086,7 +3158,7 @@ class MusicService :
     private fun performAggressiveCacheClear(mediaId: String) {
         Timber.tag(TAG).d("Performing aggressive cache clear for $mediaId")
 
-        songUrlCache.remove(mediaId)
+        songUrlCache.invalidate(mediaId)
 
         try {
             playerCache.removeResource(mediaId)
@@ -3260,21 +3332,45 @@ class MusicService :
     }
 
     /**
-     * Handles expired URL (403) errors by clearing caches and retrying.
+     * Handles expired URL (403/410) errors by clearing caches and retrying.
      */
-    private fun handleExpiredUrlError(mediaId: String?) {
+    private fun handleExpiredUrlError(
+        mediaId: String?,
+        failedStreamClient: String?,
+    ) {
         if (mediaId == null) {
+            handleFinalFailure()
+            return
+        }
+
+        refreshStreamAndRetry(
+            mediaId = mediaId,
+            failedStreamClient = failedStreamClient,
+            refreshCipherConfig = true,
+            retryReason = "expired URL error",
+        )
+    }
+
+    private fun refreshStreamAndRetry(
+        mediaId: String,
+        failedStreamClient: String?,
+        refreshCipherConfig: Boolean,
+        retryReason: String,
+    ) {
+        if (hasExceededRetryLimit(mediaId)) {
+            Timber.tag(TAG).w("Song $mediaId reached the retry limit during $retryReason")
+            markSongAsFailed(mediaId)
             handleFinalFailure()
             return
         }
 
         incrementRetryCount(mediaId)
 
-        songUrlCache.remove(mediaId)
-        // A 403/410 on GET means the (HEAD-unvalidated) WEB_REMIX stream URL was bad — mark it so the
-        // re-resolution falls through to the fallback clients instead of retrying WEB_REMIX.
-        YTPlayerUtils.markWebRemixFailed(mediaId)
-        Timber.tag(TAG).d("Cleared cached URL for $mediaId, marked WEB_REMIX failed")
+        songUrlCache.invalidate(mediaId)
+        if (failedStreamClient == "WEB_REMIX") {
+            YTPlayerUtils.markWebRemixFailed(mediaId)
+        }
+        Timber.tag(TAG).d("Cleared cached URL for $mediaId after $retryReason (client=$failedStreamClient)")
 
         try {
             YTPlayerUtils.forceRefreshForVideo(mediaId)
@@ -3282,29 +3378,39 @@ class MusicService :
             Timber.tag(TAG).e(e, "Failed to clear decryption caches")
         }
 
-        // A 403 can also mean the cipher produced a wrong-but-non-throwing signature from a
-        // stale/wrong player config — invisible to the cipher's own exception-retry. Ask it to
-        // re-fetch its config (rate-limited); if that corrects the table, the cipher rebuilds its
-        // WebView on the next decipher, so we clear the WEB_REMIX failure set to let playback return
-        // to WEB_REMIX — no app restart. Affects every cipher client (WEB_REMIX/WEB_CREATOR/TVHTML5/WEB).
-        scope.launch {
-            if (CipherDeobfuscator.onStreamRejected()) {
-                Timber.tag(TAG).d("Player config changed after stream rejection — restoring WEB_REMIX")
-                YTPlayerUtils.clearWebRemixFailures()
+        if (refreshCipherConfig) {
+            // A rejection can mean the cipher produced a wrong-but-non-throwing signature. If a
+            // rate-limited refresh corrects the table, allow WEB_REMIX again on the next resolution.
+            scope.launch {
+                if (CipherDeobfuscator.onStreamRejected()) {
+                    Timber.tag(TAG).d("Player config changed after stream rejection — restoring WEB_REMIX")
+                    YTPlayerUtils.clearWebRemixFailures()
+                }
             }
         }
 
+        val retryPosition = player.currentPosition
+        val retryIndex = player.currentMediaItemIndex
+        val retryPlayWhenReady = player.playWhenReady
         retryJob?.cancel()
         retryJob =
             scope.launch {
                 delay(RETRY_DELAY_MS)
 
-                val currentPosition = player.currentPosition
-                val currentIndex = player.currentMediaItemIndex
-                player.seekTo(currentIndex, currentPosition)
+                if (player.currentMediaItem?.mediaId != mediaId ||
+                    player.currentMediaItemIndex != retryIndex ||
+                    player.currentPosition != retryPosition ||
+                    player.playWhenReady != retryPlayWhenReady
+                ) {
+                    Timber.tag(TAG).d("Skipping stale retry for $mediaId after $retryReason")
+                    return@launch
+                }
+
+                retryJob = null
+                player.seekTo(retryIndex, retryPosition)
                 player.prepare()
 
-                Timber.tag(TAG).d("Retrying playback for $mediaId after 403 error")
+                Timber.tag(TAG).d("Retrying playback for $mediaId after $retryReason")
             }
     }
 
@@ -3418,6 +3524,11 @@ class MusicService :
                 CacheDataSource
                     .Factory()
                     .setCache(playerCache)
+                    // HLS playlists and live chunks normally use LENGTH_UNSET. They
+                    // must bypass the finite-song cache completely; otherwise a
+                    // cached media playlist is replayed until its old segment list
+                    // ends and every restart begins with the same stale sequence.
+                    .setFlags(FLAG_IGNORE_CACHE_ON_ERROR or FLAG_IGNORE_CACHE_FOR_UNSET_LENGTH_REQUESTS)
                     .setUpstreamDataSourceFactory(
                         DefaultDataSource.Factory(
                             this,
@@ -3437,6 +3548,10 @@ class MusicService :
                         ),
                     ),
             ).setCacheWriteDataSinkFactory(null)
+            // The outer cache contains completed offline downloads. A normal song's
+            // first DataSpec commonly has LENGTH_UNSET, so ignoring the cache here
+            // defeats offline playback and forces a network resolve. HLS/live safety
+            // remains on the inner playerCache layer above.
             .setFlags(FLAG_IGNORE_CACHE_ON_ERROR)
 
     private var isSilenceSkipping = false
@@ -3718,6 +3833,23 @@ class MusicService :
 
     private fun createDataSourceFactory(): DataSource.Factory {
         return ResolvingDataSource.Factory(createCacheDataSource()) { dataSpec ->
+            if (dataSpec.key == null) {
+                // HLS manifests and media segments are keyless. Keep this path
+                // independent from ExoPlayer state so it is safe on loader threads.
+                return@Factory dataSpec
+                    .withRequestHeaders(
+                        dataSpec.httpRequestHeaders +
+                            mapOf(
+                                "User-Agent" to "MetrolistHU/13.7.4",
+                                "Cache-Control" to "no-cache",
+                            ),
+                    ).buildUpon()
+                    .setFlags(dataSpec.flags or DataSpec.FLAG_DONT_CACHE_IF_LENGTH_UNKNOWN)
+                    .build()
+            }
+
+            // Existing MP3/AAC WebRadio and YouTube path: the custom key remains
+            // the sole discriminator, exactly as before HLS support was added.
             val mediaId = dataSpec.key ?: error("No media id")
 
             if (isRadioMediaId(mediaId)) {
@@ -3730,7 +3862,7 @@ class MusicService :
                         dataSpec.httpRequestHeaders +
                             mapOf(
                                 "Icy-MetaData" to "1",
-                                "User-Agent" to "MetrolistHU/13.6.5",
+                                "User-Agent" to "MetrolistHU/13.7.4",
                                 "Cache-Control" to "no-cache",
                             ),
                     ).buildUpon()
@@ -3765,14 +3897,18 @@ class MusicService :
                     return@Factory dataSpec
                 }
 
-                songUrlCache[mediaId]?.takeIf { it.second > System.currentTimeMillis() }?.let {
+                songUrlCache[mediaId]?.let { cachedStream ->
                     recoverSongDeduped(mediaId)
-                    return@Factory dataSpec.withUri(it.first.toUri())
+                    currentStreamClient.value = cachedStream.clientName
+                    return@Factory dataSpec
+                        .withUri(cachedStream.url.toUri())
+                        .withRequestHeaders(dataSpec.httpRequestHeaders + cachedStream.requestHeaders)
                 }
             } else {
                 Timber.tag(TAG).i("BYPASSING CACHE for $mediaId due to quality change")
             }
 
+            val cacheGeneration = songUrlCache.generation(mediaId)
             Timber.tag(TAG).i("FETCHING STREAM: $mediaId | quality=$audioQuality")
             val playbackData =
                 runBlocking(Dispatchers.IO) {
@@ -3859,14 +3995,23 @@ class MusicService :
                 val streamUrl = nonNullPlayback.streamUrl
                 currentStreamClient.value = nonNullPlayback.streamClient
 
-                songUrlCache[mediaId] =
-                    streamUrl to System.currentTimeMillis() + (nonNullPlayback.streamExpiresInSeconds * 1000L)
+                songUrlCache.put(
+                    mediaId = mediaId,
+                    url = streamUrl,
+                    requestHeaders = nonNullPlayback.streamHeaders,
+                    clientName = nonNullPlayback.streamClient,
+                    expiresInSeconds = nonNullPlayback.streamExpiresInSeconds,
+                    expectedGeneration = cacheGeneration,
+                )
 
                 nonNullPlayback.playbackTracking?.videostatsPlaybackUrl?.baseUrl?.let {
                     playbackUrlCache[cacheKey(mediaId)] = it
                 }
 
-                return@Factory dataSpec.withUri(streamUrl.toUri()).subrange(dataSpec.uriPositionOffset, CHUNK_LENGTH)
+                return@Factory dataSpec
+                    .withUri(streamUrl.toUri())
+                    .subrange(dataSpec.uriPositionOffset, CHUNK_LENGTH)
+                    .withRequestHeaders(dataSpec.httpRequestHeaders + nonNullPlayback.streamHeaders)
             }
         }
     }
@@ -4167,6 +4312,41 @@ class MusicService :
             false
         }
 
+
+    private fun observePhysicalFmSession() {
+        removePhysicalFmSessionObserver?.invoke()
+        removePhysicalFmSessionObserver = PhysicalFmSessionBridge.observe { controller ->
+            scope.launch {
+                physicalFmSessionJob?.cancel()
+                physicalFmController = controller
+                if (controller == null) {
+                    mediaSession?.let { session ->
+                        if (session.player !== player) {
+                            (session as MediaSession).player = player
+                        }
+                    }
+                    return@launch
+                }
+
+                physicalFmSessionJob = scope.launch {
+                    controller.isActive.collect { active ->
+                        val target = if (active) controller.player else player
+                        mediaSession?.let { session ->
+                            if (session.player !== target) {
+                                (session as MediaSession).player = target
+                                Timber.tag(TAG).i(
+                                    "MediaSession player switched to %s",
+                                    if (active) "physical FM" else "ExoPlayer",
+                                )
+                                updateNotification()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     override fun onDestroy() {
         isRunning = false
 
@@ -4206,12 +4386,18 @@ class MusicService :
         connectivityObserver.unregister()
         abandonAudioFocus()
         closeAudioEffectSession()
+        physicalFmSessionJob?.cancel()
+        physicalFmSessionJob = null
+        removePhysicalFmSessionObserver?.invoke()
+        removePhysicalFmSessionObserver = null
+        physicalFmController = null
         mediaLibrarySessionCallback.release()
         mediaSession?.release()
         player.removeListener(this)
         sleepTimer?.let { player.removeListener(it) }
         playerNormalizationProcessors.remove(player)
         playerSilenceProcessors.remove(player)
+        initialBufferRecoveryJob?.cancel()
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerFuture = null
         player.release()
@@ -4250,11 +4436,6 @@ class MusicService :
             return
         }
         super.onTaskRemoved(rootIntent)
-        // User removed the task while paused: drop foreground promotion so the process can idle.
-        // Queue/state remain persisted; opening the app restores playback as usual.
-        if (::player.isInitialized && !player.isPlaying) {
-            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
-        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo) = mediaSession
@@ -4909,6 +5090,8 @@ class MusicService :
         const val MAX_CONSECUTIVE_ERR = 5
         const val MAX_RETRY_COUNT = 10
 
+        private const val INITIAL_BUFFER_RECOVERY_DELAY_MS = 15_000L
+        private const val INITIAL_BUFFER_RECOVERY_POSITION_MS = 5_000L
         private const val MAX_GAIN_MB = 300 // Maximum gain in millibels (3 dB)
         private const val MIN_GAIN_MB = -1500 // Minimum gain in millibels (-15 dB)
 

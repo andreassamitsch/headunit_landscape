@@ -11,7 +11,6 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -70,8 +69,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.ContentScale
@@ -97,6 +94,7 @@ import com.metrolist.innertube.models.PodcastItem
 import com.metrolist.innertube.models.SongItem
 import com.metrolist.innertube.models.WatchEndpoint
 import com.metrolist.music.LocalDatabase
+import com.metrolist.music.LocalArtistNameAliases
 import com.metrolist.music.LocalListenTogetherManager
 import com.metrolist.music.LocalPlayerAwareWindowInsets
 import com.metrolist.music.LocalPlayerConnection
@@ -135,6 +133,7 @@ import com.metrolist.music.ui.utils.backToMain
 import com.metrolist.music.ui.utils.fadingEdge
 import com.metrolist.music.ui.utils.isScrollingUp
 import com.metrolist.music.ui.utils.resize
+import com.metrolist.music.utils.ArtistNameAliases
 import com.metrolist.music.utils.rememberPreference
 import com.metrolist.music.viewmodels.ArtistViewModel
 import com.valentinilk.shimmer.shimmer
@@ -160,6 +159,13 @@ fun ArtistScreen(
     val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
     val artistPage = viewModel.artistPage
     val libraryArtist by viewModel.libraryArtist.collectAsStateWithLifecycle()
+    val artistNameAliases = LocalArtistNameAliases.current
+    val displayArtistName =
+        ArtistNameAliases.resolve(
+            artistNameAliases,
+            viewModel.artistId,
+            artistPage?.artist?.title ?: libraryArtist?.artist?.name.orEmpty(),
+        ).ifEmpty { null }
     val librarySongs by viewModel.librarySongs.collectAsStateWithLifecycle()
     val libraryAlbums by viewModel.libraryAlbums.collectAsStateWithLifecycle()
     val isChannelSubscribed by viewModel.isChannelSubscribed.collectAsStateWithLifecycle()
@@ -340,7 +346,6 @@ fun ArtistScreen(
             } else {
                 item(key = "header") {
                     val thumbnail = artistPage?.artist?.thumbnail ?: libraryArtist?.artist?.thumbnailUrl
-                    val artistName = artistPage?.artist?.title ?: libraryArtist?.artist?.name
 
                     Box {
                         // Artist Image with offset
@@ -396,7 +401,7 @@ fun ArtistScreen(
                             ) {
                                 // Artist Name
                                 Text(
-                                    text = artistName ?: "Unknown",
+                                    text = displayArtistName ?: "Unknown",
                                     style = MaterialTheme.typography.headlineLarge,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
@@ -457,60 +462,21 @@ fun ArtistScreen(
                                                         notifyUserSelection = !embeddedInPlayer,
                                                     )
                                                 }
-                                                if (embeddedInPlayer) {
-                                                    Row(
-                                                        modifier =
-                                                            Modifier
-                                                                .height(40.dp)
-                                                                .clip(RoundedCornerShape(50))
-                                                                .border(
-                                                                    width = 1.dp,
-                                                                    color = MaterialTheme.colorScheme.outline,
-                                                                    shape = RoundedCornerShape(50),
-                                                                ).pointerInput(radioEndpoint) {
-                                                                    awaitPointerEventScope {
-                                                                        while (true) {
-                                                                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                                                                            if (event.changes.any { it.previousPressed && !it.pressed }) {
-                                                                                event.changes.forEach { it.consume() }
-                                                                                playArtistRadio()
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }.combinedClickable(
-                                                                    onClick = playArtistRadio,
-                                                                    onLongClick = {},
-                                                                ).padding(horizontal = 16.dp),
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                    ) {
-                                                        Icon(
-                                                            painter = painterResource(R.drawable.radio),
-                                                            contentDescription = null,
-                                                            modifier = Modifier.size(20.dp),
-                                                        )
-                                                        Spacer(modifier = Modifier.width(8.dp))
-                                                        Text(
-                                                            text = stringResource(R.string.radio),
-                                                            fontSize = 14.sp,
-                                                        )
-                                                    }
-                                                } else {
-                                                    OutlinedButton(
-                                                        onClick = playArtistRadio,
-                                                        shape = RoundedCornerShape(50),
-                                                        modifier = Modifier.height(40.dp),
-                                                    ) {
-                                                        Icon(
-                                                            painter = painterResource(R.drawable.radio),
-                                                            contentDescription = null,
-                                                            modifier = Modifier.size(20.dp),
-                                                        )
-                                                        Spacer(modifier = Modifier.width(8.dp))
-                                                        Text(
-                                                            text = stringResource(R.string.radio),
-                                                            fontSize = 14.sp,
-                                                        )
-                                                    }
+                                                OutlinedButton(
+                                                    onClick = playArtistRadio,
+                                                    shape = RoundedCornerShape(50),
+                                                    modifier = Modifier.height(40.dp),
+                                                ) {
+                                                    Icon(
+                                                        painter = painterResource(R.drawable.radio),
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(20.dp),
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(
+                                                        text = stringResource(R.string.radio),
+                                                        fontSize = 14.sp,
+                                                    )
                                                 }
                                             }
                                         }
@@ -532,54 +498,22 @@ fun ArtistScreen(
                                                         notifyUserSelection = !embeddedInPlayer,
                                                     )
                                                 }
-                                                if (embeddedInPlayer) {
-                                                    Box(
-                                                        contentAlignment = Alignment.Center,
-                                                        modifier =
-                                                            Modifier
-                                                                .size(48.dp)
-                                                                .clip(RoundedCornerShape(24.dp))
-                                                                .background(MaterialTheme.colorScheme.primary)
-                                                                .pointerInput(shuffleEndpoint) {
-                                                                    awaitPointerEventScope {
-                                                                        while (true) {
-                                                                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                                                                            if (event.changes.any { it.previousPressed && !it.pressed }) {
-                                                                                event.changes.forEach { it.consume() }
-                                                                                playArtistShuffle()
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }.combinedClickable(
-                                                                    onClick = playArtistShuffle,
-                                                                    onLongClick = {},
-                                                                ),
-                                                    ) {
-                                                        Icon(
-                                                            painter = painterResource(R.drawable.shuffle),
-                                                            contentDescription = "Shuffle",
-                                                            tint = MaterialTheme.colorScheme.onPrimary,
-                                                            modifier = Modifier.size(20.dp),
-                                                        )
-                                                    }
-                                                } else {
-                                                    IconButton(
-                                                        onClick = playArtistShuffle,
-                                                        modifier =
-                                                            Modifier
-                                                                .size(48.dp)
-                                                                .background(
-                                                                    MaterialTheme.colorScheme.primary,
-                                                                    RoundedCornerShape(24.dp),
-                                                                ),
-                                                    ) {
-                                                        Icon(
-                                                            painter = painterResource(R.drawable.shuffle),
-                                                            contentDescription = "Shuffle",
-                                                            tint = MaterialTheme.colorScheme.onPrimary,
-                                                            modifier = Modifier.size(20.dp),
-                                                        )
-                                                    }
+                                                IconButton(
+                                                    onClick = playArtistShuffle,
+                                                    modifier =
+                                                        Modifier
+                                                            .size(48.dp)
+                                                            .background(
+                                                                MaterialTheme.colorScheme.primary,
+                                                                RoundedCornerShape(24.dp),
+                                                            ),
+                                                ) {
+                                                    Icon(
+                                                        painter = painterResource(R.drawable.shuffle),
+                                                        contentDescription = "Shuffle",
+                                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                                        modifier = Modifier.size(20.dp),
+                                                    )
                                                 }
                                             }
                                         }
@@ -730,7 +664,7 @@ fun ArtistScreen(
                                                     } else {
                                                         playerConnection.playQueue(
                                                             ListQueue(
-                                                                title = libraryArtist?.artist?.name ?: "Unknown Artist",
+                                                                title = displayArtistName ?: "Unknown Artist",
                                                                 items = librarySongs.map { it.toMediaItem() },
                                                                 startIndex = index,
                                                             ),
@@ -927,6 +861,12 @@ fun ArtistScreen(
                                         items = distinctItemsBySection[index] ?: section.items,
                                         key = { "youtube_album_${it.id}" },
                                     ) { item ->
+                                        val albumTapKey = "artist_album_${index}_${item.id}"
+                                        DisposableEffect(albumTapKey) {
+                                            onDispose {
+                                                rightPaneTapTargets.remove(albumTapKey)
+                                            }
+                                        }
                                         YouTubeGridItem(
                                             item = item,
                                             isActive =
@@ -940,6 +880,21 @@ fun ArtistScreen(
                                             thumbnailRatio = 1f, // Use square thumbnails for all items in horizontal scroll
                                             modifier =
                                                 Modifier
+                                                    .onGloballyPositioned { coordinates ->
+                                                        if (embeddedInPlayer && item is AlbumItem) {
+                                                            val albumId = item.id
+                                                            rightPaneTapTargets[albumTapKey] =
+                                                                coordinates.boundsInRoot() to {
+                                                                    timber.log.Timber.tag("Dudu7ArtistAlbumTap").i(
+                                                                        "Opening artist album item id=%s",
+                                                                        albumId,
+                                                                    )
+                                                                    navController.navigate("album/$albumId")
+                                                                }
+                                                        } else {
+                                                            rightPaneTapTargets.remove(albumTapKey)
+                                                        }
+                                                    }
                                                     .combinedClickable(
                                                         onClick = {
                                                             when (item) {
@@ -1090,7 +1045,7 @@ fun ArtistScreen(
                             if (librarySongs.isNotEmpty()) {
                                 playerConnection.playQueue(
                                     ListQueue(
-                                        title = libraryArtist?.artist?.name ?: "Unknown Artist",
+                                        title = displayArtistName ?: "Unknown Artist",
                                         items = librarySongs.map { it.toMediaItem() },
                                     ),
                                 )
@@ -1110,7 +1065,7 @@ fun ArtistScreen(
                                             val songs = result.items.filterIsInstance<SongItem>().map { it.toMediaItem() }
                                             playerConnection.playQueue(
                                                 ListQueue(
-                                                    title = artistPage.artist.title,
+                                                    title = displayArtistName ?: artistPage.artist.title,
                                                     items = songs,
                                                 ),
                                             )
@@ -1120,7 +1075,7 @@ fun ArtistScreen(
                                             if (songs.isNotEmpty()) {
                                                 playerConnection.playQueue(
                                                     ListQueue(
-                                                        title = artistPage.artist.title,
+                                                        title = displayArtistName ?: artistPage.artist.title,
                                                         items = songs,
                                                     ),
                                                 )
@@ -1133,7 +1088,7 @@ fun ArtistScreen(
                                 val songs = songSection.items.filterIsInstance<SongItem>().map { it.toMediaItem() }
                                 playerConnection.playQueue(
                                     ListQueue(
-                                        title = artistPage.artist.title,
+                                        title = displayArtistName ?: artistPage.artist.title,
                                         items = songs,
                                     ),
                                 )
@@ -1193,7 +1148,7 @@ fun ArtistScreen(
     }
 
     TopAppBar(
-        title = { if (!transparentAppBar) Text(artistPage?.artist?.title.orEmpty()) },
+        title = { if (!transparentAppBar) Text(displayArtistName.orEmpty()) },
         navigationIcon = {
             IconButton(
                 onClick = navController::navigateUp,

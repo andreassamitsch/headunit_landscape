@@ -1,5 +1,6 @@
 package com.metrolist.music.ui.screens.artist
 
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,12 +18,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,24 +43,18 @@ import com.metrolist.innertube.models.EpisodeItem
 import com.metrolist.innertube.models.PlaylistItem
 import com.metrolist.innertube.models.PodcastItem
 import com.metrolist.innertube.models.SongItem
-import com.metrolist.innertube.YouTube
 import com.metrolist.innertube.models.YTItem
 import com.metrolist.music.LocalPlayerConnection
 import com.metrolist.music.R
 import com.metrolist.music.extensions.toMediaItem
 import com.metrolist.music.playback.queues.ListQueue
 import com.metrolist.music.playback.queues.YouTubeQueue
+import com.metrolist.music.ui.utils.resize
 import com.metrolist.music.viewmodels.ArtistViewModel
-import kotlinx.coroutines.launch
 
 /**
- * Touch-safe artist page for the vehicle player's embedded right pane.
- *
- * The normal ArtistScreen has several overlapping, animated layers which are
- * useful in the phone UI but can intercept taps when it is hosted inside the
- * player's nested NavHost. This deliberately flat layout keeps every visible
- * control in the same input hierarchy while retaining the important YouTube
- * Music actions and navigation.
+ * Flat, touch-safe artist page used only inside the Dudu7 right pane.
+ * The phone ArtistScreen keeps its animated layout.
  */
 @Composable
 fun EmbeddedArtistScreen(
@@ -67,7 +62,6 @@ fun EmbeddedArtistScreen(
     viewModel: ArtistViewModel = hiltViewModel(),
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
-    val coroutineScope = rememberCoroutineScope()
     val page = viewModel.artistPage
     val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
     val isPlaying by playerConnection.isEffectivelyPlaying.collectAsStateWithLifecycle()
@@ -77,8 +71,8 @@ fun EmbeddedArtistScreen(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(64.dp)
-                    .padding(horizontal = 12.dp),
+                    .height(58.dp)
+                    .padding(horizontal = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -110,7 +104,11 @@ fun EmbeddedArtistScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(text = "Künstler wird geladen …")
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator()
+                    Spacer(Modifier.height(10.dp))
+                    Text(text = "Künstler wird geladen …")
+                }
             }
             return@Column
         }
@@ -122,13 +120,13 @@ fun EmbeddedArtistScreen(
             item(key = "embedded_artist_header") {
                 page.artist.thumbnail?.let { thumbnail ->
                     AsyncImage(
-                        model = thumbnail,
+                        model = thumbnail.resize(1000, 1000),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .height(220.dp),
+                                .height(210.dp),
                     )
                 }
 
@@ -146,7 +144,7 @@ fun EmbeddedArtistScreen(
                         overflow = TextOverflow.Ellipsis,
                     )
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -181,7 +179,7 @@ fun EmbeddedArtistScreen(
                     }
 
                     page.subscriberCountText?.takeIf { it.isNotBlank() }?.let {
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
                         Text(
                             text = it,
                             style = MaterialTheme.typography.bodyMedium,
@@ -202,29 +200,44 @@ fun EmbeddedArtistScreen(
             }
 
             page.sections.forEachIndexed { sectionIndex, section ->
+                val songs = section.items.filterIsInstance<SongItem>()
+                val moreRoute =
+                    section.moreEndpoint?.let { endpoint ->
+                        "artist/${viewModel.artistId}/items?browseId=${Uri.encode(endpoint.browseId)}&params=${Uri.encode(endpoint.params.orEmpty())}"
+                    } ?: songs.takeIf { it.isNotEmpty() }?.let {
+                        "artist/${viewModel.artistId}/items?browseId=__artist_songs__&params="
+                    }
+
                 item(key = "embedded_section_${sectionIndex}_title") {
-                    Text(
-                        text = section.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
+                    Row(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .then(
-                                    section.moreEndpoint?.let { endpoint ->
-                                        Modifier.clickable {
-                                            navController.navigate(
-                                                "artist/${viewModel.artistId}/items?browseId=${endpoint.browseId}?params=${endpoint.params}",
-                                            )
-                                        }
-                                    } ?: Modifier,
-                                )
-                                .padding(start = 18.dp, top = 18.dp, end = 18.dp, bottom = 8.dp),
-                    )
+                                .clickable(enabled = moreRoute != null) {
+                                    moreRoute?.let(navController::navigate)
+                                }.padding(start = 18.dp, top = 18.dp, end = 18.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = section.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (moreRoute != null) {
+                            Text(
+                                text = "Alle anzeigen",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
                 }
 
-                val songs = section.items.filterIsInstance<SongItem>()
-                itemsIndexed(section.items) { _, item ->
+                itemsIndexed(
+                    items = section.items,
+                    key = { index, item -> "embedded_${sectionIndex}_${item.id}_$index" },
+                ) { _, item ->
                     EmbeddedArtistItemRow(
                         item = item,
                         active = mediaMetadata?.id == item.id,
@@ -232,31 +245,16 @@ fun EmbeddedArtistScreen(
                         onClick = {
                             when (item) {
                                 is SongItem -> {
-                                    coroutineScope.launch {
-                                        val complete = section.moreEndpoint?.let { endpoint ->
-                                            val first = YouTube.artistItems(endpoint).getOrNull()
-                                            if (first == null) emptyList() else {
-                                                val all = first.items.toMutableList()
-                                                var continuation = first.continuation
-                                                while (continuation != null) {
-                                                    val next = YouTube.artistItemsContinuation(continuation).getOrNull() ?: break
-                                                    all += next.items
-                                                    continuation = next.continuation
-                                                }
-                                                all.filterIsInstance<SongItem>().distinctBy { it.id }
-                                            }
-                                        }.orEmpty().ifEmpty { songs }
-                                        val startIndex = complete.indexOfFirst { it.id == item.id }.coerceAtLeast(0)
-                                        playerConnection.notifyUserSongSelection()
-                                        playerConnection.playQueue(
-                                            ListQueue(
-                                                title = section.title.ifBlank { page.artist.title },
-                                                items = complete.map { it.toMediaItem() },
-                                                startIndex = startIndex,
-                                            ),
-                                            notifyUserSelection = false,
-                                        )
-                                    }
+                                    val startIndex = songs.indexOfFirst { it.id == item.id }.coerceAtLeast(0)
+                                    playerConnection.notifyUserSongSelection()
+                                    playerConnection.playQueue(
+                                        ListQueue(
+                                            title = section.title.ifBlank { page.artist.title },
+                                            items = songs.map { it.toMediaItem() },
+                                            startIndex = startIndex,
+                                        ),
+                                        notifyUserSelection = false,
+                                    )
                                 }
 
                                 is EpisodeItem -> {
@@ -325,7 +323,7 @@ private fun EmbeddedArtistItemRow(
     ) {
         item.thumbnail?.let { thumbnail ->
             AsyncImage(
-                model = thumbnail,
+                model = thumbnail.resize(256, 256),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier =

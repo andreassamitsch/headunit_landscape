@@ -1,0 +1,84 @@
+name: Build Metrolist dudu7 13.7.48 Ice Glass
+
+on:
+  pull_request:
+    branches: [agent/fix-radio-at-logo-fallback]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dudu7-13748-ice-glass-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          ref: ${{ github.head_ref || github.ref }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-cleanup: on-success
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Apply test-build version and validate Ice Glass source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git diff --check
+          sed -i 's/versionCode = 1370056/versionCode = 1370057/' app/build.gradle.kts
+          sed -i 's/versionName = "13.7.47"/versionName = "13.7.48"/' app/build.gradle.kts
+          UI='app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt'
+          grep -q 'BorderStroke' "$UI"
+          grep -q 'surfaceContainer.copy(alpha = 0.78f)' "$UI"
+          grep -q 'tonalElevation = 2.dp' "$UI"
+          grep -q 'shadowElevation = 6.dp' "$UI"
+          if grep -Eq 'RenderEffect|blur\(|graphicsLayer' "$UI"; then
+            echo 'Unexpected dynamic blur/render layer in Ice Glass Lite' >&2
+            exit 1
+          fi
+
+      - name: Unit tests
+        shell: bash
+        run: |
+          chmod +x gradlew
+          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+
+      - name: Build and verify update-compatible APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace | tee artifacts/build.log
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          test -n "$APK"
+          OUT='artifacts/Metrolist-dudu7-13.7.48.apk'
+          cp "$APK" "$OUT"
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$BUILD_TOOLS/aapt" dump badging "$OUT" > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$OUT" > artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370057'" artifacts/apk-badging.txt
+          grep -q "application-label:'Metrolist dudu7'" artifacts/apk-badging.txt
+          grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
+          unzip -l "$OUT" | tee artifacts/apk-contents.txt
+          grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
+          grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
+          sha256sum "$OUT" > "$OUT.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.48
+          path: artifacts/
+          retention-days: 14

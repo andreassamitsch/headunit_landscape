@@ -94,6 +94,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -142,6 +143,8 @@ import com.metrolist.music.R
 import com.metrolist.music.constants.CropAlbumArtKey
 import com.metrolist.music.constants.DarkModeKey
 import com.metrolist.music.constants.Dudu7PlayerPaneWeightKey
+import com.metrolist.music.constants.Dudu7BackgroundBlurStrengthKey
+import com.metrolist.music.constants.Dudu7BackgroundBottomScrimStrengthKey
 import com.metrolist.music.constants.Dudu7StartWithLyricsKey
 import com.metrolist.music.constants.HidePlayerThumbnailKey
 import com.metrolist.music.constants.HideStatusBarOnFullscreenKey
@@ -194,6 +197,8 @@ import com.metrolist.music.ui.utils.ShowOffsetDialog
 import com.metrolist.music.variant.Dudu7Layout
 import com.metrolist.music.variant.VehicleEmptyPlayer
 import com.metrolist.music.variant.VehicleLandscapeLayout
+import com.metrolist.music.variant.rememberVehicleHazeState
+import com.metrolist.music.variant.vehicleHazeSource
 import com.metrolist.music.variant.VehiclePlayerControls
 import com.metrolist.music.variant.VehicleVariantConfig
 import com.metrolist.music.utils.dataStore
@@ -217,6 +222,30 @@ import com.metrolist.music.constants.SleepTimerFadeOutKey
 import com.metrolist.music.constants.SleepTimerStopAfterCurrentSongKey
 
 
+private data class Dudu7FmVisualSnapshot(
+    val active: Boolean = false,
+    val identity: String = "",
+    val artworkUrl: String? = null,
+)
+
+internal fun shouldUseVehiclePlayerLayout(
+    isDudu7: Boolean,
+    isLandscape: Boolean,
+): Boolean = isDudu7 || isLandscape
+
+private fun dudu7HighResolutionArtworkUrl(value: String?): String? {
+    val url = value?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    if (url.startsWith("file:", ignoreCase = true) || url.startsWith("content:", ignoreCase = true)) return url
+    return when {
+        "googleusercontent.com" in url || "ytimg.com" in url ->
+            url
+                .replace(Regex("=w\\d+-h\\d+[^?]*"), "=w1600-h1600-l90-rj")
+                .replace(Regex("=s\\d+[^?]*"), "=s1600-c-k-c0x00ffffff-no-rj")
+        "mzstatic.com" in url -> url.replace(Regex("/\\d+x\\d+bb\\."), "/1600x1600bb.")
+        else -> url
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BottomSheetPlayer(
@@ -233,6 +262,7 @@ fun BottomSheetPlayer(
     val copiedArtistStr = stringResource(R.string.copied_artist)
     val bottomSheetPageState = LocalBottomSheetPageState.current
     val playerConnection = LocalPlayerConnection.current ?: return
+    val vehicleHazeState = rememberVehicleHazeState()
     val database = LocalDatabase.current
     val syncUtils = LocalSyncUtils.current
 
@@ -343,6 +373,19 @@ fun BottomSheetPlayer(
 
     val playbackState by playerConnection.playbackState.collectAsState()
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
+    var dudu7FmVisual by remember { mutableStateOf(Dudu7FmVisualSnapshot()) }
+    val effectiveVisualId =
+        if (VehicleVariantConfig.isDudu7 && dudu7FmVisual.active) {
+            "fm:${dudu7FmVisual.identity}"
+        } else {
+            mediaMetadata?.id
+        }
+    val effectiveArtworkUrl =
+        if (VehicleVariantConfig.isDudu7 && dudu7FmVisual.active) {
+            dudu7FmVisual.artworkUrl
+        } else {
+            mediaMetadata?.thumbnailUrl
+        }
     val radioStationStore = remember(context) { RadioStationStore.get(context) }
     val savedRadioStations by radioStationStore.stations.collectAsStateWithLifecycle()
     val isWebRadio = isRadioMediaId(mediaMetadata?.id)
@@ -350,10 +393,21 @@ fun BottomSheetPlayer(
         remember(mediaMetadata?.id, savedRadioStations) {
             runCatching { playerConnection.player.currentMediaItem?.toRadioStationOrNull() }.getOrNull()
         }
+    val effectiveArtworkFallbackUrl =
+        if (isWebRadio) {
+            currentRadioStation?.favicon?.takeIf { it.isNotBlank() && it != effectiveArtworkUrl }
+        } else {
+            null
+        }
+    val effectiveBackgroundArtworkUrl =
+        if (VehicleVariantConfig.isDudu7) dudu7HighResolutionArtworkUrl(effectiveArtworkUrl) else effectiveArtworkUrl
+    val effectiveBackgroundFallbackUrl =
+        if (VehicleVariantConfig.isDudu7) dudu7HighResolutionArtworkUrl(effectiveArtworkFallbackUrl) else effectiveArtworkFallbackUrl
     val currentSong by playerConnection.currentSong.collectAsStateWithLifecycle(initialValue = null)
     val resolvedRadioSong by playerConnection.radioResolvedSong.collectAsStateWithLifecycle()
     val resolvedRadioLibrarySong by playerConnection.resolvedRadioLibrarySong.collectAsStateWithLifecycle()
     val radioHasTrackMetadata by playerConnection.radioHasTrackMetadata.collectAsStateWithLifecycle()
+    val radioHasTrackArtwork by playerConnection.radioHasTrackArtwork.collectAsStateWithLifecycle()
     val recognitionStatus by MusicRecognitionService.recognitionStatus.collectAsStateWithLifecycle()
     val automix by playerConnection.service.automixItems.collectAsStateWithLifecycle()
     val repeatMode by playerConnection.repeatMode.collectAsStateWithLifecycle()
@@ -366,6 +420,19 @@ fun BottomSheetPlayer(
     val (storedDudu7PlayerPaneWeight) =
         rememberPreference(Dudu7PlayerPaneWeightKey, VehicleVariantConfig.defaultPlayerPaneWeight)
     val dudu7PlayerPaneWeight = Dudu7Layout.sanitizePlayerPaneWeight(storedDudu7PlayerPaneWeight)
+    val dudu7BackgroundBlurStrength by rememberPreference(Dudu7BackgroundBlurStrengthKey, defaultValue = 120)
+    val dudu7BackgroundBottomScrimStrength by
+        rememberPreference(Dudu7BackgroundBottomScrimStrengthKey, defaultValue = 35)
+    val dudu7BackgroundBottomScrimAlpha =
+        dudu7BackgroundBottomScrimStrength.coerceIn(0, 100) / 100f * 0.80f
+    val artworkBackgroundBlur =
+        if (VehicleVariantConfig.isDudu7) {
+            dudu7BackgroundBlurStrength.coerceIn(0, 200).dp
+        } else if (useDarkTheme) {
+            150.dp
+        } else {
+            100.dp
+        }
     val squigglySlider by rememberPreference(SquigglySliderKey, defaultValue = false)
 
     // Listen Together state (reactive)
@@ -448,59 +515,99 @@ fun BottomSheetPlayer(
     val defaultGradientColors = listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant)
     val fallbackColor = MaterialTheme.colorScheme.surface.toArgb()
 
-    LaunchedEffect(mediaMetadata?.id, playerBackground) {
-        if (playerBackground == PlayerBackgroundStyle.GRADIENT) {
-            val currentMetadata = mediaMetadata
-            if (currentMetadata != null && currentMetadata.thumbnailUrl != null) {
-                val cachedColors = gradientColorsCache[currentMetadata.id]
-                if (cachedColors != null) {
-                    gradientColors = cachedColors
-                    return@LaunchedEffect
-                }
-                withContext(Dispatchers.IO) {
+    val visualArtworkKey =
+        "${effectiveVisualId.orEmpty()}|${effectiveBackgroundArtworkUrl.orEmpty()}|${effectiveBackgroundFallbackUrl.orEmpty()}"
+    val latestVisualArtworkKey by rememberUpdatedState(visualArtworkKey)
+
+    LaunchedEffect(visualArtworkKey, playerBackground) {
+        val needsArtworkPalette =
+            playerBackground == PlayerBackgroundStyle.GRADIENT ||
+                (VehicleVariantConfig.isDudu7 && playerBackground == PlayerBackgroundStyle.BLUR)
+        val artworkCandidates =
+            listOfNotNull(
+                effectiveBackgroundArtworkUrl?.takeIf { it.isNotBlank() },
+                effectiveBackgroundFallbackUrl?.takeIf { it.isNotBlank() },
+            ).distinct()
+        if (!needsArtworkPalette || artworkCandidates.isEmpty()) {
+            gradientColors = emptyList()
+            return@LaunchedEffect
+        }
+
+        val artworkCacheKey = visualArtworkKey
+        val cachedColors = gradientColorsCache[artworkCacheKey]
+        if (cachedColors != null) {
+            gradientColors = cachedColors
+            return@LaunchedEffect
+        }
+        withContext(Dispatchers.IO) {
+            val bitmap =
+                artworkCandidates.firstNotNullOfOrNull { artworkUrl ->
                     val request =
                         ImageRequest
                             .Builder(context)
-                            .data(currentMetadata.thumbnailUrl)
+                            .data(artworkUrl)
                             .size(100, 100)
                             .allowHardware(false)
-                            .memoryCacheKey("gradient_${currentMetadata.id}")
+                            .memoryCacheKey("gradient_${artworkCacheKey.hashCode()}_${artworkUrl.hashCode()}")
                             .build()
-
-                    val result = runCatching { context.imageLoader.execute(request) }.getOrNull()
-                    if (result != null) {
-                        val bitmap = result.image?.toBitmap()
-                        if (bitmap != null) {
-                            val palette =
-                                withContext(Dispatchers.Default) {
-                                    Palette
-                                        .from(bitmap)
-                                        .maximumColorCount(8)
-                                        .resizeBitmapArea(100 * 100)
-                                        .generate()
-                                }
-                            val extractedColors =
-                                PlayerColorExtractor.extractGradientColors(
-                                    palette = palette,
-                                    fallbackColor = fallbackColor,
-                                )
-                            gradientColorsCache[currentMetadata.id] = extractedColors
-                            withContext(Dispatchers.Main) { gradientColors = extractedColors }
-                        }
+                    runCatching { context.imageLoader.execute(request).image?.toBitmap() }.getOrNull()
+                }
+            if (bitmap != null) {
+                val palette =
+                    withContext(Dispatchers.Default) {
+                        Palette
+                            .from(bitmap)
+                            .maximumColorCount(8)
+                            .resizeBitmapArea(100 * 100)
+                            .generate()
+                    }
+                val extractedColors =
+                    PlayerColorExtractor.extractGradientColors(
+                        palette = palette,
+                        fallbackColor = fallbackColor,
+                    )
+                gradientColorsCache[artworkCacheKey] = extractedColors
+                withContext(Dispatchers.Main) {
+                    if (latestVisualArtworkKey == artworkCacheKey) {
+                        gradientColors = extractedColors
+                    }
+                }
+            } else {
+                withContext(Dispatchers.Main) {
+                    if (latestVisualArtworkKey == artworkCacheKey) {
+                        gradientColors = emptyList()
                     }
                 }
             }
-        } else {
-            gradientColors = emptyList()
         }
     }
+
+    val visualBackdropColor =
+        when {
+            playerBackground == PlayerBackgroundStyle.DEFAULT -> MaterialTheme.colorScheme.surfaceContainer
+            gradientColors.isNotEmpty() -> gradientColors.first()
+            else -> MaterialTheme.colorScheme.surface
+        }
+    val visualBackdropLuminance =
+        when (playerBackground) {
+            PlayerBackgroundStyle.BLUR -> visualBackdropColor.luminance() * 0.70f
+            PlayerBackgroundStyle.GRADIENT -> visualBackdropColor.luminance() * 0.80f
+            PlayerBackgroundStyle.DEFAULT -> visualBackdropColor.luminance()
+        }
+    val adaptiveVisualContentColor =
+        if (visualBackdropLuminance >= 0.52f) {
+            Color.Black.copy(alpha = 0.90f)
+        } else {
+            Color.White.copy(alpha = 0.96f)
+        }
+    val inverseAdaptiveVisualContentColor =
+        if (adaptiveVisualContentColor.luminance() > 0.5f) Color.Black else Color.White
 
     val TextBackgroundColor by animateColorAsState(
         targetValue =
             when (playerBackground) {
                 PlayerBackgroundStyle.DEFAULT -> MaterialTheme.colorScheme.onBackground
-                PlayerBackgroundStyle.BLUR -> Color.White
-                PlayerBackgroundStyle.GRADIENT -> Color.White
+                PlayerBackgroundStyle.BLUR, PlayerBackgroundStyle.GRADIENT -> adaptiveVisualContentColor
             },
         label = "TextBackgroundColor",
     )
@@ -509,8 +616,7 @@ fun BottomSheetPlayer(
         targetValue =
             when (playerBackground) {
                 PlayerBackgroundStyle.DEFAULT -> MaterialTheme.colorScheme.surface
-                PlayerBackgroundStyle.BLUR -> Color.Black
-                PlayerBackgroundStyle.GRADIENT -> Color.Black
+                PlayerBackgroundStyle.BLUR, PlayerBackgroundStyle.GRADIENT -> inverseAdaptiveVisualContentColor
             },
         label = "icBackgroundColor",
     )
@@ -521,7 +627,7 @@ fun BottomSheetPlayer(
                 playerBackground == PlayerBackgroundStyle.GRADIENT -> {
                 when (playerButtonsStyle) {
                     PlayerButtonsStyle.DEFAULT -> {
-                        Pair(Color.White, Color.Black)
+                        Pair(adaptiveVisualContentColor, inverseAdaptiveVisualContentColor)
                     }
 
                     PlayerButtonsStyle.PRIMARY -> {
@@ -575,8 +681,8 @@ fun BottomSheetPlayer(
                 when (playerButtonsStyle) {
                     PlayerButtonsStyle.DEFAULT -> {
                         Pair(
-                            Color.White.copy(alpha = 0.2f),
-                            Color.White,
+                            adaptiveVisualContentColor.copy(alpha = 0.20f),
+                            adaptiveVisualContentColor,
                         )
                     }
 
@@ -659,14 +765,18 @@ fun BottomSheetPlayer(
             (recognitionStatus is RecognitionStatus.Listening || recognitionStatus is RecognitionStatus.Processing)
 
     fun startRadioRecognition() {
-        val streamUrl = currentRadioStation?.streamUrl?.trim().orEmpty()
+        val streamUrl =
+            runCatching { playerConnection.player.currentMediaItem?.localConfiguration?.uri?.toString()?.trim() }
+                .getOrNull()
+                .takeUnless { it.isNullOrBlank() }
+                ?: currentRadioStation?.streamUrl?.trim().orEmpty()
         if (streamUrl.isBlank()) {
             Toast.makeText(context, "Radiostream ist nicht verfügbar", Toast.LENGTH_SHORT).show()
             return
         }
         recognitionRequestedForRadio = true
         MusicRecognitionService.reset()
-        scope.launch { MusicRecognitionService.recognizeStream(streamUrl) }
+        scope.launch { MusicRecognitionService.recognizeStream(context.applicationContext, streamUrl) }
     }
 
     LaunchedEffect(recognitionStatus, recognitionRequestedForRadio, isWebRadio) {
@@ -925,34 +1035,46 @@ fun BottomSheetPlayer(
                 modifier =
                     Modifier
                         .fillMaxSize()
+                        .vehicleHazeSource(vehicleHazeState)
                         .background(bottomSheetBackgroundColor),
             ) {
                 when (playerBackground) {
                     PlayerBackgroundStyle.BLUR -> {
                         AnimatedContent(
-                            targetState = mediaMetadata?.thumbnailUrl,
+                            targetState = effectiveBackgroundArtworkUrl to effectiveBackgroundFallbackUrl,
                             transitionSpec = {
                                 fadeIn(tween(800)).togetherWith(fadeOut(tween(800)))
                             },
                             label = "blurBackground",
-                        ) { thumbnailUrl ->
-                            if (thumbnailUrl != null) {
+                        ) { (thumbnailUrl, fallbackUrl) ->
+                            if (thumbnailUrl != null || fallbackUrl != null) {
                                 Box(modifier = Modifier.alpha(backgroundAlpha)) {
-                                    AsyncImage(
-                                        model =
-                                            ImageRequest
-                                                .Builder(context)
-                                                .data(thumbnailUrl)
-                                                .size(100, 100)
-                                                .allowHardware(false)
-                                                .build(),
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier =
-                                            Modifier
-                                                .fillMaxSize()
-                                                .blur(if (useDarkTheme) 150.dp else 100.dp),
-                                    )
+                                    if (!fallbackUrl.isNullOrBlank()) {
+                                        AsyncImage(
+                                            model =
+                                                ImageRequest
+                                                    .Builder(context)
+                                                    .data(fallbackUrl)
+                                                    .allowHardware(false)
+                                                    .build(),
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize().blur(artworkBackgroundBlur),
+                                        )
+                                    }
+                                    if (!thumbnailUrl.isNullOrBlank()) {
+                                        AsyncImage(
+                                            model =
+                                                ImageRequest
+                                                    .Builder(context)
+                                                    .data(thumbnailUrl)
+                                                    .allowHardware(false)
+                                                    .build(),
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize().blur(artworkBackgroundBlur),
+                                        )
+                                    }
                                     Box(
                                         modifier =
                                             Modifier
@@ -1001,6 +1123,31 @@ fun BottomSheetPlayer(
                     else -> {
                         PlayerBackgroundStyle.DEFAULT
                     }
+                }
+                if (
+                    VehicleVariantConfig.isDudu7 &&
+                    playerBackground == PlayerBackgroundStyle.BLUR &&
+                    dudu7BackgroundBlurStrength > 0 &&
+                    dudu7BackgroundBottomScrimAlpha > 0f
+                ) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .alpha(backgroundAlpha)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colorStops =
+                                            arrayOf(
+                                                0.00f to Color.Transparent,
+                                                0.48f to Color.Transparent,
+                                                0.72f to Color.Black.copy(alpha = dudu7BackgroundBottomScrimAlpha * 0.22f),
+                                                0.88f to Color.Black.copy(alpha = dudu7BackgroundBottomScrimAlpha * 0.58f),
+                                                1.00f to Color.Black.copy(alpha = dudu7BackgroundBottomScrimAlpha),
+                                            ),
+                                    ),
+                                ),
+                    )
                 }
             }
         },
@@ -1920,13 +2067,38 @@ fun BottomSheetPlayer(
             }
         }
 
-        when (LocalConfiguration.current.orientation) {
-            Configuration.ORIENTATION_LANDSCAPE -> {
+        when {
+            shouldUseVehiclePlayerLayout(
+                isDudu7 = VehicleVariantConfig.isDudu7,
+                isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE,
+            ) -> {
+                val tabContentColor =
+                    if (playerBackground == PlayerBackgroundStyle.DEFAULT) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        adaptiveVisualContentColor
+                    }
+                val tabGlassColor =
+                    tabContentColor.copy(
+                        alpha = if (tabContentColor.luminance() > 0.5f) 0.13f else 0.18f,
+                    )
                 VehicleLandscapeLayout(
                     state = state,
                     showInlineLyrics = showInlineLyrics,
                     playerPaneWeight = dudu7PlayerPaneWeight,
                     onToggleLyrics = { if (!isWebRadio) showInlineLyrics = !showInlineLyrics },
+                    tabContentColor = tabContentColor,
+                    tabGlassColor = tabGlassColor,
+                    playerTextColor = TextBackgroundColor,
+                    playerSecondaryTextColor = TextBackgroundColor.copy(alpha = 0.76f),
+                    playerPlayButtonContainerColor = textButtonColor,
+                    playerPlayButtonContentColor = iconButtonColor,
+                    playerSideButtonContentColor = sideButtonContentColor,
+                    hazeState = vehicleHazeState,
+                    onPhysicalRadioVisualChanged = { active, identity, artworkUrl ->
+                        val next = Dudu7FmVisualSnapshot(active, identity, artworkUrl)
+                        if (dudu7FmVisual != next) dudu7FmVisual = next
+                    },
                     thumbnailContent = {
                         val currentSliderPosition by rememberUpdatedState(sliderPosition)
                         val sliderPositionProvider = remember { { currentSliderPosition } }
@@ -1948,8 +2120,9 @@ fun BottomSheetPlayer(
                                     modifier = Modifier.animateContentSize(),
                                     isPlayerExpanded = isExpandedProvider,
                                     isLandscape = true,
-                                    landscapeHorizontalPadding = 2.dp,
+                                    landscapeHorizontalPadding = VehicleRadioPlayerMetrics.ArtworkHorizontalPadding,
                                     isListenTogetherGuest = isListenTogetherGuest,
+                                    showRadioStationLogoOverlay = isWebRadio && radioHasTrackArtwork,
                                 )
                             }
                         }
@@ -1967,7 +2140,7 @@ fun BottomSheetPlayer(
                                     currentSong?.song?.liked == true
                                 }
                             val likeEnabled = !isWebRadio || resolvedRadioSong != null
-                            val showRadioRecognition = isWebRadio && !radioHasTrackMetadata
+                            val showRadioRecognition = isWebRadio && resolvedRadioSong == null
                             VehiclePlayerControls(
                                 title = currentMediaMetadata.title,
                                 artists = currentMediaMetadata.artists.joinToString(", ") { it.name },
@@ -2063,14 +2236,10 @@ fun BottomSheetPlayer(
                                                 ?: currentMediaMetadata.artists.joinToString(" ") { it.name }
                                             SearchRoutes.resultRoute("$artist ${currentMediaMetadata.title}".trim())
                                         } else {
-                                            val albumId = currentMediaMetadata.album?.id
-                                                ?: currentSong?.album?.id
-                                                ?: currentSong?.song?.albumId
-                                            albumId?.let { "album/$it" }
-                                                ?: SearchRoutes.resultRoute(
-                                                    "${currentMediaMetadata.artists.joinToString(" ") { it.name }} ${currentMediaMetadata.title}".trim(),
-                                                )
-                                        }
+                                    SearchRoutes.resultRoute(
+                                        "${currentMediaMetadata.artists.joinToString(" ") { it.name }} ${currentMediaMetadata.title}".trim(),
+                                    )
+                                }
                                     if (!playerConnection.requestRightPaneNavigation(route)) navController.navigate(route)
                                 },
                                 onArtistClick = {

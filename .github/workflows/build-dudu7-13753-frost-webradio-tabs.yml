@@ -1,0 +1,113 @@
+name: Build Dudu7 13.7.53 Frost WebRadio Tabs
+
+on:
+  pull_request:
+    branches: [agent/issues-94-96-97-frosted-fm-artwork]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  implement-test-build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-cleanup: on-success
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Apply issues 96 99 100 101
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if grep -q 'versionCode = 1370062' app/build.gradle.kts \
+            && test -f app/src/dudu7/res/drawable-nodpi/dudu7_frost_texture.png \
+            && grep -q 'mayFollowStationArtwork' app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt; then
+            echo 'Product patch already applied.'
+          else
+            python3 scripts/apply_issues_96_99_100_101.py
+          fi
+          rm -f .github/workflows/inspect-issues-96-99-100-101.yml
+          git diff --check
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A \
+              app/build.gradle.kts \
+              app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt \
+              app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt \
+              app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt \
+              app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt \
+              app/src/dudu7/res/drawable-nodpi/dudu7_frost_texture.png \
+              .github/workflows/inspect-issues-96-99-100-101.yml
+            git commit -m "Refine Frosted Ice, WebRadio artwork and tab contrast [skip ci]"
+            git pull --rebase origin ${{ github.head_ref || github.ref_name }}
+            git push origin HEAD:${{ github.head_ref || github.ref_name }}
+          fi
+
+      - name: Verify implementation invariants
+        shell: bash
+        run: |
+          set -euxo pipefail
+          grep -q 'versionCode = 1370062' app/build.gradle.kts
+          grep -q 'versionName = "13.7.53"' app/build.gradle.kts
+          test -s app/src/dudu7/res/drawable-nodpi/dudu7_frost_texture.png
+          file app/src/dudu7/res/drawable-nodpi/dudu7_frost_texture.png | grep -q 'PNG image data, 768 x 512'
+          grep -q 'R.drawable.dudu7_frost_texture' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+          ! grep -q 'Canvas(modifier = modifier)' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+          grep -q 'tabScrimColor' app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt
+          grep -q 'tabContentColor.luminance()' app/src/main/kotlin/com/metrolist/music/ui/player/Player.kt
+          grep -q 'MaterialTheme.colorScheme.surfaceContainer)' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
+          ! grep -q 'surfaceVariant.copy(alpha = 0.55f)' app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt
+          grep -q 'mayFollowStationArtwork' app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt
+
+      - name: Unit tests
+        run: |
+          chmod +x gradlew
+          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+
+      - name: Build and verify APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace | tee artifacts/build.log
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          cp "$APK" artifacts/Metrolist-dudu7-13.7.53.apk
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$BUILD_TOOLS/aapt" dump badging artifacts/Metrolist-dudu7-13.7.53.apk > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs artifacts/Metrolist-dudu7-13.7.53.apk > artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370062'" artifacts/apk-badging.txt
+          grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
+          unzip -l artifacts/Metrolist-dudu7-13.7.53.apk > artifacts/apk-contents.txt
+          grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
+          grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
+          grep -q 'res/drawable-nodpi-v4/dudu7_frost_texture.png' artifacts/apk-contents.txt || grep -q 'dudu7_frost_texture' artifacts/apk-contents.txt
+          sha256sum artifacts/Metrolist-dudu7-13.7.53.apk > artifacts/Metrolist-dudu7-13.7.53.apk.sha256
+
+      - name: Upload verified APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.53-apk
+          path: |
+            artifacts/Metrolist-dudu7-13.7.53.apk
+            artifacts/Metrolist-dudu7-13.7.53.apk.sha256
+            artifacts/apk-badging.txt
+            artifacts/apk-signature.txt
+            artifacts/apk-contents.txt
+            artifacts/build.log
+          retention-days: 14

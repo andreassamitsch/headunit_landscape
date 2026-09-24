@@ -62,6 +62,13 @@ import com.metrolist.music.constants.DefaultOpenTabKey
 import com.metrolist.music.constants.DensityScale
 import com.metrolist.music.constants.DensityScaleKey
 import com.metrolist.music.constants.DynamicThemeKey
+import com.metrolist.music.constants.Dudu7FrostedIceKey
+import com.metrolist.music.constants.Dudu7FrostedGlassStrengthKey
+import com.metrolist.music.constants.Dudu7FrostedBlurStrengthKey
+import com.metrolist.music.constants.Dudu7FrostTextureEnabledKey
+import com.metrolist.music.constants.Dudu7FrostTextureStrengthKey
+import com.metrolist.music.constants.Dudu7BackgroundBlurStrengthKey
+import com.metrolist.music.constants.Dudu7BackgroundBottomScrimStrengthKey
 import com.metrolist.music.constants.EnableDynamicIconKey
 import com.metrolist.music.constants.EnableHighRefreshRateKey
 import com.metrolist.music.constants.EnableLandscapeScalingKey
@@ -153,6 +160,41 @@ fun AppearanceSettings(
         rememberPreference(
             EnableLandscapeScalingKey,
             defaultValue = false,
+        )
+    val (dudu7FrostedIce, onDudu7FrostedIceChange) =
+        rememberPreference(
+            Dudu7FrostedIceKey,
+            defaultValue = false,
+        )
+    val (dudu7FrostedGlassStrength, onDudu7FrostedGlassStrengthChange) =
+        rememberPreference(
+            Dudu7FrostedGlassStrengthKey,
+            defaultValue = 55,
+        )
+    val (dudu7FrostedBlurStrength, onDudu7FrostedBlurStrengthChange) =
+        rememberPreference(
+            Dudu7FrostedBlurStrengthKey,
+            defaultValue = 12,
+        )
+    val (dudu7FrostTextureEnabled, onDudu7FrostTextureEnabledChange) =
+        rememberPreference(
+            Dudu7FrostTextureEnabledKey,
+            defaultValue = false,
+        )
+    val (dudu7FrostTextureStrength, onDudu7FrostTextureStrengthChange) =
+        rememberPreference(
+            Dudu7FrostTextureStrengthKey,
+            defaultValue = 35,
+        )
+    val (dudu7BackgroundBlurStrength, onDudu7BackgroundBlurStrengthChange) =
+        rememberPreference(
+            Dudu7BackgroundBlurStrengthKey,
+            defaultValue = 120,
+        )
+    val (dudu7BackgroundBottomScrimStrength, onDudu7BackgroundBottomScrimStrengthChange) =
+        rememberPreference(
+            Dudu7BackgroundBottomScrimStrengthKey,
+            defaultValue = 35,
         )
     val (selectedThemeColorInt) =
         rememberPreference(
@@ -1013,6 +1055,150 @@ fun AppearanceSettings(
                             onClick = { onEnableLandscapeScalingChange(!enableLandscapeScaling) },
                         ),
                     )
+                    add(
+                        Material3SettingsItem(
+                            icon = painterResource(R.drawable.palette),
+                            title = { Text("Frosted Ice (Dudu7)") },
+                            description = { Text("Transparente Dudu7-Oberflächen; standardmäßig aus") },
+                            trailingContent = {
+                                Switch(
+                                    checked = dudu7FrostedIce,
+                                    onCheckedChange = onDudu7FrostedIceChange,
+                                    thumbContent = {
+                                        Icon(
+                                            painter = painterResource(
+                                                id = if (dudu7FrostedIce) R.drawable.check else R.drawable.close,
+                                            ),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(SwitchDefaults.IconSize),
+                                        )
+                                    },
+                                )
+                            },
+                            onClick = { onDudu7FrostedIceChange(!dudu7FrostedIce) },
+                        ),
+                    )
+                    add(
+                        Material3SettingsItem(
+                            icon = painterResource(R.drawable.palette),
+                            title = { Text("Dudu7-Hintergrund-Unschärfe") },
+                            description = { Text("${dudu7BackgroundBlurStrength} dp · unabhängig vom Glas") },
+                            trailingContent = {
+                                Slider(
+                                    value = dudu7BackgroundBlurStrength.toFloat(),
+                                    onValueChange = { onDudu7BackgroundBlurStrengthChange(it.roundToInt()) },
+                                    valueRange = 0f..200f,
+                                    steps = 199,
+                                    modifier = Modifier.fillMaxWidth(0.42f),
+                                )
+                            },
+                            onClick = {},
+                        ),
+                    )
+                    add(
+                        Material3SettingsItem(
+                            icon = painterResource(R.drawable.palette),
+                            title = { Text("Unteren Hintergrund abdunkeln") },
+                            description = {
+                                Text(
+                                    if (dudu7BackgroundBlurStrength > 0) {
+                                        "${dudu7BackgroundBottomScrimStrength}% · weicher Verlauf"
+                                    } else {
+                                        "Wirkt bei aktivierter Hintergrund-Unschärfe"
+                                    },
+                                )
+                            },
+                            trailingContent = {
+                                Slider(
+                                    value = dudu7BackgroundBottomScrimStrength.toFloat(),
+                                    onValueChange = { onDudu7BackgroundBottomScrimStrengthChange(it.roundToInt()) },
+                                    valueRange = 0f..100f,
+                                    steps = 99,
+                                    enabled = dudu7BackgroundBlurStrength > 0,
+                                    modifier = Modifier.fillMaxWidth(0.42f),
+                                )
+                            },
+                            onClick = {},
+                        ),
+                    )
+                    if (dudu7FrostedIce) {
+                        add(
+                            Material3SettingsItem(
+                                icon = painterResource(R.drawable.palette),
+                                title = { Text("Glasstärke") },
+                                description = { Text("${dudu7FrostedGlassStrength}% Deckkraft") },
+                                trailingContent = {
+                                    Slider(
+                                        value = dudu7FrostedGlassStrength.toFloat(),
+                                        onValueChange = { onDudu7FrostedGlassStrengthChange(it.roundToInt()) },
+                                        valueRange = 0f..100f,
+                                        steps = 19,
+                                        modifier = Modifier.fillMaxWidth(0.42f),
+                                    )
+                                },
+                                onClick = {},
+                            ),
+                        )
+                        add(
+                            Material3SettingsItem(
+                                icon = painterResource(R.drawable.palette),
+                                title = { Text("Glas-Unschärfe") },
+                                description = { Text("${dudu7FrostedBlurStrength} dp") },
+                                trailingContent = {
+                                    Slider(
+                                        value = dudu7FrostedBlurStrength.toFloat(),
+                                        onValueChange = { onDudu7FrostedBlurStrengthChange(it.roundToInt()) },
+                                        valueRange = 0f..24f,
+                                        steps = 23,
+                                        modifier = Modifier.fillMaxWidth(0.42f),
+                                    )
+                                },
+                                onClick = {},
+                            ),
+                        )
+                        add(
+                            Material3SettingsItem(
+                                icon = painterResource(R.drawable.palette),
+                                title = { Text("Froststruktur anzeigen") },
+                                description = { Text("Feine Eisstruktur über den Glasflächen") },
+                                trailingContent = {
+                                    Switch(
+                                        checked = dudu7FrostTextureEnabled,
+                                        onCheckedChange = onDudu7FrostTextureEnabledChange,
+                                        thumbContent = {
+                                            Icon(
+                                                painter = painterResource(
+                                                    id = if (dudu7FrostTextureEnabled) R.drawable.check else R.drawable.close,
+                                                ),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(SwitchDefaults.IconSize),
+                                            )
+                                        },
+                                    )
+                                },
+                                onClick = { onDudu7FrostTextureEnabledChange(!dudu7FrostTextureEnabled) },
+                            ),
+                        )
+                        if (dudu7FrostTextureEnabled) {
+                            add(
+                                Material3SettingsItem(
+                                    icon = painterResource(R.drawable.palette),
+                                    title = { Text("Froststruktur-Stärke") },
+                                    description = { Text("${dudu7FrostTextureStrength}%") },
+                                    trailingContent = {
+                                        Slider(
+                                            value = dudu7FrostTextureStrength.toFloat(),
+                                            onValueChange = { onDudu7FrostTextureStrengthChange(it.roundToInt()) },
+                                            valueRange = 0f..100f,
+                                            steps = 19,
+                                            modifier = Modifier.fillMaxWidth(0.42f),
+                                        )
+                                    },
+                                    onClick = {},
+                                ),
+                            )
+                        }
+                    }
                     // Only show dynamic theme option when using the default/dynamic color
                     // When a custom color is selected, dynamic theme is automatically disabled
                     if (!isUsingCustomColor) {

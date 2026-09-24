@@ -1,237 +1,1331 @@
 package com.metrolist.music.ui.screens.radio
 
-import androidx.compose.foundation.clickable
+import android.Manifest
+import android.content.pm.PackageManager
+import android.widget.Toast
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.content.ContextCompat
 import com.metrolist.music.LocalPlayerConnection
 import com.metrolist.music.R
+import com.metrolist.music.constants.FmRadioViewTypeKey
+import com.metrolist.music.constants.LibraryViewType
+import com.metrolist.music.extensions.move
+import com.metrolist.music.radio.fyt.FmPresetOrderStore
+import com.metrolist.music.radio.fyt.FmStationArtwork
 import com.metrolist.music.radio.fyt.FytPhysicalRadio
+import com.metrolist.music.utils.rememberEnumPreference
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyGridState
+import sh.calvin.reorderable.rememberReorderableLazyListState
+import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class)
+private enum class PhysicalRadioSection {
+    FAVOURITES,
+    SCAN,
+    MANUAL,
+    SETTINGS,
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun PhysicalRadioScreen() {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     val playerConnection = LocalPlayerConnection.current
     val radio = remember(context) { FytPhysicalRadio.get(context) }
     val state by radio.state.collectAsStateWithLifecycle()
+
+    var section by remember { mutableStateOf(PhysicalRadioSection.FAVOURITES) }
+    var viewType by rememberEnumPreference(FmRadioViewTypeKey, LibraryViewType.LIST)
     var frequencyInput by remember { mutableStateOf(FytPhysicalRadio.formatFrequency(state.frequency)) }
+    var editingPreset by remember { mutableStateOf<FytPhysicalRadio.Preset?>(null) }
+    var deletingPreset by remember { mutableStateOf<FytPhysicalRadio.Preset?>(null) }
+    var logoPickerPreset by remember { mutableStateOf<FytPhysicalRadio.Preset?>(null) }
+
+    val orderedPresets = remember { mutableStateListOf<FytPhysicalRadio.Preset>() }
+    val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
+    val reorderState =
+        rememberReorderableLazyListState(listState) { from, to ->
+            if (from.index in orderedPresets.indices && to.index in orderedPresets.indices) {
+                orderedPresets.move(from.index, to.index)
+            }
+        }
+    val gridReorderState =
+        rememberReorderableLazyGridState(gridState) { from, to ->
+            if (from.index in orderedPresets.indices && to.index in orderedPresets.indices) {
+                orderedPresets.move(from.index, to.index)
+            }
+        }
+    val isDragging = reorderState.isAnyItemDragging || gridReorderState.isAnyItemDragging
+    var wasDragging by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.frequency) {
         frequencyInput = FytPhysicalRadio.formatFrequency(state.frequency)
     }
 
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp),
-    ) {
-        Row(
+    LaunchedEffect(state.presets, isDragging) {
+        if (!isDragging && !wasDragging) {
+            val ordered = FmPresetOrderStore.ordered(context, state.presets)
+            if (orderedPresets != ordered) {
+                orderedPresets.clear()
+                orderedPresets.addAll(ordered)
+            }
+        }
+    }
+
+    LaunchedEffect(isDragging) {
+        if (wasDragging && !isDragging) {
+            FmPresetOrderStore.persist(context, orderedPresets)
+        }
+        wasDragging = isDragging
+    }
+
+    fun deletePreset(preset: FytPhysicalRadio.Preset) {
+        val remaining = orderedPresets.filterNot { it == preset }
+        orderedPresets.clear()
+        orderedPresets.addAll(remaining)
+        FmPresetOrderStore.persist(context, remaining)
+        radio.removePreset(preset)
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = state.displayStation,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = state.rt.ifBlank { "Physischer Antennenempfang" },
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+            item {
+                FilterChip(
+                    selected = section == PhysicalRadioSection.FAVOURITES,
+                    onClick = { section = PhysicalRadioSection.FAVOURITES },
+                    label = { Text("Favoriten") },
+                    leadingIcon = { Icon(painterResource(R.drawable.favorite), contentDescription = null) },
                 )
             }
-            if (state.isBusy) CircularProgressIndicator()
+            item {
+                FilterChip(
+                    selected = section == PhysicalRadioSection.SCAN,
+                    onClick = { section = PhysicalRadioSection.SCAN },
+                    label = { Text("Sendersuchlauf") },
+                    leadingIcon = { Icon(painterResource(R.drawable.search), contentDescription = null) },
+                )
+            }
+            item {
+                FilterChip(
+                    selected = section == PhysicalRadioSection.MANUAL,
+                    onClick = { section = PhysicalRadioSection.MANUAL },
+                    label = { Text("Manuell") },
+                )
+            }
+            item {
+                FilterChip(
+                    selected = section == PhysicalRadioSection.SETTINGS,
+                    onClick = { section = PhysicalRadioSection.SETTINGS },
+                    label = { Text("Radiofunktionen") },
+                )
+            }
+            if (section == PhysicalRadioSection.FAVOURITES) {
+                item {
+                    IconButton(onClick = { viewType = viewType.toggle() }) {
+                        Icon(
+                            painter =
+                                painterResource(
+                                    if (viewType == LibraryViewType.LIST) R.drawable.grid_view else R.drawable.list,
+                                ),
+                            contentDescription =
+                                if (viewType == LibraryViewType.LIST) "Kachelansicht" else "Listenansicht",
+                        )
+                    }
+                }
+            }
+            if (state.isBusy && !state.isScanning) {
+                item { CircularProgressIndicator(Modifier.size(28.dp)) }
+            }
         }
 
-        Text(
-            text =
-                buildString {
-                    append("${FytPhysicalRadio.formatFrequency(state.frequency)} MHz")
-                    append("  •  RSSI ${state.rssi}")
-                    append(if (state.stereo) "  •  Stereo" else "  •  Mono")
-                    if (state.pi != 0) append("  •  PI ${state.pi.toString(16).uppercase()}")
-                    if (state.pty != 0) append("  •  PTY ${state.pty}")
-                    if (state.tp) append("  •  TP")
-                    if (state.ta) append("  •  TA")
-                },
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        when (section) {
+            PhysicalRadioSection.FAVOURITES -> {
+                if (orderedPresets.isEmpty()) {
+                    EmptyFmFavourites(onOpenSearch = { section = PhysicalRadioSection.SCAN })
+                } else if (viewType == LibraryViewType.LIST) {
+                    LazyColumn(
+                        state = listState,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        itemsIndexed(
+                            items = orderedPresets,
+                            key = { _, preset -> FytPhysicalRadio.stablePresetKey(preset) },
+                        ) { _, preset ->
+                            ReorderableItem(reorderState, key = FytPhysicalRadio.stablePresetKey(preset)) {
+                                val isActive = state.isActive && state.currentPreset?.id == preset.id
+                                FmFavouriteRow(
+                                    preset = preset,
+                                    pi = if (isActive && state.pi > 0) state.pi else preset.pi,
+                                    activeFrequency = state.frequency,
+                                    activeEcc = state.ecc,
+                                    isActive = isActive,
+                                    onPlay = {
+                                        if (!isActive) {
+                                            playerConnection?.pause()
+                                            radio.tunePreset(preset)
+                                        }
+                                    },
+                                    onNextAf = {
+                                        if (isActive) {
+                                            radio.tuneNextAlternativeFrequency(preset)
+                                            Toast.makeText(context, "Alternative Frequenz wird geprüft", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    onEdit = { editingPreset = preset },
+                                    onDelete = { deletingPreset = preset },
+                                    dragHandle = {
+                                        IconButton(
+                                            onClick = {},
+                                            modifier =
+                                                Modifier
+                                                    .draggableHandle(
+                                                        onDragStarted = {
+                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        },
+                                                    ),
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.drag_handle),
+                                                contentDescription = "Sender verschieben",
+                                            )
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        state = gridState,
+                        columns = GridCells.Adaptive(142.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        gridItemsIndexed(
+                            items = orderedPresets,
+                            key = { _, preset -> FytPhysicalRadio.stablePresetKey(preset) },
+                        ) { _, preset ->
+                            ReorderableItem(gridReorderState, key = FytPhysicalRadio.stablePresetKey(preset)) {
+                                val isActive = state.isActive && state.currentPreset?.id == preset.id
+                                FmFavouriteCard(
+                                    preset = preset,
+                                    pi = if (isActive && state.pi > 0) state.pi else preset.pi,
+                                    activeFrequency = state.frequency,
+                                    activeEcc = state.ecc,
+                                    isActive = isActive,
+                                    onPlay = {
+                                        if (!isActive) {
+                                            playerConnection?.pause()
+                                            radio.tunePreset(preset)
+                                        }
+                                    },
+                                    onNextAf = {
+                                        if (isActive) {
+                                            radio.tuneNextAlternativeFrequency(preset)
+                                            Toast.makeText(context, "Alternative Frequenz wird geprüft", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    onEdit = { editingPreset = preset },
+                                    onDelete = { deletingPreset = preset },
+                                    dragHandle = {
+                                        IconButton(
+                                            onClick = {},
+                                            modifier =
+                                                Modifier
+                                                    .draggableHandle(
+                                                        onDragStarted = {
+                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        },
+                                                    ).size(42.dp),
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.drag_indicator_grid),
+                                                contentDescription = "Sender verschieben",
+                                            )
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            PhysicalRadioSection.SCAN -> {
+                FmAutoScanPanel(
+                    radio = radio,
+                    onSaved = { section = PhysicalRadioSection.FAVOURITES },
+                )
+            }
+
+            PhysicalRadioSection.MANUAL -> {
+                PhysicalRadioManualPanel(
+                    radio = radio,
+                    frequencyInput = frequencyInput,
+                    onFrequencyInputChange = { frequencyInput = it.replace(',', '.') },
+                    onTune = {
+                        frequencyInput.toFloatOrNull()?.let { frequency ->
+                            playerConnection?.pause()
+                            radio.tune(frequency)
+                        }
+                    },
+                )
+            }
+
+            PhysicalRadioSection.SETTINGS -> {
+                PhysicalRadioSettingsPanel(radio)
+            }
+        }
+    }
+
+    deletingPreset?.let { preset ->
+        AlertDialog(
+            onDismissRequest = { deletingPreset = null },
+            title = { Text("FM-Favorit löschen?") },
+            text = { Text("${preset.name} wird aus den FM-Favoriten entfernt.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        deletePreset(preset)
+                        deletingPreset = null
+                    },
+                ) { Text("Löschen") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { deletingPreset = null }) { Text("Abbrechen") }
+            },
         )
+    }
 
-        state.error?.let {
-            Text(
-                text = it,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyMedium,
-            )
+    editingPreset?.let { preset ->
+        FmPresetEditorDialog(
+            preset = preset,
+            onDismiss = { editingPreset = null },
+            onSave = { name, frequency ->
+                if (radio.updatePreset(preset, name, frequency)) {
+                    editingPreset = null
+                }
+            },
+            onChooseLogo = {
+                logoPickerPreset = preset
+                editingPreset = null
+            },
+        )
+    }
+    logoPickerPreset?.let { preset ->
+        FmLogoPickerDialog(preset = preset, onDismiss = { logoPickerPreset = null })
+    }
+}
+
+
+@Composable
+private fun FmPresetEditorDialog(
+    preset: FytPhysicalRadio.Preset,
+    onDismiss: () -> Unit,
+    onSave: (String, Float) -> Unit,
+    onChooseLogo: () -> Unit,
+) {
+    var name by remember(preset) { mutableStateOf(preset.name) }
+    var frequency by remember(preset) { mutableStateOf(FytPhysicalRadio.formatFrequency(preset.frequency)) }
+    var error by remember(preset) { mutableStateOf<String?>(null) }
+    val isRtrFavourite = preset.stationId.isNotBlank()
+
+    fun submit() {
+        val parsed = frequency.replace(',', '.').toFloatOrNull()
+        when {
+            name.isBlank() -> error = "Sendername fehlt"
+            parsed == null -> error = "Frequenz ist ungültig"
+            parsed !in 87.5f..108.0f -> error = "Frequenz muss zwischen 87,5 und 108,0 MHz liegen"
+            else -> onSave(name.trim(), if (isRtrFavourite) preset.frequency else parsed)
         }
+    }
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            OutlinedTextField(
-                value = frequencyInput,
-                onValueChange = { frequencyInput = it.replace(',', '.') },
-                label = { Text("Frequenz") },
-                suffix = { Text("MHz") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions.Default,
-                modifier = Modifier.weight(1f),
-            )
-            Button(
-                onClick = {
-                    frequencyInput.toFloatOrNull()?.let { frequency ->
-                        playerConnection?.pause()
-                        radio.tune(frequency)
-                    }
-                },
-                enabled = !state.isBusy,
-            ) {
-                Text("TUNE")
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("FM-Favorit bearbeiten") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Sendername") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (isRtrFavourite) {
+                    OutlinedTextField(
+                        value = "${FytPhysicalRadio.formatFrequency(preset.frequency)} MHz",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Zuletzt verwendete Frequenz") },
+                        supportingText = { Text("Alternative Frequenzen werden automatisch über RTR gewählt und nicht im Favoriten gespeichert.") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = frequency,
+                        onValueChange = { frequency = it },
+                        label = { Text("Feste Frequenz") },
+                        supportingText = { Text("Dieser manuelle Favorit verwendet genau eine Frequenz.") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                FmStationArtwork(
+                    stationName = preset.name,
+                    frequency = preset.frequency,
+                    pi = preset.pi,
+                    ecc = preset.ecc,
+                    size = 72.dp,
+                    allFrequencies = listOf(preset.frequency),
+                )
+                OutlinedButton(onClick = onChooseLogo, modifier = Modifier.fillMaxWidth()) {
+                    Text("SENDERLOGO AUSWÄHLEN")
+                }
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
-        }
+        },
+        confirmButton = { Button(onClick = ::submit) { Text("Speichern") } },
+        dismissButton = { OutlinedButton(onClick = onDismiss) { Text("Abbrechen") } },
+    )
+}
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Button(
-                onClick = {
-                    if (state.isActive) {
-                        radio.powerOff()
+@Composable
+private fun EmptyFmFavourites(onOpenSearch: () -> Unit) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                painter = painterResource(R.drawable.radio),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(52.dp),
+            )
+            Spacer(Modifier.height(8.dp))
+            Text("Noch keine FM-Sender gespeichert", style = MaterialTheme.typography.titleMedium)
+            TextButton(onClick = onOpenSearch) { Text("Automatischen Suchlauf starten") }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FmFavouriteRow(
+    preset: FytPhysicalRadio.Preset,
+    pi: Int,
+    activeFrequency: Float,
+    activeEcc: String,
+    isActive: Boolean,
+    onPlay: () -> Unit,
+    onNextAf: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    dragHandle: @Composable () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(
+                    if (isActive) {
+                        MaterialTheme.colorScheme.primaryContainer
                     } else {
-                        playerConnection?.pause()
-                        radio.powerOn()
-                    }
-                },
-                enabled = !state.isBusy,
-                modifier = Modifier.weight(1f),
-            ) {
-                Icon(
-                    painter = painterResource(if (state.isActive) R.drawable.stop else R.drawable.play),
-                    contentDescription = null,
+                        MaterialTheme.colorScheme.surfaceContainer
+                    },
+                ).combinedClickable(
+                    onClick = onPlay,
+                    onDoubleClick = onNextAf,
                 )
-                Text(if (state.isActive) "AUS" else "RADIO EIN", modifier = Modifier.padding(start = 6.dp))
-            }
-            OutlinedButton(
-                onClick = radio::toggleMute,
-                enabled = state.isActive && !state.isBusy,
-                modifier = Modifier.weight(1f),
-            ) {
-                Icon(
-                    painter = painterResource(if (state.isMuted) R.drawable.volume_off else R.drawable.volume_up),
-                    contentDescription = null,
-                )
-                Text(if (state.isMuted) "STUMM" else "TON", modifier = Modifier.padding(start = 6.dp))
-            }
-            OutlinedButton(
-                onClick = radio::saveCurrentPreset,
-                enabled = state.isActive,
-                modifier = Modifier.weight(1f),
-            ) {
-                Icon(painterResource(R.drawable.favorite_border), contentDescription = null)
-                Text("MERKEN", modifier = Modifier.padding(start = 6.dp))
-            }
-        }
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            OutlinedButton(onClick = { radio.seek(false) }, enabled = state.isActive && !state.isBusy, modifier = Modifier.weight(1f)) {
-                Text("SEEK ◀")
-            }
-            OutlinedButton(onClick = { radio.step(false) }, enabled = !state.isBusy, modifier = Modifier.weight(1f)) {
-                Text("− 0,1")
-            }
-            OutlinedButton(onClick = { radio.step(true) }, enabled = !state.isBusy, modifier = Modifier.weight(1f)) {
-                Text("+ 0,1")
-            }
-            OutlinedButton(onClick = { radio.seek(true) }, enabled = state.isActive && !state.isBusy, modifier = Modifier.weight(1f)) {
-                Text("SEEK ▶")
-            }
-            OutlinedButton(onClick = radio::enableRds, enabled = state.isActive, modifier = Modifier.weight(1f)) {
-                Text("RDS")
-            }
-        }
-
-        HorizontalDivider()
-        Text("FM-Favoriten", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-
-        if (state.presets.isEmpty()) {
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+    ) {
+        FmStationArtwork(
+            stationName = preset.name,
+            frequency = if (isActive) activeFrequency else preset.frequency,
+            pi = pi,
+            ecc = if (isActive) activeEcc.ifBlank { preset.ecc } else preset.ecc,
+            size = 56.dp,
+            allFrequencies = listOf(if (isActive) activeFrequency else preset.frequency),
+        )
+        Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
             Text(
-                text = "Mit „Merken“ wird die aktuelle Frequenz gespeichert.",
+                text = preset.name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = if (preset.stationId.isNotBlank()) {
+                    "${FytPhysicalRadio.formatFrequency(if (isActive) activeFrequency else preset.frequency)} MHz • AF automatisch über RTR"
+                } else {
+                    "${FytPhysicalRadio.formatFrequency(preset.frequency)} MHz • Fester Frequenzfavorit"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (isActive) {
+            Text(
+                text = "● LÄUFT",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(end = 4.dp),
+            )
+        }
+        FmStationActionMenu(
+            menuKey = FytPhysicalRadio.stablePresetKey(preset),
+            onEdit = onEdit,
+            onDelete = onDelete,
+        )
+        dragHandle()
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FmFavouriteCard(
+    preset: FytPhysicalRadio.Preset,
+    pi: Int,
+    activeFrequency: Float,
+    activeEcc: String,
+    isActive: Boolean,
+    onPlay: () -> Unit,
+    onNextAf: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    dragHandle: @Composable () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.86f)
+                .clip(RoundedCornerShape(14.dp))
+                .background(
+                    if (isActive) MaterialTheme.colorScheme.primaryContainer
+                    else MaterialTheme.colorScheme.surfaceContainer,
+                )
+                .combinedClickable(onClick = onPlay, onDoubleClick = onNextAf),
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxSize().padding(start = 10.dp, top = 10.dp, end = 10.dp, bottom = 44.dp),
+        ) {
+            FmStationArtwork(
+                stationName = preset.name,
+                frequency = if (isActive) activeFrequency else preset.frequency,
+                pi = pi,
+                ecc = if (isActive) activeEcc.ifBlank { preset.ecc } else preset.ecc,
+                size = 88.dp,
+                allFrequencies = listOf(if (isActive) activeFrequency else preset.frequency),
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = preset.name,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = "${FytPhysicalRadio.formatFrequency(if (isActive) activeFrequency else preset.frequency)} MHz",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+            if (isActive) {
+                Text(
+                    text = "● LÄUFT",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+        FmStationActionMenu(
+            menuKey = FytPhysicalRadio.stablePresetKey(preset),
+            onEdit = onEdit,
+            onDelete = onDelete,
+            modifier = Modifier.align(Alignment.BottomStart).padding(start = 2.dp, bottom = 2.dp),
+        )
+        Box(Modifier.align(Alignment.BottomEnd).padding(end = 2.dp, bottom = 2.dp)) { dragHandle() }
+    }
+}
+
+@Composable
+private fun FmStationActionMenu(
+    menuKey: String,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var menuExpanded by remember(menuKey) { mutableStateOf(false) }
+    Box(modifier) {
+        IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(42.dp)) {
+            Icon(painterResource(R.drawable.more_vert), contentDescription = "Senderaktionen")
+        }
+        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Bearbeiten") },
+                leadingIcon = { Icon(painterResource(R.drawable.edit), contentDescription = null) },
+                onClick = {
+                    menuExpanded = false
+                    onEdit()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Löschen", color = MaterialTheme.colorScheme.error) },
+                leadingIcon = {
+                    Icon(
+                        painterResource(R.drawable.delete),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                },
+                onClick = {
+                    menuExpanded = false
+                    onDelete()
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun FmAutoScanPanel(
+    radio: FytPhysicalRadio,
+    onSaved: () -> Unit,
+) {
+    val context = LocalContext.current
+    val playerConnection = LocalPlayerConnection.current
+    val state by radio.state.collectAsStateWithLifecycle()
+    val selected = remember { mutableStateMapOf<Int, Boolean>() }
+    var showScanStartOptions by remember { mutableStateOf(false) }
+
+    fun startScan(clearFavourites: Boolean) {
+        playerConnection?.pause()
+        if (clearFavourites) {
+            radio.clearPresets()
+            FmPresetOrderStore.persist(context, emptyList())
+        }
+        radio.startAutoScan()
+    }
+
+    LaunchedEffect(state.scanResults) {
+        state.scanResults.forEach { result ->
+            selected.putIfAbsent((result.frequency * 10).roundToInt(), true)
+        }
+        val validKeys = state.scanResults.map { (it.frequency * 10).roundToInt() }.toSet()
+        selected.keys.toList().filterNot { it in validKeys }.forEach(selected::remove)
+    }
+
+    val selectedResults =
+        state.scanResults.filter {
+            selected[(it.frequency * 10).roundToInt()] == true
+        }
+
+    LazyColumn(
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        item {
+            Text(
+                "Automatischer FM-Sendersuchlauf",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                "Das gesamte UKW-Band wird geprüft. Gefundene Sender werden erst nach deiner Auswahl als Favoriten gespeichert.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        } else {
-            LazyColumn(Modifier.fillMaxSize()) {
-                items(state.presets, key = { it.frequency }) { preset ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    playerConnection?.pause()
-                                    radio.tune(preset.frequency)
-                                }.padding(vertical = 7.dp),
+        }
+
+        item {
+            if (state.isScanning) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LinearProgressIndicator(
+                        progress = { state.scanProgress.coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        "${(state.scanProgress * 100).roundToInt()} %  •  " +
+                            "${FytPhysicalRadio.formatFrequency(state.frequency)} MHz  •  " +
+                            "${state.scanResults.size} Sender",
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    OutlinedButton(
+                        onClick = radio::stopAutoScan,
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(preset.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                            Text("${FytPhysicalRadio.formatFrequency(preset.frequency)} MHz", style = MaterialTheme.typography.bodyMedium)
-                        }
-                        IconButton(onClick = { radio.removePreset(preset.frequency) }) {
-                            Icon(painterResource(R.drawable.delete), contentDescription = "Favorit löschen")
+                        Text("SUCHLAUF ABBRECHEN")
+                    }
+                }
+            } else {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Button(
+                        onClick = {
+                            if (state.presets.isEmpty()) {
+                                startScan(clearFavourites = false)
+                            } else {
+                                showScanStartOptions = true
+                            }
+                        },
+                        enabled = state.libraryLoaded,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(painterResource(R.drawable.search), contentDescription = null)
+                        Text(
+                            if (state.scanResults.isEmpty()) "SUCHLAUF STARTEN" else "NEU SUCHEN",
+                            modifier = Modifier.padding(start = 6.dp),
+                        )
+                    }
+                    if (state.scanResults.isNotEmpty()) {
+                        OutlinedButton(onClick = radio::clearScanResults) {
+                            Text("LEEREN")
                         }
                     }
                 }
             }
         }
 
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = "FYT ${state.platform.ifBlank { "Dudu7" }} • radio_type=${state.radioType.ifBlank { "?" }} • libfmjni=${if (state.libraryLoaded) "bereit" else "fehlt"}",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        state.error?.let { error ->
+            item {
+                Text(
+                    text = error,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+
+        if (!state.isScanning && state.scanResults.isEmpty()) {
+            item {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(180.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "Noch keine Suchergebnisse",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
+        if (state.scanResults.isNotEmpty()) {
+            item {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        "${state.scanResults.size} Sender gefunden",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(
+                        onClick = {
+                            state.scanResults.forEach {
+                                selected[(it.frequency * 10).roundToInt()] = true
+                            }
+                        },
+                    ) { Text("Alle") }
+                    TextButton(onClick = { selected.keys.forEach { selected[it] = false } }) {
+                        Text("Keine")
+                    }
+                }
+            }
+
+            items(
+                items = state.scanResults,
+                key = { "scan-${(it.frequency * 10).roundToInt()}" },
+            ) { result ->
+                val key = (result.frequency * 10).roundToInt()
+                FmScanResultRow(
+                    result = result,
+                    checked = selected[key] == true,
+                    onCheckedChange = { selected[key] = it },
+                    onPreview = {
+                        playerConnection?.pause()
+                        radio.tune(result.frequency)
+                    },
+                )
+            }
+
+            item {
+                Button(
+                    onClick = {
+                        radio.saveScanResults(selectedResults)
+                        onSaved()
+                    },
+                    enabled = selectedResults.isNotEmpty() && !state.isScanning,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("${selectedResults.size} AUSGEWÄHLTE SENDER HINZUFÜGEN")
+                }
+            }
+        }
+    }
+
+    if (showScanStartOptions) {
+        AlertDialog(
+            onDismissRequest = { showScanStartOptions = false },
+            title = { Text("FM-Suchlauf starten") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Es sind ${state.presets.size} FM-Favoriten gespeichert. " +
+                            "Du kannst sie behalten oder vor dem Suchlauf vollständig löschen.",
+                    )
+                    Button(
+                        onClick = {
+                            showScanStartOptions = false
+                            startScan(clearFavourites = false)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("FAVORITEN BEHALTEN UND SUCHEN")
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            showScanStartOptions = false
+                            startScan(clearFavourites = true)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            "ALLE FM-FAVORITEN LÖSCHEN UND SUCHEN",
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showScanStartOptions = false }) {
+                    Text("ABBRECHEN")
+                }
+            },
         )
     }
+}
+
+@Composable
+private fun FmScanResultRow(
+    result: FytPhysicalRadio.ScanResult,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    onPreview: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainer)
+                .combinedClickable(onClick = onPreview, onLongClick = { onCheckedChange(!checked) })
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+    ) {
+        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
+        FmStationArtwork(
+            stationName = result.name,
+            frequency = result.frequency,
+            pi = result.pi,
+            ecc = result.ecc,
+            size = 54.dp,
+            allFrequencies = FytPhysicalRadio.scanFrequencies(result),
+        )
+        Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+            Text(
+                result.name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                buildString {
+                    append(FytPhysicalRadio.formatFrequencies(FytPhysicalRadio.scanFrequencies(result)))
+                    append("  •  RSSI ${result.rssi}")
+                    result.stereo?.let { append(if (it) "  •  Stereo" else "  •  Mono") }
+                    val pty = FytPhysicalRadio.ptyLabel(result.pty)
+                    if (pty.isNotBlank()) append("  •  $pty")
+                    if (result.tp) append("  •  TP")
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        TextButton(onClick = onPreview) { Text("HÖREN") }
+    }
+}
+
+@Composable
+private fun PhysicalRadioManualPanel(
+    radio: FytPhysicalRadio,
+    frequencyInput: String,
+    onFrequencyInputChange: (String) -> Unit,
+    onTune: () -> Unit,
+) {
+    val context = LocalContext.current
+    val playerConnection = LocalPlayerConnection.current
+    val state by radio.state.collectAsStateWithLifecycle()
+    val currentPreset =
+        state.presets.firstOrNull {
+            FytPhysicalRadio.presetMatches(it, state.frequency, state.pi)
+        }
+    val isFavourite = currentPreset != null
+
+    LazyColumn(
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(9.dp),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        item {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                FmStationArtwork(
+                    stationName = state.displayStation,
+                    frequency = state.frequency,
+                    pi = state.pi,
+                    ecc = state.ecc,
+                    size = 82.dp,
+                    allFrequencies = listOf(state.frequency) + state.alternativeFrequencies,
+                )
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = state.displayStation,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = state.rt.ifBlank { "Physischer Antennenempfang" },
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+
+        item { RadioStatusLine(state) }
+
+        state.error?.let { error ->
+            item {
+                Text(
+                    text = error,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+
+        item {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                OutlinedTextField(
+                    value = frequencyInput,
+                    onValueChange = onFrequencyInputChange,
+                    label = { Text("Frequenz") },
+                    suffix = { Text("MHz") },
+                    singleLine = true,
+                    keyboardOptions =
+                        KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal,
+                            imeAction = ImeAction.Done,
+                        ),
+                    keyboardActions = KeyboardActions(onDone = { onTune() }),
+                    modifier = Modifier.weight(1f),
+                )
+                Button(onClick = onTune, enabled = !state.isBusy) {
+                    Text("EINSTELLEN")
+                }
+            }
+        }
+
+        item {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Button(
+                    onClick = {
+                        if (state.isActive) {
+                            radio.powerOff()
+                        } else {
+                            playerConnection?.pause()
+                            radio.powerOn()
+                        }
+                    },
+                    enabled = !state.isBusy,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(
+                        painter = painterResource(if (state.isActive) R.drawable.stop else R.drawable.play),
+                        contentDescription = null,
+                    )
+                    Text(if (state.isActive) "AUS" else "RADIO EIN", modifier = Modifier.padding(start = 6.dp))
+                }
+                OutlinedButton(
+                    onClick = {
+                        if (isFavourite) {
+                            val preset = currentPreset ?: return@OutlinedButton
+                            val remaining = state.presets.filterNot { it == preset }
+                            radio.removePreset(preset)
+                            FmPresetOrderStore.persist(context, remaining)
+                        } else {
+                            radio.saveCurrentPreset()
+                        }
+                    },
+                    enabled = state.isActive,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(
+                        painter = painterResource(if (isFavourite) R.drawable.favorite else R.drawable.favorite_border),
+                        contentDescription = null,
+                    )
+                    Text(if (isFavourite) "ENTFERNEN" else "MERKEN", modifier = Modifier.padding(start = 6.dp))
+                }
+            }
+        }
+
+        item {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                OutlinedButton(
+                    onClick = { radio.seek(false) },
+                    enabled = state.isActive && !state.isBusy,
+                    modifier = Modifier.weight(1f),
+                ) { Text("SEEK ◀") }
+                OutlinedButton(
+                    onClick = { radio.step(false) },
+                    enabled = !state.isBusy,
+                    modifier = Modifier.weight(1f),
+                ) { Text("− 0,1") }
+                OutlinedButton(
+                    onClick = { radio.step(true) },
+                    enabled = !state.isBusy,
+                    modifier = Modifier.weight(1f),
+                ) { Text("+ 0,1") }
+                OutlinedButton(
+                    onClick = { radio.seek(true) },
+                    enabled = state.isActive && !state.isBusy,
+                    modifier = Modifier.weight(1f),
+                ) { Text("SEEK ▶") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PhysicalRadioSettingsPanel(radio: FytPhysicalRadio) {
+    val context = LocalContext.current
+    val state by radio.state.collectAsStateWithLifecycle()
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { result ->
+        val granted = result.values.any { it }
+        radio.setGeoEnabled(granted)
+        radio.onLocationPermissionChanged()
+    }
+
+    LazyColumn(
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        item {
+            Text(
+                "Radiofunktionen",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                "Die Einstellungen werden dauerhaft gespeichert. Funktionen greifen nur, wenn sie vom FYT-Tuner unterstützt werden.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        item {
+            RadioSettingRow(
+                title = "GPS-Sendererkennung (RTR)",
+                description = when {
+                    !state.geoEnabled -> "Aus. Aktivieren lädt das österreichische RTR-Frequenzbuch und nutzt GPS nur lokal im Fahrzeug."
+                    !state.geoPermissionGranted -> "Standortberechtigung fehlt. GPS-Daten werden nicht an RTR übertragen."
+                    else -> "${state.geoLocationStatus} • ${state.rtrCatalogStatus}"
+                },
+                checked = state.geoEnabled,
+                onCheckedChange = { enabled ->
+                    if (!enabled) {
+                        radio.setGeoEnabled(false)
+                    } else if (
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                    ) {
+                        radio.setGeoEnabled(true)
+                        radio.onLocationPermissionChanged()
+                    } else {
+                        locationPermissionLauncher.launch(arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                        ))
+                    }
+                },
+            )
+        }
+        item {
+            OutlinedButton(
+                onClick = radio::refreshRtrData,
+                enabled = !state.rtrCatalogLoading,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (state.rtrCatalogLoading) "RTR-DATEN WERDEN GELADEN …" else "RTR-FREQUENZDATEN AKTUALISIEREN")
+            }
+        }
+        item {
+            RadioSettingRow(
+                title = "AF – Alternative Frequenzen",
+                description = "Bei schwachem Empfang nach einer stärkeren Frequenz desselben Senders suchen.",
+                checked = state.afEnabled,
+                onCheckedChange = radio::setAfEnabled,
+            )
+        }
+        item {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+            ) {
+                Text(
+                    "AF-Sensitivität: ${state.afSensitivity}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "Höher bedeutet einen früheren Wechsel. Aktueller geglätteter Empfang: " +
+                        if (state.afAverageRssi > 0) state.afAverageRssi.toString() else "–",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Slider(
+                    value = state.afSensitivity.toFloat(),
+                    onValueChange = { radio.setAfSensitivity(it.roundToInt()) },
+                    valueRange = 15f..50f,
+                    steps = 34,
+                )
+                Text(
+                    "Automatisches AF startet nach drei schwachen Messungen. Doppeltipp auf den laufenden Favoriten wechselt sofort zur nächsten gespeicherten AF-Frequenz.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        item {
+            RadioSettingRow(
+                title = "TA – Verkehrsmeldungen",
+                description = "TA-Ereignisse des aktuell laufenden FM-Senders hervorheben.",
+                checked = state.taEnabled,
+                onCheckedChange = radio::setTaEnabled,
+            )
+        }
+        item {
+            RadioSettingRow(
+                title = "REG – Regionalprogramm",
+                description = "Alternative Frequenzen auf dieselbe Regionalvariante beschränken, sofern die Firmware dies unterstützt.",
+                checked = state.regEnabled,
+                onCheckedChange = radio::setRegEnabled,
+            )
+        }
+        item {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                OutlinedButton(
+                    onClick = radio::requestAlternativeFrequency,
+                    enabled = state.isActive && state.afEnabled && !state.isBusy,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("AF JETZT PRÜFEN")
+                }
+                OutlinedButton(
+                    onClick = radio::enableRds,
+                    enabled = state.isActive,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("RDS NEU LESEN")
+                }
+            }
+        }
+        item { HorizontalDivider() }
+        item { RadioStatusLine(state) }
+        item { FmRadioDiagnostics(state) }
+        item {
+            Text(
+                text =
+                    "FYT ${state.platform.ifBlank { "Dudu7" }} • " +
+                        "radio_type=${state.radioType.ifBlank { "?" }} • " +
+                        "libfmjni=${if (state.libraryLoaded) "bereit" else "fehlt"}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RadioSettingRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainer)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun RadioStatusLine(state: FytPhysicalRadio.State) {
+    Text(
+        text =
+            buildString {
+                append("${FytPhysicalRadio.formatFrequency(state.frequency)} MHz")
+                append("  •  RSSI ${state.rssi}")
+                state.stereo?.let { append(if (it) "  •  Stereo" else "  •  Mono") }
+                if (state.pi != 0) append("  •  PI ${state.pi.toString(16).uppercase()}")
+                if (state.ecc.isNotBlank()) append("  •  ECC ${state.ecc.uppercase()}")
+                val pty = FytPhysicalRadio.ptyLabel(state.pty)
+                if (pty.isNotBlank()) append("  •  $pty")
+                if (state.afEnabled) append("  •  AF")
+                if (state.tp) append("  •  TP")
+                if (state.ta && state.taEnabled) append("  •  TA AKTIV")
+            },
+        style = MaterialTheme.typography.labelLarge,
+        color =
+            if (state.ta && state.taEnabled) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+    )
 }

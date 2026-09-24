@@ -1,0 +1,2 @@
+Final Metrolist dudu7 13.7.13 validation branch.
+YouTube Music title clicks search the current artist and title in the right pane.

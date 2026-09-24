@@ -10,6 +10,8 @@ import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.metrolist.music.App
+import com.metrolist.innertube.YouTube
+import com.metrolist.innertube.utils.parseCookieString
 import com.metrolist.music.constants.AccountChannelHandleKey
 import com.metrolist.music.constants.AccountEmailKey
 import com.metrolist.music.constants.AccountNameKey
@@ -102,24 +104,41 @@ class AccountSettingsViewModel @Inject constructor(
         accountEmail: String,
         accountChannelHandle: String,
     ) {
+        val normalizedCookie = cookie.trim()
+        if ("SAPISID" !in parseCookieString(normalizedCookie)) {
+            Timber.e("saveTokenAndRestart: missing SAPISID; token not saved")
+            return
+        }
+        val normalizedVisitorData = visitorData.trim()
+        val normalizedDataSyncId = dataSyncId.trim().substringBefore("||")
+
         viewModelScope.launch(Dispatchers.IO) {
             val saved = context.safeDataStoreEdit { settings ->
-                settings[InnerTubeCookieKey] = cookie
-                settings[VisitorDataKey] = visitorData
-                settings[DataSyncIdKey] = dataSyncId
-                settings[AccountNameKey] = accountName
-                settings[AccountEmailKey] = accountEmail
-                settings[AccountChannelHandleKey] = accountChannelHandle
+                settings[InnerTubeCookieKey] = normalizedCookie
+                settings[VisitorDataKey] = normalizedVisitorData
+                settings[DataSyncIdKey] = normalizedDataSyncId
+                settings[AccountNameKey] = accountName.trim()
+                settings[AccountEmailKey] = accountEmail.trim()
+                settings[AccountChannelHandleKey] = accountChannelHandle.trim()
             }
             if (!saved) {
                 Timber.e("saveTokenAndRestart: DataStore write failed — skipping restart to avoid losing credentials")
                 return@launch
             }
+            // Apply the new session immediately. A forced Runtime.exit(0) leaves some FYT
+            // launchers on the previously visible app and looks exactly like a crash.
+            YouTube.cookie = normalizedCookie
+            YouTube.visitorData = normalizedVisitorData.takeIf { it.isNotBlank() }
+            YouTube.dataSyncId = normalizedDataSyncId.takeIf { it.isNotBlank() }
             withContext(Dispatchers.Main) {
                 val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-                intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                context.startActivity(intent)
-                Runtime.getRuntime().exit(0)
+                if (intent != null) {
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                    runCatching { context.startActivity(intent) }
+                        .onFailure { Timber.e(it, "saveTokenAndRestart: safe relaunch failed") }
+                } else {
+                    Timber.w("saveTokenAndRestart: no launch intent; credentials remain active without relaunch")
+                }
             }
         }
     }

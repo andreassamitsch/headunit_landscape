@@ -79,6 +79,13 @@ val Dudu7PlayerPaneWeightKey = floatPreferencesKey("dudu7PlayerPaneWeight")
 val Dudu7StartWithLyricsKey = booleanPreferencesKey("dudu7StartWithLyrics")
 val Dudu7SwipeToRemoveQueueKey = booleanPreferencesKey("dudu7SwipeToRemoveQueue")
 val Dudu7AutoCenterQueueKey = booleanPreferencesKey("dudu7AutoCenterQueue")
+val Dudu7FrostedIceKey = booleanPreferencesKey("dudu7FrostedIce")
+val Dudu7FrostedGlassStrengthKey = intPreferencesKey("dudu7FrostedGlassStrength")
+val Dudu7FrostedBlurStrengthKey = intPreferencesKey("dudu7FrostedBlurStrength")
+val Dudu7FrostTextureEnabledKey = booleanPreferencesKey("dudu7FrostTextureEnabled")
+val Dudu7FrostTextureStrengthKey = intPreferencesKey("dudu7FrostTextureStrength")
+val Dudu7BackgroundBlurStrengthKey = intPreferencesKey("dudu7BackgroundBlurStrength")
+val Dudu7BackgroundBottomScrimStrengthKey = intPreferencesKey("dudu7BackgroundBottomScrimStrength")
 
 enum class SliderStyle {
     DEFAULT,
@@ -269,6 +276,7 @@ val ArtistViewTypeKey = stringPreferencesKey("artistViewType")
 val AlbumViewTypeKey = stringPreferencesKey("albumViewType")
 val PlaylistViewTypeKey = stringPreferencesKey("playlistViewType")
 val WebRadioViewTypeKey = stringPreferencesKey("webRadioViewType")
+val FmRadioViewTypeKey = stringPreferencesKey("fmRadioViewType")
 
 val PlaylistEditLockKey = booleanPreferencesKey("playlistEditLock")
 val QuickPicksKey = stringPreferencesKey("discover")

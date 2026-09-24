@@ -4,7 +4,11 @@
  */
 package com.metrolist.music.ui.screens.radio
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,6 +23,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -37,6 +42,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -49,6 +56,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,6 +75,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.media3.common.Player
 import coil3.compose.AsyncImage
 import com.metrolist.music.LocalPlayerConnection
 import com.metrolist.music.R
@@ -75,11 +84,22 @@ import com.metrolist.music.constants.WebRadioViewTypeKey
 import com.metrolist.music.extensions.move
 import com.metrolist.music.playback.queues.ListQueue
 import com.metrolist.music.radio.RadioBrowserClient
+import com.metrolist.music.radio.RadioLogoCandidate
 import com.metrolist.music.radio.RadioStation
+import com.metrolist.music.radio.RadioStationLogoCache
 import com.metrolist.music.radio.RadioStationLogoResolver
+import com.metrolist.music.radio.RadioStationLogoSearch
 import com.metrolist.music.radio.RadioStationStore
+import com.metrolist.music.radio.orderWebRadioFavourites
+import com.metrolist.music.radio.webRadioFavouriteStartIndex
+import com.metrolist.music.radio.mergeSavedStationUpdates
 import com.metrolist.music.utils.rememberEnumPreference
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyGridState
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -106,6 +126,8 @@ fun WebRadioScreen() {
     val savedStations by store.stations.collectAsStateWithLifecycle()
     val currentMediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
     val radioIsPlaying by playerConnection.isEffectivelyPlaying.collectAsStateWithLifecycle()
+    val radioPlaybackState by playerConnection.playbackState.collectAsStateWithLifecycle()
+    val radioPlaybackError by playerConnection.error.collectAsStateWithLifecycle()
     val currentRadioMediaId = currentMediaMetadata?.id?.takeIf { it.startsWith("radio:") }
     val scope = rememberCoroutineScope()
 
@@ -120,9 +142,11 @@ fun WebRadioScreen() {
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var editingStation by remember { mutableStateOf<RadioStation?>(null) }
-    var actionStation by remember { mutableStateOf<RadioStation?>(null) }
     var deletingStation by remember { mutableStateOf<RadioStation?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
+    var favoritePlayJob by remember { mutableStateOf<Job?>(null) }
+    var favoriteRequestId by remember { mutableLongStateOf(0L) }
+    val refreshedFavoriteCache = remember { mutableMapOf<String, Pair<Long, RadioStation>>() }
 
     val orderedSavedStations = remember { mutableStateListOf<RadioStation>() }
     val savedListState = rememberLazyListState()
@@ -143,9 +167,12 @@ fun WebRadioScreen() {
     var wasDragging by remember { mutableStateOf(false) }
 
     LaunchedEffect(savedStations, isDragging) {
-        if (!isDragging && !wasDragging && orderedSavedStations.map { it.uuid } != savedStations.map { it.uuid }) {
-            orderedSavedStations.clear()
-            orderedSavedStations.addAll(savedStations)
+        if (!isDragging && !wasDragging) {
+            val merged = mergeSavedStationUpdates(orderedSavedStations, savedStations)
+            if (merged != orderedSavedStations) {
+                orderedSavedStations.clear()
+                orderedSavedStations.addAll(merged)
+            }
         }
     }
     LaunchedEffect(isDragging) {
@@ -156,18 +183,79 @@ fun WebRadioScreen() {
     }
 
     fun playSaved(station: RadioStation) {
-        val stations = savedStations.ifEmpty { listOf(station) }
-        val effectiveStations = if (stations.any { it.uuid == station.uuid }) stations else stations + station
-        val startIndex = effectiveStations.indexOfFirst { it.uuid == station.uuid }.coerceAtLeast(0)
-        playerConnection.playQueue(
-            queue =
-                ListQueue(
-                    title = "WebRadio",
-                    items = effectiveStations.map { it.toMediaItem() },
-                    startIndex = startIndex,
-                ),
-            notifyUserSelection = false,
-        )
+        favoriteRequestId += 1L
+        val requestId = favoriteRequestId
+        favoritePlayJob?.cancel()
+
+        fun startFavorite(playable: RadioStation) {
+            val queueStations =
+                orderWebRadioFavourites(
+                    selected = playable,
+                    savedStations = orderedSavedStations.toList().ifEmpty { listOf(station) },
+                )
+            playerConnection.playQueue(
+                queue =
+                    ListQueue(
+                        title = "WebRadio",
+                        items = queueStations.map { it.toMediaItem() },
+                        startIndex = webRadioFavouriteStartIndex(playable, queueStations),
+                    ),
+                notifyUserSelection = false,
+            )
+        }
+
+        // A favorite tap is a playback command, not a network-refresh command.
+        // Start immediately with the saved URL so rapid taps cannot cancel every
+        // request before playQueue() is reached. A cached fresh URL may be used,
+        // but the background refresh below never blocks the initial start.
+        val now = System.currentTimeMillis()
+        val cached = refreshedFavoriteCache[station.uuid]?.takeIf { now - it.first < 5 * 60_000L }?.second
+        val initialPlayable = cached ?: station
+        startFavorite(initialPlayable)
+
+        favoritePlayJob =
+            scope.launch {
+                val looksLikeRadioBrowserEntry =
+                    station.country.isNotBlank() ||
+                        station.language.isNotBlank() ||
+                        station.tags.isNotBlank() ||
+                        station.codec.isNotBlank() ||
+                        station.bitrate > 0
+                val refreshed =
+                    cached ?: if (looksLikeRadioBrowserEntry) {
+                        withTimeoutOrNull(4_500L) {
+                            RadioBrowserClient.refreshStation(station).getOrNull()
+                        }
+                    } else {
+                        null
+                    }
+                if (requestId != favoriteRequestId) return@launch
+
+                val candidate = refreshed ?: station
+                val resolvedUrl =
+                    withTimeoutOrNull(4_500L) {
+                        RadioBrowserClient.resolveStreamUrl(candidate.streamUrl).getOrNull()
+                    } ?: candidate.streamUrl
+                if (requestId != favoriteRequestId) return@launch
+
+                val playable = candidate.copy(streamUrl = resolvedUrl)
+                refreshedFavoriteCache[station.uuid] = System.currentTimeMillis() to playable
+                if (playable != station) store.addOrUpdate(playable)
+
+                // Do not interrupt a stream that already became ready. Retry only
+                // when the same selected favorite still failed or is still stuck
+                // after the refresh/playlist resolution completed.
+                if (playable.streamUrl != initialPlayable.streamUrl) {
+                    val player = runCatching { playerConnection.player }.getOrNull()
+                    val sameStation = player?.currentMediaItem?.mediaId == station.mediaId
+                    val needsRetry =
+                        sameStation &&
+                            (player.playerError != null || player.playbackState != Player.STATE_READY)
+                    if (requestId == favoriteRequestId && needsRetry) {
+                        startFavorite(playable)
+                    }
+                }
+            }
     }
 
     fun performSearch() {
@@ -236,9 +324,16 @@ fun WebRadioScreen() {
                                     isSaved = true,
                                     isActive = isActive,
                                     isPlaying = isActive && radioIsPlaying,
-                                    onPlay = { if (isActive) playerConnection.togglePlayPause() else playSaved(station) },
+                                    onPlay = {
+                                        if (isActive && radioPlaybackState == Player.STATE_READY && radioPlaybackError == null) {
+                                            playerConnection.togglePlayPause()
+                                        } else {
+                                            playSaved(station)
+                                        }
+                                    },
                                     onSave = {},
-                                    onLongClick = { actionStation = station },
+                                    onEdit = { editingStation = station },
+                                    onDelete = { deletingStation = station },
                                     dragHandle = {
                                         RadioDragHandle(
                                             Modifier.draggableHandle(
@@ -268,9 +363,16 @@ fun WebRadioScreen() {
                                     isSaved = true,
                                     isActive = isActive,
                                     isPlaying = isActive && radioIsPlaying,
-                                    onPlay = { if (isActive) playerConnection.togglePlayPause() else playSaved(station) },
+                                    onPlay = {
+                                        if (isActive && radioPlaybackState == Player.STATE_READY && radioPlaybackError == null) {
+                                            playerConnection.togglePlayPause()
+                                        } else {
+                                            playSaved(station)
+                                        }
+                                    },
                                     onSave = {},
-                                    onLongClick = { actionStation = station },
+                                    onEdit = { editingStation = station },
+                                    onDelete = { deletingStation = station },
                                     dragHandle = {
                                         RadioDragHandle(
                                             modifier =
@@ -362,7 +464,10 @@ fun WebRadioScreen() {
                                     isActive = isActive,
                                     isPlaying = isActive && radioIsPlaying,
                                     onPlay = {
-                                        if (isActive) playerConnection.togglePlayPause() else {
+                                        if (isActive && radioPlaybackState == Player.STATE_READY && radioPlaybackError == null) {
+                                            playerConnection.togglePlayPause()
+                                        } else {
+                                            if (savedStations.any { it.uuid == station.uuid }) store.addOrUpdate(station)
                                             playerConnection.playQueue(
                                                 queue = ListQueue(title = station.name, items = listOf(station.toMediaItem())),
                                                 notifyUserSelection = false,
@@ -370,7 +475,8 @@ fun WebRadioScreen() {
                                         }
                                     },
                                     onSave = { store.addOrUpdate(station) },
-                                    onLongClick = {},
+                                    onEdit = {},
+                                    onDelete = {},
                                     onLogoResolved = { enriched ->
                                         results = results.map { if (it.uuid == enriched.uuid) enriched else it }
                                         if (savedStations.any { it.uuid == enriched.uuid }) store.addOrUpdate(enriched)
@@ -393,7 +499,10 @@ fun WebRadioScreen() {
                                     isActive = isActive,
                                     isPlaying = isActive && radioIsPlaying,
                                     onPlay = {
-                                        if (isActive) playerConnection.togglePlayPause() else {
+                                        if (isActive && radioPlaybackState == Player.STATE_READY && radioPlaybackError == null) {
+                                            playerConnection.togglePlayPause()
+                                        } else {
+                                            if (savedStations.any { it.uuid == station.uuid }) store.addOrUpdate(station)
                                             playerConnection.playQueue(
                                                 queue = ListQueue(title = station.name, items = listOf(station.toMediaItem())),
                                                 notifyUserSelection = false,
@@ -401,7 +510,8 @@ fun WebRadioScreen() {
                                         }
                                     },
                                     onSave = { store.addOrUpdate(station) },
-                                    onLongClick = {},
+                                    onEdit = {},
+                                    onDelete = {},
                                     onLogoResolved = { enriched ->
                                         results = results.map { if (it.uuid == enriched.uuid) enriched else it }
                                         if (savedStations.any { it.uuid == enriched.uuid }) store.addOrUpdate(enriched)
@@ -436,30 +546,6 @@ fun WebRadioScreen() {
         )
     }
 
-    actionStation?.let { station ->
-        AlertDialog(
-            onDismissRequest = { actionStation = null },
-            title = { Text(station.name) },
-            text = { Text("Aktion für diesen Radiosender auswählen") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        actionStation = null
-                        editingStation = station
-                    },
-                ) { Text("Bearbeiten") }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        actionStation = null
-                        deletingStation = station
-                    },
-                ) { Text("Löschen", color = MaterialTheme.colorScheme.error) }
-            },
-        )
-    }
-
     deletingStation?.let { station ->
         AlertDialog(
             onDismissRequest = { deletingStation = null },
@@ -490,7 +576,14 @@ fun WebRadioScreen() {
                     RadioBrowserClient.resolveStreamUrl(draft.streamUrl)
                         .onSuccess { resolved ->
                             val station = draft.copy(streamUrl = resolved)
-                            store.addOrUpdate(station)
+                            store.replaceFromUser(station)
+                            val orderedIndex = orderedSavedStations.indexOfFirst { it.uuid == station.uuid }
+                            if (orderedIndex >= 0) {
+                                orderedSavedStations[orderedIndex] = station
+                            } else {
+                                orderedSavedStations.add(station)
+                            }
+                            refreshedFavoriteCache.remove(station.uuid)
                             showAddDialog = false
                             editingStation = null
                             section = WebRadioSection.SAVED
@@ -525,7 +618,8 @@ private fun RadioStationRow(
     isPlaying: Boolean,
     onPlay: () -> Unit,
     onSave: () -> Unit,
-    onLongClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
     dragHandle: @Composable () -> Unit = {},
     onLogoResolved: (RadioStation) -> Unit = {},
 ) {
@@ -536,8 +630,8 @@ private fun RadioStationRow(
                 .fillMaxWidth()
                 .padding(horizontal = 6.dp, vertical = 2.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.48f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
-                .combinedClickable(onClick = onPlay, onLongClick = onLongClick)
+                .background(if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer)
+                .clickable(onClick = onPlay)
                 .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
         RadioStationArtwork(station, 54, Modifier, onLogoResolved)
@@ -546,6 +640,7 @@ private fun RadioStationRow(
             StationDetails(station)
         }
         if (isSaved) {
+            RadioStationActionMenu(onEdit = onEdit, onDelete = onDelete)
             dragHandle()
         } else {
             IconButton(onClick = onSave) {
@@ -564,7 +659,8 @@ private fun RadioStationCard(
     isPlaying: Boolean,
     onPlay: () -> Unit,
     onSave: () -> Unit,
-    onLongClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
     dragHandle: @Composable () -> Unit = {},
     onLogoResolved: (RadioStation) -> Unit = {},
 ) {
@@ -576,11 +672,11 @@ private fun RadioStationCard(
                 .clip(RoundedCornerShape(14.dp))
                 .background(
                     if (isActive) {
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.58f)
+                        MaterialTheme.colorScheme.primaryContainer
                     } else {
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                        MaterialTheme.colorScheme.surfaceContainer
                     },
-                ).combinedClickable(onClick = onPlay, onLongClick = onLongClick),
+                ).clickable(onClick = onPlay),
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -620,11 +716,56 @@ private fun RadioStationCard(
             Box(
                 modifier =
                     Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 2.dp, bottom = 2.dp),
+            ) {
+                RadioStationActionMenu(onEdit = onEdit, onDelete = onDelete)
+            }
+            Box(
+                modifier =
+                    Modifier
                         .align(Alignment.BottomEnd)
                         .padding(end = 2.dp, bottom = 2.dp),
             ) {
                 dragHandle()
             }
+        }
+    }
+}
+
+@Composable
+private fun RadioStationActionMenu(
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }, modifier = Modifier.size(42.dp)) {
+            Icon(painterResource(R.drawable.more_vert), contentDescription = "Senderaktionen")
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Bearbeiten") },
+                leadingIcon = { Icon(painterResource(R.drawable.edit), contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onEdit()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Löschen", color = MaterialTheme.colorScheme.error) },
+                leadingIcon = {
+                    Icon(
+                        painterResource(R.drawable.delete),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    onDelete()
+                },
+            )
         }
     }
 }
@@ -652,11 +793,18 @@ private fun RadioStationArtwork(
     modifier: Modifier,
     onLogoResolved: (RadioStation) -> Unit,
 ) {
+    val context = LocalContext.current
     var artworkUrl by remember(station.uuid, station.favicon) { mutableStateOf(station.favicon) }
-    LaunchedEffect(station.uuid, station.homepage) {
+    LaunchedEffect(station.uuid, station.homepage, station.favicon, station.manualFavicon) {
         RadioStationLogoResolver.resolve(station)?.let { resolved ->
-            artworkUrl = resolved
-            if (resolved != station.favicon) onLogoResolved(station.copy(favicon = resolved))
+            val stable =
+                if (RadioStationLogoCache.isLocal(resolved)) {
+                    resolved
+                } else {
+                    RadioStationLogoCache.cache(context, station.uuid, resolved) ?: resolved
+                }
+            artworkUrl = stable
+            if (stable != station.favicon) onLogoResolved(station.copy(favicon = stable))
         }
     }
     if (artworkUrl.isNotBlank()) {
@@ -762,32 +910,74 @@ private fun RadioStationEditorDialog(
     onDismiss: () -> Unit,
     onSave: (RadioStation) -> Unit,
 ) {
+    val context = LocalContext.current
+    val stationUuid = remember(initial) { initial?.uuid ?: UUID.randomUUID().toString() }
     var name by remember(initial) { mutableStateOf(initial?.name.orEmpty()) }
     var streamUrl by remember(initial) { mutableStateOf(initial?.streamUrl.orEmpty()) }
     var favicon by remember(initial) { mutableStateOf(initial?.favicon.orEmpty()) }
     var manualFavicon by remember(initial) { mutableStateOf(initial?.manualFavicon == true) }
-    var logoCandidates by remember(initial) { mutableStateOf<List<String>>(emptyList()) }
+    var logoCandidates by remember(initial) { mutableStateOf<List<RadioLogoCandidate>>(emptyList()) }
     var logoSearchLoading by remember(initial) { mutableStateOf(false) }
+    var logoSaving by remember(initial) { mutableStateOf(false) }
     var logoSearchError by remember(initial) { mutableStateOf<String?>(null) }
+    val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
+
+    fun selectFixedLogo(source: String) {
+        if (source.isBlank() || logoSaving) return
+        scope.launch {
+            logoSaving = true
+            logoSearchError = null
+            val cached = RadioStationLogoCache.cache(context, stationUuid, source)
+            if (cached != null) {
+                favicon = cached
+                manualFavicon = true
+            } else {
+                logoSearchError = "Logo konnte nicht lokal gespeichert werden"
+            }
+            logoSaving = false
+        }
+    }
+
+    val imagePicker =
+        rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            uri?.toString()?.let(::selectFixedLogo)
+        }
 
     fun searchLogos() {
         if (name.isBlank() || logoSearchLoading) return
         scope.launch {
             logoSearchLoading = true
             logoSearchError = null
-            RadioBrowserClient.search(name.trim())
-                .onSuccess { stations ->
-                    logoCandidates =
-                        stations
-                            .asSequence()
-                            .map { it.favicon.trim() }
-                            .filter { it.startsWith("https://") || it.startsWith("http://") }
-                            .distinct()
-                            .take(16)
-                            .toList()
-                    if (logoCandidates.isEmpty()) logoSearchError = "Keine passenden Logos gefunden"
-                }.onFailure { logoSearchError = it.message ?: "Logosuche fehlgeschlagen" }
+            val currentStation =
+                initial?.copy(
+                    name = name.trim(),
+                    streamUrl = streamUrl.trim().ifBlank { initial.streamUrl },
+                    favicon = favicon.trim(),
+                    manualFavicon = manualFavicon,
+                )
+            val candidates =
+                RadioStationLogoSearch.search(name.trim(), currentStation).getOrElse { error ->
+                    logoSearchError = error.message ?: "Logosuche fehlgeschlagen"
+                    logoSearchLoading = false
+                    return@launch
+                }
+            RadioStationLogoCache.clearPreviews(context, stationUuid)
+            val validated = mutableListOf<RadioLogoCandidate>()
+            candidates.take(30).chunked(6).forEach { batch ->
+                validated +=
+                    coroutineScope {
+                        batch.map { candidate ->
+                            async {
+                                RadioStationLogoCache
+                                    .cachePreview(context, stationUuid, candidate.url)
+                                    ?.let { preview -> candidate.copy(url = preview) }
+                            }
+                        }.awaitAll().filterNotNull()
+                    }
+            }
+            logoCandidates = validated
+            if (logoCandidates.isEmpty()) logoSearchError = "Keine darstellbaren Logos gefunden"
             logoSearchLoading = false
         }
     }
@@ -796,7 +986,14 @@ private fun RadioStationEditorDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (initial == null) "Radiosender hinzufügen" else "Radiosender bearbeiten") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 430.dp)
+                        .verticalScroll(scrollState),
+            ) {
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Sendername") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = streamUrl, onValueChange = { streamUrl = it }, label = { Text("Stream-, M3U- oder PLS-Adresse") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(
@@ -818,8 +1015,11 @@ private fun RadioStationEditorDialog(
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedButton(onClick = ::searchLogos, enabled = name.isNotBlank() && !logoSearchLoading) {
+                    OutlinedButton(onClick = ::searchLogos, enabled = name.isNotBlank() && !logoSearchLoading && !logoSaving) {
                         Text("Logos suchen")
+                    }
+                    OutlinedButton(onClick = { imagePicker.launch("image/*") }, enabled = !logoSaving) {
+                        Text("Bild auswählen")
                     }
                     TextButton(
                         onClick = {
@@ -829,53 +1029,69 @@ private fun RadioStationEditorDialog(
                             logoSearchError = null
                         },
                     ) { Text("Automatisch") }
-                    if (logoSearchLoading) CircularProgressIndicator(Modifier.size(24.dp))
+                    if (logoSearchLoading || logoSaving) CircularProgressIndicator(Modifier.size(24.dp))
                 }
                 if (logoCandidates.isNotEmpty()) {
                     Text("Logo auswählen", style = MaterialTheme.typography.labelLarge)
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(logoCandidates, key = { it }) { candidate ->
-                            AsyncImage(
-                                model = candidate,
-                                contentDescription = "Logo auswählen",
-                                contentScale = ContentScale.Fit,
-                                modifier =
-                                    Modifier
-                                        .size(72.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .then(
-                                            if (favicon == candidate && manualFavicon) {
-                                                Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp))
-                                            } else {
-                                                Modifier
-                                            },
-                                        ).clickable {
-                                            favicon = candidate
-                                            manualFavicon = true
-                                        },
-                            )
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        items(logoCandidates, key = { it.url }) { candidate ->
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                AsyncImage(
+                                    model = candidate.url,
+                                    contentDescription = "Logo auswählen: ${candidate.displayDetails}",
+                                    contentScale = ContentScale.Fit,
+                                    modifier =
+                                        Modifier
+                                            .size(82.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                                            .clickable(enabled = !logoSaving) { selectFixedLogo(candidate.url) },
+                                )
+                                Text(
+                                    candidate.displayDetails,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                     }
                 }
                 logoSearchError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if (manualFavicon && favicon.isNotBlank()) {
-                    Text("Dieses Logo bleibt fest eingestellt.", style = MaterialTheme.typography.bodySmall)
+                    Text("Dieses Logo ist lokal gespeichert und bleibt fest eingestellt.", style = MaterialTheme.typography.bodySmall)
                 }
             }
         },
         confirmButton = {
             Button(
-                enabled = name.isNotBlank() && streamUrl.isNotBlank(),
+                enabled = name.isNotBlank() && streamUrl.isNotBlank() && !logoSaving,
                 onClick = {
-                    onSave(
-                        (initial ?: RadioStation(UUID.randomUUID().toString(), name.trim(), streamUrl.trim()))
-                            .copy(
-                                name = name.trim(),
-                                streamUrl = streamUrl.trim(),
-                                favicon = favicon.trim(),
-                                manualFavicon = manualFavicon && favicon.isNotBlank(),
-                            ),
-                    )
+                    val saveDraft: (String, Boolean) -> Unit = { stableFavicon, stableManual ->
+                        onSave(
+                            (initial ?: RadioStation(stationUuid, name.trim(), streamUrl.trim()))
+                                .copy(
+                                    name = name.trim(),
+                                    streamUrl = streamUrl.trim(),
+                                    favicon = stableFavicon,
+                                    manualFavicon = stableManual,
+                                ),
+                        )
+                    }
+                    if (manualFavicon && favicon.isNotBlank() && !RadioStationLogoCache.isLocal(favicon)) {
+                        scope.launch {
+                            logoSaving = true
+                            val cached = RadioStationLogoCache.cache(context, stationUuid, favicon)
+                            logoSaving = false
+                            if (cached != null) {
+                                saveDraft(cached, true)
+                            } else {
+                                logoSearchError = "Logo konnte nicht lokal gespeichert werden"
+                            }
+                        }
+                    } else {
+                        saveDraft(favicon.trim(), manualFavicon && favicon.isNotBlank())
+                    }
                 },
             ) { Text("Speichern") }
         },

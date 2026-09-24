@@ -1,0 +1,190 @@
+name: Build Dudu7 13.7.78 updater signer fix
+
+on:
+  push:
+    branches:
+      - agent/issue-170-dudu7-updater-signer-fallback-13-7-78
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dudu7-13-7-78-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-build-release:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Verify Issue 170 implementation
+        shell: bash
+        run: |
+          set -euxo pipefail
+          grep -q 'versionCode = 1370087' app/build.gradle.kts
+          grep -q 'versionName = "13.7.78"' app/build.gradle.kts
+          UPDATER=app/src/dudu7/kotlin/com/metrolist/music/update/Dudu7UpdateManager.kt
+          TEST=app/src/test/kotlin/com/metrolist/music/update/Dudu7UpdateProtocolTest.kt
+          grep -q 'DUDU7_TRUSTED_SIGNER_SHA256' "$UPDATER"
+          grep -q 'evaluateDudu7SignerEvidence' "$UPDATER"
+          grep -q 'usesSystemInstallerFallback' "$UPDATER"
+          grep -q 'signingCertificateHistory' "$UPDATER"
+          grep -q 'Android bestätigt die Signatur beim Installieren erneut' "$UPDATER"
+          ! grep -q 'installedSigners != archiveSigners' "$UPDATER"
+          grep -q 'missing OEM signer evidence falls back to Android installer without rejecting update' "$TEST"
+          grep -q 'different OEM signer evidence is diagnostic and does not false-block' "$TEST"
+          grep -q 'release manifest signer must match pinned Dudu7 certificate' "$TEST"
+          git diff --check origin/agent/issues-112-164-167-168-radio-fixes-13-7-77...HEAD
+
+      - name: Compile standard MetroList and run Dudu7 unit tests
+        shell: bash
+        run: |
+          chmod +x gradlew
+          ./gradlew --console=plain :app:compileGmsStandardDebugKotlin --no-daemon --stacktrace
+          ./gradlew --console=plain :app:testGmsDudu7DebugUnitTest --no-daemon --stacktrace
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+
+      - name: Build and verify Dudu7 ARM APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts
+          ./gradlew --console=plain :app:assembleGmsDudu7Debug --no-daemon --stacktrace | tee artifacts/build.log
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' | grep '/gmsDudu7/debug/' | head -1)
+          test -n "$APK"
+          OUT=artifacts/Metrolist-dudu7-13.7.78.apk
+          cp "$APK" "$OUT"
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$BUILD_TOOLS/aapt" dump badging "$OUT" > artifacts/apk-badging.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$OUT" > artifacts/apk-signature.txt
+          grep -q "package: name='com.metrolist.music.dudu7.debug' versionCode='1370087'" artifacts/apk-badging.txt
+          grep -q "application-label:'Metrolist dudu7'" artifacts/apk-badging.txt
+          grep -qi '138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee' artifacts/apk-signature.txt
+          unzip -l "$OUT" > artifacts/apk-contents.txt
+          grep -q 'lib/arm64-v8a/' artifacts/apk-contents.txt
+          grep -q 'lib/armeabi-v7a/' artifacts/apk-contents.txt
+          sha256sum "$OUT" > "$OUT.sha256"
+          SHA=$(awk '{print $1}' "$OUT.sha256")
+          cat > artifacts/dudu7-update.json <<JSON
+          {"versionCode":1370087,"versionName":"13.7.78","packageName":"com.metrolist.music.dudu7.debug","signerSha256":"138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee","apkAsset":"Metrolist-dudu7-13.7.78.apk","sha256":"$SHA"}
+          JSON
+
+      - name: Publish 13.7.78 to Dudu7 updater
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          SHA=$(awk '{print $1}' artifacts/Metrolist-dudu7-13.7.78.apk.sha256)
+          cat > artifacts/release-notes.md <<MD
+          ## MetroList dudu7 13.7.78
+
+          **Issue #170 – Dudu7 Updater-Signaturprüfung**
+          - Entfernt die fehleranfällige harte Set-Gleichheit zwischen installierter App- und APK-Signatur aus dem FYT/Android-PackageManager.
+          - Das Release-Manifest muss weiterhin exakt den fest gepinnten Dudu7-Signer `138bf5c8…a06ee` enthalten.
+          - SHA-256, Paketname und VersionCode werden weiterhin vor dem Installer hart geprüft.
+          - Verfügbare Signer-/Signing-History-Daten des PackageManagers werden weiterhin ausgewertet und diagnostiziert.
+          - Sind diese OEM-Daten leer oder widersprüchlich, wird das Update nicht mehr fälschlich verworfen; Android führt beim eigentlichen Update seine eigene zwingende Signatur-/Lineage-Kompatibilitätsprüfung durch.
+          - Keine Deinstallation, kein Datenverlust und keine stille Installation.
+
+          **Migration**
+          - Da ältere Dudu7-Versionen bereits in ihrer eigenen Vorprüfung hängen bleiben können, muss 13.7.78 gegebenenfalls noch einmal manuell über die bestehende App installiert werden.
+          - Danach sollen Folgeupdates wieder vollständig über das integrierte Dudu7 Update Center funktionieren.
+
+          **Validierung**
+          - Standard-MetroList-Compile
+          - vollständige Dudu7-Unit-/Regressionstests
+          - ARM64 + ARMv7 APK
+          - Paket-, Signatur- und SHA-256-Prüfung
+          - APK SHA-256: $SHA
+          MD
+
+          TAG=dudu7-v13.7.78
+          HEAD_SHA=$(git rev-parse HEAD)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            TAG_SHA=$(git rev-list -n 1 "$TAG")
+            test "$TAG_SHA" = "$HEAD_SHA" || { echo "$TAG already exists on a different commit" >&2; exit 1; }
+          else
+            gh release create "$TAG" \
+              artifacts/Metrolist-dudu7-13.7.78.apk \
+              artifacts/Metrolist-dudu7-13.7.78.apk.sha256 \
+              artifacts/dudu7-update.json \
+              --target "$HEAD_SHA" \
+              --title 'MetroList dudu7 13.7.78' \
+              --notes-file artifacts/release-notes.md \
+              --prerelease
+          fi
+
+      - name: Verify public updater manifest and APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          import hashlib, json, time, urllib.error, urllib.request
+          tag='dudu7-v13.7.78'
+          api=f'https://api.github.com/repos/andreassamitsch/headunit_landscape/releases/tags/{tag}'
+          headers={'User-Agent':'Metrolist-dudu7-ci','Accept':'application/vnd.github+json'}
+          release=None
+          for _ in range(12):
+              try:
+                  release=json.load(urllib.request.urlopen(urllib.request.Request(api,headers=headers),timeout=30))
+                  if release.get('tag_name')==tag and release.get('assets'):
+                      break
+              except (urllib.error.HTTPError, urllib.error.URLError):
+                  release=None
+              time.sleep(5)
+          if not release:
+              raise SystemExit('13.7.78 release did not become publicly readable')
+          assets={a['name']:a['browser_download_url'] for a in release['assets']}
+          required={'dudu7-update.json','Metrolist-dudu7-13.7.78.apk','Metrolist-dudu7-13.7.78.apk.sha256'}
+          missing=required-assets.keys()
+          if missing:
+              raise SystemExit(f'Missing updater assets: {sorted(missing)}')
+          manifest=json.load(urllib.request.urlopen(urllib.request.Request(assets['dudu7-update.json'],headers={'User-Agent':'Metrolist-dudu7-ci'}),timeout=30))
+          assert manifest['versionCode']==1370087
+          assert manifest['versionName']=='13.7.78'
+          assert manifest['packageName']=='com.metrolist.music.dudu7.debug'
+          assert manifest['signerSha256']=='138bf5c8338174eb09a847b7a1e60462b6ca1a108b04d512cc79fcfc150a06ee'
+          assert manifest['apkAsset']=='Metrolist-dudu7-13.7.78.apk'
+          h=hashlib.sha256()
+          with urllib.request.urlopen(urllib.request.Request(assets['Metrolist-dudu7-13.7.78.apk'],headers={'User-Agent':'Metrolist-dudu7-ci'}),timeout=120) as response:
+              while True:
+                  chunk=response.read(1024*1024)
+                  if not chunk: break
+                  h.update(chunk)
+          assert h.hexdigest()==manifest['sha256']
+          print('13.7.78 public updater manifest and APK SHA verified:', h.hexdigest())
+          PY
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metrolist-dudu7-13.7.78-updater
+          path: |
+            artifacts/Metrolist-dudu7-13.7.78.apk
+            artifacts/Metrolist-dudu7-13.7.78.apk.sha256
+            artifacts/dudu7-update.json
+            artifacts/apk-badging.txt
+            artifacts/apk-signature.txt
+            artifacts/apk-contents.txt
+            artifacts/build.log
+            artifacts/release-notes.md
+          retention-days: 14

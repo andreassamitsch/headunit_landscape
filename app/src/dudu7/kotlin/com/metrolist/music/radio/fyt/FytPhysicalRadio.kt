@@ -9,40 +9,86 @@ import android.os.Handler
 import android.os.Looper
 import com.android.fmradio.FmNative
 import com.android.fmradio.FmService
+import com.metrolist.music.playback.Dudu7FmMediaButtonRouting
+import com.metrolist.music.playback.Dudu7FmSessionOwnership
+import com.metrolist.music.playback.Dudu7FmSessionRouting
+import com.metrolist.music.playback.Dudu7SyuRadioIpc
+import com.metrolist.music.playback.MediaKeyDiagnostics
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
-import java.lang.reflect.Method
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
  * Independent physical FM backend for FYT/Dudu7 head units.
  *
- * It talks directly to the firmware-provided libfmjni.so and TWUtil MCU bridge;
- * NavRadio+ is neither referenced nor required at runtime.
+ * It uses the Dudu7/UIS7870 FmService/FmNative path exposed by the Syu RadioProxy.
+ * Optional TWUtil backends belong to other head-unit families and are not used here.
  */
 object FytPhysicalRadio {
     private const val TAG = "FytPhysicalRadio"
     private const val PREFS = "dudu7_physical_radio"
     private const val KEY_FREQUENCY = "frequency"
-    private const val KEY_PRESETS = "presets"
+    private const val KEY_PRESETS = "presets_v3"
+    private const val LEGACY_KEY_PRESETS = "presets"
+    private const val KEY_AF = "af_enabled"
+    private const val KEY_TA = "ta_enabled"
+    private const val KEY_REG = "reg_enabled"
+    private const val KEY_AF_SENSITIVITY = "af_sensitivity"
+    private const val KEY_GEO = "rtr_geo_enabled"
     private const val FM_MIN = 87.5f
     private const val FM_MAX = 108.0f
     private const val FM_STEP = 0.1f
+    private const val SEEK_RSSI_THRESHOLD = 38
+    private const val SCAN_RSSI_THRESHOLD = 36
+    private const val AF_POLL_INTERVAL_MS = 6_000L
+    private const val AF_SWITCH_COOLDOWN_MS = 20_000L
+    private const val DEFAULT_AF_SENSITIVITY = 30
+    private const val MIN_AF_SENSITIVITY = 15
+    private const val MAX_AF_SENSITIVITY = 50
+    private const val AF_RSSI_WINDOW_SIZE = 4
+    private const val AF_WEAK_SAMPLE_COUNT = 3
+    private const val AF_RSSI_HYSTERESIS = 3
+    private const val AF_RSSI_SAMPLE_COUNT = 4
+    private const val AF_RSSI_SAMPLE_INTERVAL_MS = 90L
+    private const val DUDU7_SESSION_PROPAGATION_MS = 150L
 
     data class Preset(
         val frequency: Float,
         val name: String,
+        val pi: Int = 0,
+        val ecc: String = "",
+        // Kept only for binary/source compatibility. V3 favourites never persist AF lists.
+        val alternativeFrequencies: List<Float> = emptyList(),
+        val stationId: String = "",
+        val id: String = "",
+    )
+
+    data class ScanResult(
+        val frequency: Float,
+        val name: String,
+        val rssi: Int,
+        val stereo: Boolean?,
+        val pi: Int,
+        val ecc: String = "",
+        val pty: Int,
+        val tp: Boolean,
+        val alternativeFrequencies: List<Float> = emptyList(),
+        val stationId: String = "",
+        val rdsConfirmed: Boolean = false,
     )
 
     data class State(
@@ -51,22 +97,107 @@ object FytPhysicalRadio {
         val isActive: Boolean = false,
         val isMuted: Boolean = false,
         val isBusy: Boolean = false,
+        val isScanning: Boolean = false,
+        val scanProgress: Float = 0f,
+        val scanResults: List<ScanResult> = emptyList(),
         val frequency: Float = 99.7f,
         val ps: String = "",
         val rt: String = "",
         val rssi: Int = 0,
-        val stereo: Boolean = false,
+        val stereo: Boolean? = null,
         val pi: Int = 0,
+        val ecc: String = "",
+        val alternativeFrequencies: List<Float> = emptyList(),
+        val rdsConfirmed: Boolean = false,
+        val rdsFreshFrequency: Float = 0f,
         val pty: Int = 0,
         val tp: Boolean = false,
         val ta: Boolean = false,
+        val afEnabled: Boolean = true,
+        val afSensitivity: Int = DEFAULT_AF_SENSITIVITY,
+        val afAverageRssi: Int = 0,
+        val afWeakSamples: Int = 0,
+        val firmwareFmSensitivity: Int? = null,
+        val taEnabled: Boolean = true,
+        val regEnabled: Boolean = false,
+        val afSupported: Boolean = true,
+        val afLastResult: String = "",
+        val afLastNativeResult: Int? = null,
+        val geoEnabled: Boolean = false,
+        val geoPermissionGranted: Boolean = false,
+        val geoLocationStatus: String = "Standort deaktiviert",
+        val geoLatitude: Double? = null,
+        val geoLongitude: Double? = null,
+        val geoAccuracyMeters: Float? = null,
+        val rtrCatalogStatus: String = "Noch nicht geladen",
+        val rtrCatalogStations: Int = 0,
+        val rtrCatalogUpdatedAt: Long = 0L,
+        val rtrCatalogLoading: Boolean = false,
+        val rtrMatchedFrequency: Float = 0f,
+        val rtrStableId: String = "",
+        val rtrCanonicalName: String = "",
+        val rtrMatchSource: String = "",
+        val rtrMatchConfidence: Int = 0,
+        val rtrCoverageStrength: Int = 0,
+        val rtrCoverageName: String = "",
+        val rtrStationSite: String = "",
+        val rtrAfPredictions: List<RtrAfPrediction> = emptyList(),
+        val activeFavouriteId: String = "",
         val presets: List<Preset> = emptyList(),
         val radioType: String = "",
         val platform: String = "",
         val error: String? = null,
     ) {
+        val currentPreset: Preset?
+            get() = FytPhysicalRadio.findCurrentPreset(
+                presets = presets,
+                activeId = activeFavouriteId,
+                frequency = frequency,
+                pi = pi,
+                rdsConfirmed = rdsConfirmed && kotlin.math.abs(rdsFreshFrequency - frequency) < 0.05f,
+                stationId = rtrStableId.takeIf {
+                    kotlin.math.abs(rtrMatchedFrequency - frequency) < 0.05f && rtrMatchConfidence >= 60
+                }.orEmpty(),
+            )
+
+        private val resolvedStationIdentity: FmResolvedStationIdentity
+            get() {
+                val baseIdentity =
+                    FmStationIdentity.resolve(
+                        rawPs = ps,
+                        storedName = currentPreset?.name,
+                        frequencies = listOf(frequency) + currentPreset?.let(FytPhysicalRadio::presetFrequencies).orEmpty(),
+                        pi = pi.takeIf { rdsConfirmed && kotlin.math.abs(rdsFreshFrequency - frequency) < 0.05f } ?: 0,
+                        ecc = ecc,
+                    )
+                val activePreset = currentPreset?.takeIf { activeFavouriteId.isNotBlank() && it.id == activeFavouriteId }
+                val rdsFresh = rdsConfirmed && kotlin.math.abs(rdsFreshFrequency - frequency) < 0.05f
+                val currentRtrMatch = rtrStableId.isNotBlank() && rtrCanonicalName.isNotBlank() &&
+                    kotlin.math.abs(rtrMatchedFrequency - frequency) < 0.05f && rtrMatchConfidence >= 60
+                val allowRtrOverride =
+                    FmActiveFavouriteIdentityPolicy.allowRtrOverride(
+                        activeFavourite = activePreset != null,
+                        storedStationId = activePreset?.stationId.orEmpty(),
+                        storedPi = activePreset?.pi ?: 0,
+                        currentPi = pi,
+                        rdsFresh = rdsFresh,
+                        rtrStableId = rtrStableId,
+                    )
+                if (!currentRtrMatch || !allowRtrOverride) return baseIdentity
+                val preservedName = currentPreset?.takeIf { it.stationId == rtrStableId }?.name?.trim().orEmpty()
+                return FmResolvedStationIdentity(
+                    stableId = rtrStableId,
+                    canonicalName = preservedName.ifBlank { rtrCanonicalName },
+                    recognized = true,
+                    source = rtrMatchSource.ifBlank { "RTR" },
+                )
+            }
+
         val displayStation: String
-            get() = ps.ifBlank { "FM ${formatFrequency(frequency)} MHz" }
+            get() = resolvedStationIdentity.canonicalName
+
+        val stableStationId: String
+            get() = resolvedStationIdentity.stableId
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -76,10 +207,27 @@ object FytPhysicalRadio {
 
     private var appContext: Context? = null
     private var native: FmNative? = null
-    private var twUtil: TwUtilBridge? = null
     private var pollingJob: Job? = null
+    private var scanJob: Job? = null
+    private var afJob: Job? = null
+    private var geoJob: Job? = null
+    private var rtrStateJob: Job? = null
+    private var rtrMatchJob: Job? = null
+    private var rtrRepository: RtrFmRepository? = null
+    private var receptionPathStore: FmReceptionPathStore? = null
+    private var lastRtrResolveKey = ""
     private var audioManager: AudioManager? = null
     private var focusRequest: AudioFocusRequest? = null
+    private var lastAfAttemptAt = 0L
+    private var lastAfSwitchAt = 0L
+    private var pendingPresetIdentity: Preset? = null
+    private var pendingPs = ""
+    private var pendingPsCount = 0
+    private var pendingPi = 0
+    private var pendingPiCount = 0
+    private var pendingAfFrequencies: List<Float> = emptyList()
+    private var pendingAfCount = 0
+    private val rssiWindow = ArrayDeque<Int>()
 
     fun get(context: Context): FytPhysicalRadio {
         initialize(context)
@@ -88,26 +236,162 @@ object FytPhysicalRadio {
 
     fun initialize(context: Context) {
         if (_state.value.initialized) return
+        val applicationContext = context.applicationContext
         synchronized(lock) {
             if (_state.value.initialized) return
-            val applicationContext = context.applicationContext
             appContext = applicationContext
+            rtrRepository = RtrFmRepository.get(applicationContext)
+            receptionPathStore = FmReceptionPathStore(applicationContext)
             val prefs = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val frequency = normalizeFrequency(prefs.getFloat(KEY_FREQUENCY, 99.7f))
+            val presetPayload = prefs.getString(KEY_PRESETS, null)
+            val legacyPresetPayload = if (presetPayload == null) prefs.getString(LEGACY_KEY_PRESETS, null) else null
+            val loadedPresets = readPresets(presetPayload ?: legacyPresetPayload)
             native = FmNative.getInstance()
             FmNative.initAudio(applicationContext)
-            twUtil = TwUtilBridge()
             audioManager = applicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
             _state.value =
                 State(
                     initialized = true,
                     libraryLoaded = FmNative.isLibraryLoaded(),
                     frequency = frequency,
-                    presets = readPresets(prefs.getString(KEY_PRESETS, null)),
+                    presets = loadedPresets,
+                    afEnabled = prefs.getBoolean(KEY_AF, true),
+                    afSensitivity =
+                        prefs.getInt(KEY_AF_SENSITIVITY, DEFAULT_AF_SENSITIVITY)
+                            .coerceIn(MIN_AF_SENSITIVITY, MAX_AF_SENSITIVITY),
+                    firmwareFmSensitivity = systemProperty("ro.fyt.fmsens").toIntOrNull(),
+                    taEnabled = prefs.getBoolean(KEY_TA, true),
+                    regEnabled = prefs.getBoolean(KEY_REG, false),
+                    geoEnabled = prefs.getBoolean(KEY_GEO, false),
+                    geoPermissionGranted = FmGeoLocationProvider.hasPermission(applicationContext),
+                    geoLocationStatus = if (FmGeoLocationProvider.hasPermission(applicationContext)) {
+                        "Standort freigegeben"
+                    } else {
+                        "Standortberechtigung fehlt"
+                    },
                     radioType = systemProperty("sys.fyt.radio_type"),
                     platform = systemProperty("ro.product.board").ifBlank { systemProperty("ro.board.platform") },
                     error = if (FmNative.isLibraryLoaded()) null else "FYT-Firmwarebibliothek libfmjni.so konnte nicht geladen werden",
                 )
+            if (presetPayload == null && legacyPresetPayload != null) persistPresets(loadedPresets)
+        }
+        Dudu7FmMediaButtonRouting.install(applicationContext)
+        Dudu7FmSessionRouting.install(applicationContext)
+        startRtrServices(applicationContext)
+    }
+
+    private fun startRtrServices(context: Context) {
+        val repository = rtrRepository ?: RtrFmRepository.get(context).also { rtrRepository = it }
+        if (rtrStateJob == null) {
+            rtrStateJob = scope.launch {
+                repository.state.collectLatest { rtr ->
+                    _state.update { it.copy(
+                        rtrCatalogStatus = rtr.status,
+                        rtrCatalogStations = rtr.stationCount,
+                        rtrCatalogUpdatedAt = rtr.updatedAt,
+                        rtrCatalogLoading = rtr.loading,
+                    ) }
+                }
+            }
+        }
+        if (geoJob == null) {
+            geoJob = scope.launch {
+                FmGeoLocationProvider.state.collectLatest { geo ->
+                    val point = geo.point
+                    _state.update { it.copy(
+                        geoPermissionGranted = geo.permissionGranted,
+                        geoLocationStatus = geo.status,
+                        geoLatitude = point?.latitude,
+                        geoLongitude = point?.longitude,
+                        geoAccuracyMeters = point?.accuracyMeters?.takeIf { accuracy -> accuracy.isFinite() },
+                    ) }
+                    if (_state.value.geoEnabled && point != null) requestRtrResolution()
+                }
+            }
+        }
+        if (_state.value.geoEnabled) FmGeoLocationProvider.start(context)
+        scope.launch {
+            repository.refreshIfNeeded()
+            requestRtrResolution(force = true)
+        }
+    }
+
+    fun setGeoEnabled(enabled: Boolean) {
+        persistBoolean(KEY_GEO, enabled)
+        _state.update { it.copy(geoEnabled = enabled) }
+        val context = appContext ?: return
+        if (enabled) {
+            FmGeoLocationProvider.start(context)
+        } else {
+            FmGeoLocationProvider.stop()
+            _state.update { it.copy(
+                geoLatitude = null,
+                geoLongitude = null,
+                geoAccuracyMeters = null,
+                geoLocationStatus = "Standort deaktiviert",
+            ) }
+        }
+        requestRtrResolution(force = true)
+    }
+
+    fun onLocationPermissionChanged() {
+        val context = appContext ?: return
+        FmGeoLocationProvider.permissionChanged(context)
+        val granted = FmGeoLocationProvider.hasPermission(context)
+        _state.update { it.copy(geoPermissionGranted = granted) }
+        if (!granted) {
+            persistBoolean(KEY_GEO, false)
+            _state.update { it.copy(geoEnabled = false) }
+        } else if (_state.value.geoEnabled) {
+            FmGeoLocationProvider.start(context)
+        }
+        requestRtrResolution(force = true)
+    }
+
+    fun refreshRtrData() {
+        scope.launch {
+            rtrRepository?.refreshIfNeeded(force = true)
+            requestRtrResolution(force = true)
+        }
+    }
+
+    private fun requestRtrResolution(force: Boolean = false) {
+        val repository = rtrRepository ?: return
+        val before = _state.value
+        val point = if (before.geoEnabled) FmGeoLocationProvider.state.value.point else null
+        val pointKey = point?.let {
+            "${(it.latitude * 100.0).roundToInt()}:${(it.longitude * 100.0).roundToInt()}"
+        } ?: "none"
+        val key = "${frequencyKey(before.frequency)}:${before.pi}:${before.ps}:" +
+            "${before.currentPreset?.name.orEmpty()}:$pointKey"
+        if (!force && key == lastRtrResolveKey) return
+        lastRtrResolveKey = key
+        rtrMatchJob?.cancel()
+        rtrMatchJob = scope.launch {
+            val match = repository.resolve(
+                frequency = before.frequency,
+                rawPs = before.ps,
+                storedName = before.currentPreset?.name,
+                pi = before.pi,
+                location = point,
+            )
+            val predictions = match?.let {
+                repository.alternatives(it, before.frequency, point)
+            }.orEmpty()
+            if (kotlin.math.abs(_state.value.frequency - before.frequency) >= 0.05f) return@launch
+            _state.update { it.copy(
+                rtrMatchedFrequency = if (match == null) 0f else before.frequency,
+                rtrStableId = match?.stableId.orEmpty(),
+                rtrCanonicalName = match?.canonicalName.orEmpty(),
+                rtrMatchSource = match?.source.orEmpty(),
+                rtrMatchConfidence = match?.confidence ?: 0,
+                rtrCoverageStrength = match?.coverageStrength ?: 0,
+                rtrCoverageName = match?.coverageName.orEmpty(),
+                rtrStationSite = match?.stationSite.orEmpty(),
+                rtrAfPredictions = predictions,
+            ) }
+            if (match != null) updateCurrentPresetIdentity()
         }
     }
 
@@ -118,6 +402,7 @@ object FytPhysicalRadio {
                 _state.update { it.copy(isBusy = true, error = null) }
             }
             val target = normalizeFrequency(frequency)
+            Dudu7SyuRadioIpc.resetFrequencyAnchor("powerOn:$target", target)
             val context = appContext
             val fm = native
             if (context == null || fm == null || !FmNative.isLibraryLoaded()) {
@@ -126,34 +411,44 @@ object FytPhysicalRadio {
             }
 
             try {
+                // NavRadio+ publishes its Dudu7 MediaSession before claiming RadioProxy/FmNative.
+                // Give Android/com.syu.ms one dispatch turn before activating the hardware source.
+                val claimChanged = Dudu7FmSessionOwnership.claim()
+                MediaKeyDiagnostics.record(
+                    context,
+                    "DUDU7_SESSION_CLAIM",
+                    "source=powerOn claimed=true changed=$claimChanged target=$target",
+                )
+                val syuReady = Dudu7SyuRadioIpc.claimFmSource()
+                MediaKeyDiagnostics.record(
+                    context,
+                    "SYU_IPC_SOURCE",
+                    "source=powerOn requestQueued=true mainReady=$syuReady target=$target",
+                )
+                delay(DUDU7_SESSION_PROPAGATION_MS)
+
                 requestAudioFocus()
                 FytAudioRouter.prepare(context)
                 installRdsListener()
 
-                twUtil?.open()
-                twUtil?.initRadioSequence()
-                delay(150)
-                twUtil?.radioOnFm()
-                delay(100)
-                twUtil?.unmute()
-                delay(50)
-
                 val openOk = fm.openDev()
                 val powerOk = fm.powerUp(target)
+                runCatching { fm.setRds(false) }
                 val tuneOk = fm.tune(target)
                 fm.setMute(false)
-                repeat(3) { index ->
-                    twUtil?.setAudioSourceFm()
-                    if (index < 2) delay(100)
-                }
                 FmNative.setFirmwareFmVolumeEnabled(true)
                 runCatching { fm.setEuropeArea() }
                 runCatching { fm.setRds(true) }
+                applyRegionalConfig(fm, _state.value.regEnabled)
 
                 if (!openOk || !powerOk || !tuneOk) {
                     error("Tuner-Initialisierung fehlgeschlagen (open=$openOk, power=$powerOk, tune=$tuneOk)")
                 }
 
+                val presetIdentity = pendingPresetIdentity
+                pendingPresetIdentity = null
+                resetPendingRds()
+                resetAfSampling()
                 persistFrequency(target)
                 _state.update {
                     it.copy(
@@ -161,18 +456,43 @@ object FytPhysicalRadio {
                         isMuted = false,
                         isBusy = false,
                         frequency = target,
-                        ps = "",
+                        activeFavouriteId = presetIdentity?.id.orEmpty(),
+                        ps = presetIdentity?.name.orEmpty(),
                         rt = "",
+                        stereo = null,
                         pi = 0,
+                        ecc = "",
+                        alternativeFrequencies = emptyList(),
+                        rdsConfirmed = false,
+                        rdsFreshFrequency = 0f,
+                        rtrMatchedFrequency = 0f,
+                        rtrStableId = "",
+                        rtrCanonicalName = "",
+                        rtrMatchSource = "",
+                        rtrMatchConfidence = 0,
+                        rtrCoverageStrength = 0,
+                        rtrCoverageName = "",
+                        rtrStationSite = "",
+                        rtrAfPredictions = emptyList(),
+                        afAverageRssi = 0,
+                        afWeakSamples = 0,
                         pty = 0,
                         error = null,
                     )
                 }
                 startPolling()
+                requestRtrResolution(force = true)
                 Timber.tag(TAG).i("Physical FM active at %.1f MHz", target)
             } catch (error: Throwable) {
                 Timber.tag(TAG).e(error, "Could not start physical FM")
+                Dudu7SyuRadioIpc.releaseFmSource()
                 cleanupHardware()
+                val released = Dudu7FmSessionOwnership.release()
+                MediaKeyDiagnostics.record(
+                    context,
+                    "DUDU7_SESSION_CLAIM",
+                    "source=powerOn_failed claimed=false changed=$released error=${error.javaClass.simpleName}",
+                )
                 _state.update { it.copy(isActive = false, isBusy = false, error = error.message ?: "Radio konnte nicht gestartet werden") }
             }
         }
@@ -180,24 +500,42 @@ object FytPhysicalRadio {
 
     fun powerOff() {
         scope.launch {
+            stopAutoScan()
             synchronized(lock) {
                 if (_state.value.isBusy && !_state.value.isActive) return@launch
                 _state.update { it.copy(isBusy = true) }
             }
+            Dudu7SyuRadioIpc.releaseFmSource()
             cleanupHardware()
             _state.update {
                 it.copy(
                     isActive = false,
                     isMuted = false,
                     isBusy = false,
+                    isScanning = false,
+                    scanProgress = 0f,
                     ps = "",
                     rt = "",
                     rssi = 0,
-                    stereo = false,
+                    stereo = null,
                     pi = 0,
+                    ecc = "",
+                    alternativeFrequencies = emptyList(),
+                    rdsConfirmed = false,
+                    rdsFreshFrequency = 0f,
+                    afAverageRssi = 0,
+                    afWeakSamples = 0,
                     pty = 0,
                     tp = false,
                     ta = false,
+                )
+            }
+            val released = Dudu7FmSessionOwnership.release()
+            appContext?.let { context ->
+                MediaKeyDiagnostics.record(
+                    context,
+                    "DUDU7_SESSION_CLAIM",
+                    "source=powerOff claimed=false changed=$released",
                 )
             }
             Timber.tag(TAG).i("Physical FM released")
@@ -206,17 +544,59 @@ object FytPhysicalRadio {
 
     fun tune(frequency: Float) {
         val target = normalizeFrequency(frequency)
+        val requestedPreset = pendingPresetIdentity
+        _state.update { current ->
+            current.copy(activeFavouriteId = requestedPreset?.id.orEmpty())
+        }
+        Dudu7SyuRadioIpc.onMetroListTuneRequested("tune:$target", target)
         if (!_state.value.isActive) {
             powerOn(target)
             return
         }
         scope.launch {
-            _state.update { it.copy(isBusy = true, error = null, ps = "", rt = "", pi = 0, pty = 0) }
-            val success = runCatching { native?.tune(target) == true }.getOrDefault(false)
+            if (_state.value.isScanning) stopAutoScan()
+            val presetIdentity = pendingPresetIdentity
+            pendingPresetIdentity = null
+            resetPendingRds()
+            resetAfSampling()
+            _state.update {
+                it.copy(
+                    isBusy = true,
+                    error = null,
+                    activeFavouriteId = presetIdentity?.id.orEmpty(),
+                    ps = presetIdentity?.name.orEmpty(),
+                    rt = "",
+                    stereo = null,
+                    pi = 0,
+                    ecc = "",
+                    alternativeFrequencies = emptyList(),
+                    rdsConfirmed = false,
+                    rdsFreshFrequency = 0f,
+                    rtrMatchedFrequency = 0f,
+                    rtrStableId = "",
+                    rtrCanonicalName = "",
+                    rtrMatchSource = "",
+                    rtrMatchConfidence = 0,
+                    rtrCoverageStrength = 0,
+                    rtrCoverageName = "",
+                    rtrStationSite = "",
+                    rtrAfPredictions = emptyList(),
+                    pty = 0,
+                )
+            }
+            val success = runCatching {
+                native?.let { fm ->
+                    runCatching { fm.setRds(false) }
+                    val tuned = fm.tune(target)
+                    runCatching { fm.setRds(true) }
+                    tuned
+                } == true
+            }.getOrDefault(false)
             if (success) {
                 persistFrequency(target)
                 _state.update { it.copy(isBusy = false, frequency = target) }
                 triggerRdsRead()
+                requestRtrResolution(force = true)
             } else {
                 _state.update { it.copy(isBusy = false, error = "Frequenz konnte nicht eingestellt werden") }
             }
@@ -240,8 +620,22 @@ object FytPhysicalRadio {
             return
         }
         scope.launch {
-            if (_state.value.isBusy) return@launch
-            _state.update { it.copy(isBusy = true, error = null, ps = "", rt = "") }
+            if (_state.value.isBusy || _state.value.isScanning) return@launch
+            resetPendingRds()
+            _state.update {
+                it.copy(
+                    isBusy = true,
+                    error = null,
+                    ps = "",
+                    rt = "",
+                    stereo = null,
+                    pi = 0,
+                    ecc = "",
+                    alternativeFrequencies = emptyList(),
+                    rdsConfirmed = false,
+                    rdsFreshFrequency = 0f,
+                )
+            }
             val fm = native
             if (fm == null) {
                 _state.update { it.copy(isBusy = false, error = "Tuner ist nicht verfügbar") }
@@ -249,7 +643,7 @@ object FytPhysicalRadio {
             }
 
             val nativeResult = runCatching { fm.seek(_state.value.frequency, up) }.getOrNull()
-            val nativeFrequency = nativeResult?.firstOrNull()?.takeIf { it in FM_MIN..FM_MAX }
+            val nativeFrequency = nativeResult?.firstOrNull()?.let(::decodeFrequency)
             val found =
                 if (nativeFrequency != null && abs(nativeFrequency - _state.value.frequency) >= 0.05f) {
                     normalizeFrequency(nativeFrequency)
@@ -258,6 +652,7 @@ object FytPhysicalRadio {
                 }
 
             if (found != null) {
+                Dudu7SyuRadioIpc.resetFrequencyAnchor("seekResult:$found", found)
                 persistFrequency(found)
                 _state.update { it.copy(isBusy = false, frequency = found) }
                 triggerRdsRead()
@@ -265,6 +660,209 @@ object FytPhysicalRadio {
                 _state.update { it.copy(isBusy = false, error = "Kein weiterer Sender gefunden") }
             }
         }
+    }
+
+    fun startAutoScan() {
+        if (_state.value.isScanning) return
+        Dudu7SyuRadioIpc.resetFrequencyAnchor("autoScanStart", null)
+        scanJob?.cancel()
+        scanJob =
+            scope.launch {
+                val originalFrequency = _state.value.frequency
+                if (!_state.value.isActive) {
+                    powerOn(originalFrequency)
+                    var attempts = 0
+                    while (!_state.value.isActive && _state.value.error == null && attempts < 50) {
+                        delay(100)
+                        attempts++
+                    }
+                }
+                val fm = native
+                if (fm == null || !_state.value.isActive) {
+                    _state.update { it.copy(error = "Tuner konnte für den Suchlauf nicht gestartet werden") }
+                    return@launch
+                }
+
+                _state.update {
+                    it.copy(
+                        isScanning = true,
+                        isBusy = true,
+                        scanProgress = 0.01f,
+                        scanResults = emptyList(),
+                        error = null,
+                    )
+                }
+
+                val progressJob =
+                    launch {
+                        var progress = 0.03f
+                        while (isActive && _state.value.isScanning && progress < 0.48f) {
+                            delay(350)
+                            progress = (progress + 0.018f).coerceAtMost(0.48f)
+                            _state.update { it.copy(scanProgress = progress) }
+                        }
+                    }
+
+                val rawDeferred =
+                    async(Dispatchers.IO) {
+                        runCatching { FmNative.autoScan(0) }
+                            .onFailure { Timber.tag(TAG).w(it, "Native autoScan failed") }
+                            .getOrDefault(shortArrayOf())
+                    }
+                val raw =
+                    withTimeoutOrNull(18_000) { rawDeferred.await() }
+                        ?: run {
+                            runCatching { fm.stopScan() }
+                            shortArrayOf()
+                        }
+                progressJob.cancel()
+
+                var frequencies =
+                    raw
+                        .asSequence()
+                        .mapNotNull { decodeFrequency(it.toFloat()) }
+                        .distinctBy { (it * 10).roundToInt() }
+                        .sorted()
+                        .toList()
+                if (frequencies.isEmpty()) {
+                    frequencies = softwareBandScan(fm)
+                }
+
+                val results = mutableListOf<ScanResult>()
+                frequencies.forEachIndexed { index, frequency ->
+                    if (!isActive || !_state.value.isScanning) return@forEachIndexed
+                    resetPendingRds()
+                    _state.update {
+                        it.copy(
+                            scanProgress = 0.5f + (index.toFloat() / frequencies.size.coerceAtLeast(1)) * 0.48f,
+                            frequency = frequency,
+                            ps = "",
+                            rt = "",
+                            stereo = null,
+                            pi = 0,
+                            ecc = "",
+                            alternativeFrequencies = emptyList(),
+                            rdsConfirmed = false,
+                            rdsFreshFrequency = 0f,
+                            pty = 0,
+                            tp = false,
+                            ta = false,
+                        )
+                    }
+                    runCatching { fm.setRds(false) }
+                    if (!fm.tune(frequency)) return@forEachIndexed
+                    delay(70)
+                    runCatching { fm.setRds(true) }
+                    val observation = readFreshRdsObservation(fm, attempts = 7, initialDelayMs = 230)
+                    val rssi = runCatching { fm.rssi }.getOrDefault(0)
+                    if (rssi < SCAN_RSSI_THRESHOLD) return@forEachIndexed
+                    val stereoState = runCatching { fm.stereoState }.getOrDefault(-1)
+                    val point = if (_state.value.geoEnabled) FmGeoLocationProvider.state.value.point else null
+                    val rtrMatch = rtrRepository?.cachedSnapshot()?.let { catalog ->
+                        RtrFmMatcher.resolve(
+                            snapshot = catalog,
+                            frequency = frequency,
+                            rawPs = observation.ps,
+                            storedName = null,
+                            pi = observation.pi,
+                            location = point,
+                        )
+                    }
+                    results +=
+                        ScanResult(
+                            frequency = frequency,
+                            name = rtrMatch?.canonicalName ?: observation.ps.ifBlank { "FM ${formatFrequency(frequency)}" },
+                            rssi = rssi,
+                            stereo = stereoState.takeIf { it >= 0 }?.let { it == 1 },
+                            pi = observation.pi,
+                            ecc = observation.ecc,
+                            pty = observation.pty,
+                            tp = observation.tp,
+                            alternativeFrequencies = emptyList(),
+                            stationId = rtrMatch?.stableId.orEmpty(),
+                            rdsConfirmed = observation.confirmed,
+                        )
+                    _state.update { it.copy(scanResults = groupScanResults(results)) }
+                }
+
+                resetPendingRds()
+                runCatching {
+                    fm.setRds(false)
+                    fm.tune(originalFrequency)
+                    fm.setRds(true)
+                }
+                Dudu7SyuRadioIpc.resetFrequencyAnchor("autoScanComplete", originalFrequency)
+                persistFrequency(originalFrequency)
+                _state.update {
+                    it.copy(
+                        isScanning = false,
+                        isBusy = false,
+                        scanProgress = 1f,
+                        scanResults =
+                            groupScanResults(results)
+                                .sortedWith(
+                                    compareByDescending<ScanResult> { result -> result.rssi }
+                                        .thenBy { result -> result.frequency },
+                                ),
+                        frequency = originalFrequency,
+                        ps = "",
+                        rt = "",
+                        pi = 0,
+                        ecc = "",
+                        alternativeFrequencies = emptyList(),
+                        rdsConfirmed = false,
+                        rdsFreshFrequency = 0f,
+                    )
+                }
+                triggerRdsRead()
+                Timber.tag(TAG).i("FM scan completed with %d stations", results.size)
+            }
+    }
+
+    fun stopAutoScan() {
+        scanJob?.cancel()
+        scanJob = null
+        runCatching { native?.stopScan() }
+        _state.update { it.copy(isScanning = false, isBusy = false, scanProgress = 0f) }
+    }
+
+    fun clearScanResults() {
+        _state.update { it.copy(scanResults = emptyList(), scanProgress = 0f) }
+    }
+
+    fun saveScanResults(results: Collection<ScanResult>) {
+        if (results.isEmpty()) return
+        var updated = _state.value.presets
+        results.sortedByDescending(ScanResult::rssi).forEach { result ->
+            val refs = updated.map(::presetRef)
+            val existingIndex = FmFavouriteModel.existingIndexForUpsert(refs, result.frequency, result.stationId)
+            if (existingIndex >= 0) {
+                val existing = updated[existingIndex]
+                updated = updated.toMutableList().apply {
+                    this[existingIndex] = existing.copy(
+                        frequency = normalizeFrequency(result.frequency),
+                        name = if (existing.stationId.isNotBlank()) existing.name else result.name,
+                        pi = result.pi.takeIf { result.rdsConfirmed } ?: existing.pi,
+                        ecc = result.ecc.takeIf { result.rdsConfirmed }.orEmpty().ifBlank { existing.ecc },
+                        alternativeFrequencies = emptyList(),
+                        stationId = result.stationId.ifBlank { existing.stationId },
+                    )
+                }
+            } else {
+                updated = updated + Preset(
+                    frequency = normalizeFrequency(result.frequency),
+                    name = result.name,
+                    pi = result.pi.takeIf { result.rdsConfirmed } ?: 0,
+                    ecc = result.ecc.takeIf { result.rdsConfirmed }.orEmpty(),
+                    alternativeFrequencies = emptyList(),
+                    stationId = result.stationId,
+                    id = FmFavouriteModel.newId(),
+                )
+            }
+        }
+        updated = normalizePresets(updated)
+        persistPresets(updated)
+        _state.update { it.copy(presets = updated) }
     }
 
     fun toggleMute() {
@@ -275,7 +873,6 @@ object FytPhysicalRadio {
         scope.launch {
             if (!_state.value.isActive) return@launch
             val result = runCatching { native?.setMute(mute) }.getOrNull()
-            if (mute) twUtil?.mute() else twUtil?.unmute()
             if (result != null) _state.update { it.copy(isMuted = mute) }
         }
     }
@@ -287,20 +884,547 @@ object FytPhysicalRadio {
         }
     }
 
+    fun setAfEnabled(enabled: Boolean) {
+        persistBoolean(KEY_AF, enabled)
+        _state.update { it.copy(afEnabled = enabled) }
+        if (enabled) requestAlternativeFrequency()
+    }
+
+    fun setAfSensitivity(value: Int) {
+        val normalized = value.coerceIn(MIN_AF_SENSITIVITY, MAX_AF_SENSITIVITY)
+        persistInt(KEY_AF_SENSITIVITY, normalized)
+        _state.update { current ->
+            val weakSamples =
+                if (current.afAverageRssi > 0 && current.afAverageRssi < normalized) {
+                    current.afWeakSamples.coerceAtLeast(1)
+                } else {
+                    0
+                }
+            current.copy(afSensitivity = normalized, afWeakSamples = weakSamples)
+        }
+    }
+
+    fun setTaEnabled(enabled: Boolean) {
+        persistBoolean(KEY_TA, enabled)
+        _state.update { it.copy(taEnabled = enabled) }
+    }
+
+    fun setRegEnabled(enabled: Boolean) {
+        persistBoolean(KEY_REG, enabled)
+        _state.update { it.copy(regEnabled = enabled) }
+        native?.let { applyRegionalConfig(it, enabled) }
+    }
+
+    fun requestAlternativeFrequency() {
+        launchAlternativeFrequencyCheck(manual = true)
+    }
+
+    private fun requestAutomaticAlternativeFrequency() {
+        launchAlternativeFrequencyCheck(manual = false)
+    }
+
+    private fun launchAlternativeFrequencyCheck(manual: Boolean) {
+        if (afJob?.isActive == true) {
+            _state.update { it.copy(afLastResult = "AF-Prüfung läuft bereits") }
+            return
+        }
+        afJob =
+            scope.launch {
+                val fm = native
+                if (fm == null) {
+                    _state.update { it.copy(afLastResult = "FM-Tuner nicht verfügbar") }
+                    return@launch
+                }
+                val before = _state.value
+                val now = System.currentTimeMillis()
+                val blockedReason =
+                    when {
+                        !before.isActive -> "FM-Radio ist nicht aktiv"
+                        !before.afEnabled -> "AF ist ausgeschaltet"
+                        before.isScanning -> "AF während Sendersuchlauf nicht möglich"
+                        before.isBusy -> "Radio ist gerade beschäftigt"
+                        !manual && now - lastAfSwitchAt < AF_SWITCH_COOLDOWN_MS -> "AF-Umschaltsperre aktiv"
+                        !manual &&
+                            (before.afAverageRssi <= 0 ||
+                                before.afAverageRssi >= before.afSensitivity ||
+                                before.afWeakSamples < AF_WEAK_SAMPLE_COUNT) -> "Empfang liegt noch nicht unter der AF-Schwelle"
+                        else -> null
+                    }
+                if (blockedReason != null) {
+                    _state.update { it.copy(afLastResult = blockedReason) }
+                    return@launch
+                }
+
+                val preset = before.currentPreset
+                var expectedPi = before.pi.takeIf { before.rdsConfirmed && it > 0 } ?: preset?.pi.orZero()
+                if (manual && preset != null && expectedPi <= 0) {
+                    val sourceObservation = readFreshRdsObservation(fm, attempts = 4, initialDelayMs = 80)
+                    if (sourceObservation.pi > 0) {
+                        expectedPi = sourceObservation.pi
+                        _state.update { current ->
+                            current.copy(
+                                pi = expectedPi,
+                                rdsConfirmed = true,
+                                rdsFreshFrequency = before.frequency,
+                            )
+                        }
+                    }
+                }
+                val currentRtrMatch =
+                    preset != null &&
+                        before.rtrStableId.isNotBlank() &&
+                        kotlin.math.abs(before.rtrMatchedFrequency - before.frequency) < 0.05f &&
+                        before.rtrMatchConfidence >= 60 &&
+                        (preset.stationId.isBlank() || preset.stationId == before.rtrStableId)
+                val stationId =
+                    before.rtrStableId.takeIf { currentRtrMatch }.orEmpty()
+                        .ifBlank { preset?.stationId.orEmpty() }
+                val regionKey = currentRegionKey()
+                val identityBlock =
+                    when {
+                        preset == null || before.activeFavouriteId != preset.id -> "Kein eindeutig aktiver Favorit"
+                        regionKey == null -> "Aktueller Standort für AF nicht verfügbar"
+                        expectedPi <= 0 && !manual -> "Ausgangssender hat keine bestätigte PI"
+                        stationId.isBlank() -> "Sender ist am aktuellen Standort nicht eindeutig über RTR zugeordnet"
+                        else -> null
+                    }
+                if (identityBlock != null) {
+                    _state.update { it.copy(afLastResult = identityBlock) }
+                    appContext?.let { context ->
+                        MediaKeyDiagnostics.record(
+                            context,
+                            "FM_AF_PATH",
+                            "decision=blocked reason=$identityBlock favourite=${preset?.id.orEmpty()} " +
+                                "region=${regionKey.orEmpty()} expectedPi=${expectedPi.toString(16)}",
+                        )
+                    }
+                    return@launch
+                }
+                val activePreset = preset ?: return@launch
+                val activeRegionKey = regionKey ?: return@launch
+
+                Dudu7SyuRadioIpc.resetFrequencyAnchor(
+                    reason = "afCheck:${if (manual) "manual" else "automatic"}",
+                    baselineFrequency = null,
+                )
+                val history =
+                    receptionPathStore?.candidatesFor(
+                        favouriteId = activePreset.id,
+                        regionKey = activeRegionKey,
+                        expectedPi = expectedPi,
+                        stationId = stationId,
+                    ).orEmpty()
+                val currentPoint = if (before.geoEnabled) FmGeoLocationProvider.state.value.point else null
+                val rtrPredictions =
+                    if (currentRtrMatch && before.rtrStableId == stationId && before.rtrAfPredictions.isNotEmpty()) {
+                        before.rtrAfPredictions
+                    } else {
+                        withTimeoutOrNull(6_000) {
+                            rtrRepository?.alternativesForProgram(
+                                stableId = stationId,
+                                currentFrequency = before.frequency,
+                                location = currentPoint,
+                            ).orEmpty()
+                        }.orEmpty()
+                    }
+                val plan =
+                    FmLocalAfPlanner.plan(
+                        favouriteId = activePreset.id,
+                        currentFrequency = before.frequency,
+                        expectedPi = expectedPi,
+                        stationId = stationId,
+                        regionKey = activeRegionKey,
+                        history = history,
+                        rtrCandidates =
+                            rtrPredictions.map {
+                                FmRtrLocalCandidate(
+                                    frequency = it.frequency,
+                                    coverageStrength = it.coverageStrength,
+                                    source = it.source,
+                                )
+                            },
+                    )
+                val candidates =
+                    plan.map {
+                        FmAfCandidate(
+                            frequency = it.frequency,
+                            trustedPresetFrequency = it.cachedPath,
+                            predictedCoverage = it.predictedCoverage,
+                            source = it.source,
+                        )
+                    }
+                if (candidates.isEmpty()) {
+                    _state.update { it.copy(afLastResult = "Keine lokal mögliche RTR-Frequenz verfügbar") }
+                    appContext?.let { context ->
+                        MediaKeyDiagnostics.record(
+                            context,
+                            "FM_AF_PATH",
+                            "decision=no_candidates favourite=${activePreset.id} region=$activeRegionKey stationId=$stationId",
+                        )
+                    }
+                    return@launch
+                }
+
+                val currentRssi =
+                    sampleRssi(fm).takeIf { it > 0 }
+                        ?: before.afAverageRssi.takeIf { it > 0 }
+                        ?: before.rssi
+                _state.update {
+                    it.copy(
+                        isBusy = true,
+                        error = null,
+                        afLastResult = "${candidates.size} lokale AF-Frequenz(en) werden mit PI geprüft …",
+                        afLastNativeResult = null,
+                    )
+                }
+                runCatching { fm.setMute(true) }
+                try {
+                    appContext?.let { context ->
+                        MediaKeyDiagnostics.record(
+                            context,
+                            "FM_AF_PATH",
+                            "decision=plan favourite=${activePreset.id} region=$activeRegionKey stationId=$stationId " +
+                                "expectedPi=${expectedPi.toString(16)} candidates=${candidates.joinToString { formatFrequency(it.frequency) }}",
+                        )
+                    }
+                    val measurements =
+                        candidates.mapIndexedNotNull { index, candidate ->
+                            measureAlternativeFrequency(
+                                fm = fm,
+                                candidate = candidate,
+                                index = index + 1,
+                                total = candidates.size,
+                            )
+                        }
+                    val selected =
+                        FmAlternativeFrequencySelector.choose(
+                            currentFrequency = before.frequency,
+                            currentRssi = currentRssi,
+                            expectedPi = expectedPi,
+                            measurements = measurements,
+                            minimumImprovement = AF_RSSI_HYSTERESIS,
+                        )
+                    if (selected != null) {
+                        val tunedSelected = runCatching { fm.tune(selected.frequency) }.getOrDefault(false)
+                        if (!tunedSelected) {
+                            error("AF-Zielfrequenz ${formatFrequency(selected.frequency)} MHz konnte nicht eingestellt werden")
+                        }
+                        delay(220)
+                        commitAlternativeFrequencySwitch(
+                            before = before,
+                            favouriteId = activePreset.id,
+                            regionKey = activeRegionKey,
+                            stationId = stationId,
+                            target = selected.frequency,
+                            targetRssi = selected.rssi,
+                            targetPi = selected.pi,
+                            result =
+                                "Gewechselt ${formatFrequency(before.frequency)} → ${formatFrequency(selected.frequency)} MHz " +
+                                    "(PI bestätigt; RSSI $currentRssi → ${selected.rssi}; ${selected.source})",
+                            nativeResult = null,
+                            predictedCoverage = selected.predictedCoverage,
+                        )
+                        return@launch
+                    }
+
+                    runCatching { fm.tune(before.frequency) }
+                    delay(180)
+                    _state.update {
+                        it.copy(
+                            isBusy = false,
+                            frequency = before.frequency,
+                            activeFavouriteId = activePreset.id,
+                            ps = before.ps,
+                            rt = before.rt,
+                            stereo = before.stereo,
+                            pi = before.pi,
+                            ecc = before.ecc,
+                            rssi = currentRssi,
+                            alternativeFrequencies = before.alternativeFrequencies,
+                            rdsConfirmed = before.rdsConfirmed,
+                            rdsFreshFrequency = before.rdsFreshFrequency,
+                            afLastResult =
+                                "AF: keine bessere bestätigte Frequenz – zurück auf ${formatFrequency(before.frequency)} MHz",
+                        )
+                    }
+                    appContext?.let { context ->
+                        val summary = measurements.joinToString { measurement ->
+                            "${formatFrequency(measurement.frequency)}:${measurement.pi.toString(16)}"
+                        }
+                        MediaKeyDiagnostics.record(
+                            context,
+                            "FM_AF_PATH",
+                            "decision=rejected_identity favourite=${activePreset.id} expectedPi=${expectedPi.toString(16)} measured=$summary",
+                        )
+                    }
+                    triggerRdsRead()
+                } catch (error: Throwable) {
+                    Timber.tag(TAG).w(error, "Local RTR AF candidate check failed")
+                    runCatching { fm.tune(before.frequency) }
+                    _state.update {
+                        before.copy(
+                            isBusy = false,
+                            afLastResult = "AF-Prüfung fehlgeschlagen: ${error.message ?: error.javaClass.simpleName}",
+                        )
+                    }
+                    triggerRdsRead()
+                } finally {
+                    Dudu7SyuRadioIpc.resetFrequencyAnchor("afComplete", _state.value.frequency)
+                    runCatching { fm.setMute(before.isMuted) }
+                }
+            }
+    }
+
+    private suspend fun sampleRssi(
+        fm: FmNative,
+        samples: Int = AF_RSSI_SAMPLE_COUNT,
+    ): Int {
+        val values = mutableListOf<Int>()
+        repeat(samples.coerceAtLeast(1)) { index ->
+            if (index > 0) delay(AF_RSSI_SAMPLE_INTERVAL_MS)
+            runCatching { fm.rssi }.getOrDefault(0).takeIf { it > 0 }?.let(values::add)
+        }
+        return if (values.isEmpty()) 0 else values.sum() / values.size
+    }
+
+    private suspend fun measureAlternativeFrequency(
+        fm: FmNative,
+        candidate: FmAfCandidate,
+        index: Int,
+        total: Int,
+    ): FmAfMeasurement? {
+        resetPendingRds()
+        _state.update { current ->
+            current.copy(
+                frequency = candidate.frequency,
+                rssi = 0,
+                afLastResult =
+                    "AF prüft ${formatFrequency(candidate.frequency)} MHz ($index/$total) …",
+            )
+        }
+        runCatching { fm.setRds(false) }
+        if (!runCatching { fm.tune(candidate.frequency) }.getOrDefault(false)) {
+            _state.update {
+                it.copy(afLastResult = "AF: ${formatFrequency(candidate.frequency)} MHz konnte nicht eingestellt werden")
+            }
+            return null
+        }
+        runCatching { fm.setRds(true) }
+        val observation = readFreshRdsObservation(fm, attempts = 6, initialDelayMs = 220)
+        val measuredRssi = sampleRssi(fm)
+        _state.update { current ->
+            current.copy(
+                rssi = measuredRssi,
+                afLastResult =
+                    "AF ${formatFrequency(candidate.frequency)} MHz: RSSI $measuredRssi, PI ${observation.pi.toString(16)}",
+            )
+        }
+        appContext?.let { context ->
+            MediaKeyDiagnostics.record(
+                context,
+                "FM_AF_PATH",
+                "decision=measured frequency=${candidate.frequency} rssi=$measuredRssi " +
+                    "pi=${observation.pi.toString(16)} source=${candidate.source} index=$index total=$total",
+            )
+        }
+        return FmAfMeasurement(
+            frequency = candidate.frequency,
+            rssi = measuredRssi,
+            pi = observation.pi,
+            trustedPresetFrequency = candidate.trustedPresetFrequency,
+            predictedCoverage = candidate.predictedCoverage,
+            source = candidate.source,
+        )
+    }
+
+    private fun commitAlternativeFrequencySwitch(
+        before: State,
+        favouriteId: String,
+        regionKey: String,
+        stationId: String,
+        target: Float,
+        targetRssi: Int,
+        targetPi: Int,
+        result: String,
+        nativeResult: Int?,
+        predictedCoverage: Int,
+    ) {
+        lastAfSwitchAt = System.currentTimeMillis()
+        persistFrequency(target)
+        rssiWindow.clear()
+        resetPendingRds()
+        _state.update {
+            it.copy(
+                isBusy = false,
+                frequency = target,
+                activeFavouriteId = favouriteId,
+                ps = before.ps,
+                rt = "",
+                rssi = targetRssi,
+                stereo = null,
+                pi = targetPi,
+                ecc = "",
+                // Only the source frequency is already PI-confirmed at this moment.
+                // RTR proposals and rejected measurements must never appear as AF entries.
+                alternativeFrequencies =
+                    normalizeFrequencyList(listOf(before.frequency))
+                        .filterNot { frequency -> abs(frequency - target) < 0.05f },
+                rdsConfirmed = targetPi > 0,
+                rdsFreshFrequency = if (targetPi > 0) target else 0f,
+                afAverageRssi = 0,
+                afWeakSamples = 0,
+                afLastResult = result,
+                afLastNativeResult = nativeResult,
+            )
+        }
+        val stored =
+            receptionPathStore?.rememberConfirmed(
+                favouriteId = favouriteId,
+                frequency = target,
+                regionKey = regionKey,
+                pi = targetPi,
+                stationId = stationId,
+                rssi = targetRssi,
+                coverageStrength = predictedCoverage,
+            ) == true
+        appContext?.let { context ->
+            MediaKeyDiagnostics.record(
+                context,
+                "FM_AF_PATH",
+                "decision=accepted favourite=$favouriteId region=$regionKey frequency=$target " +
+                    "pi=${targetPi.toString(16)} stationId=$stationId cached=$stored",
+            )
+        }
+        requestRtrResolution(force = true)
+        updateCurrentPresetIdentity()
+        triggerRdsRead()
+        Timber.tag(TAG).i("%s favourite=%s stableId=%s", result, favouriteId, _state.value.stableStationId)
+    }
+
+    /**
+     * Manual NavRadio+-style AF cycling. A double tap on the active favourite
+     * advances to the next known frequency and rejects a confirmed foreign PI.
+     */
+    fun tuneNextAlternativeFrequency(preset: Preset) {
+        val current = _state.value
+        if (!current.isActive || current.activeFavouriteId != preset.id) {
+            tunePreset(preset)
+            return
+        }
+        requestAlternativeFrequency()
+    }
+
     fun saveCurrentPreset() {
         val snapshot = _state.value
-        val preset = Preset(snapshot.frequency, snapshot.ps.ifBlank { "FM ${formatFrequency(snapshot.frequency)}" })
-        val updated =
-            (snapshot.presets.filterNot { abs(it.frequency - preset.frequency) < 0.05f } + preset)
-                .sortedBy { it.frequency }
+        val currentRtrMatch = snapshot.rtrStableId.isNotBlank() &&
+            kotlin.math.abs(snapshot.rtrMatchedFrequency - snapshot.frequency) < 0.05f &&
+            snapshot.rtrMatchConfidence >= 60
+        val stationId = snapshot.rtrStableId.takeIf { currentRtrMatch }.orEmpty()
+        val refs = snapshot.presets.map(::presetRef)
+        val existingIndex = FmFavouriteModel.existingIndexForUpsert(refs, snapshot.frequency, stationId)
+        val updated = snapshot.presets.toMutableList()
+        if (existingIndex >= 0) {
+            val existing = updated[existingIndex]
+            updated[existingIndex] = existing.copy(
+                frequency = normalizeFrequency(snapshot.frequency),
+                name = if (existing.stationId.isNotBlank()) existing.name else snapshot.displayStation,
+                pi = snapshot.pi.takeIf { snapshot.rdsConfirmed } ?: existing.pi,
+                ecc = snapshot.ecc.takeIf { snapshot.rdsConfirmed }.orEmpty().ifBlank { existing.ecc },
+                alternativeFrequencies = emptyList(),
+                stationId = stationId.ifBlank { existing.stationId },
+            )
+        } else {
+            updated += Preset(
+                frequency = normalizeFrequency(snapshot.frequency),
+                name = snapshot.displayStation,
+                pi = snapshot.pi.takeIf { snapshot.rdsConfirmed } ?: 0,
+                ecc = snapshot.ecc.takeIf { snapshot.rdsConfirmed }.orEmpty(),
+                alternativeFrequencies = emptyList(),
+                stationId = stationId,
+                id = FmFavouriteModel.newId(),
+            )
+        }
+        val normalized = normalizePresets(updated)
+        persistPresets(normalized)
+        _state.update { it.copy(presets = normalized) }
+    }
+
+    fun tunePreset(preset: Preset) {
+        rememberFmFavouriteSelection(preset.id)
+        val regionKey = currentRegionKey()
+        val cached =
+            receptionPathStore?.bestFor(
+                favouriteId = preset.id,
+                regionKey = regionKey,
+                expectedPi = preset.pi,
+                stationId = preset.stationId,
+            )
+        val target = cached?.frequency ?: preset.frequency
+        pendingPresetIdentity = preset
+        _state.update { it.copy(activeFavouriteId = preset.id) }
+        appContext?.let { context ->
+            MediaKeyDiagnostics.record(
+                context,
+                "FM_RECEPTION_PATH",
+                "favourite=${preset.id} region=${regionKey.orEmpty()} target=$target " +
+                    "source=${if (cached == null) "preset" else "local_cache"} pi=${preset.pi.toString(16)}",
+            )
+        }
+        tune(target)
+    }
+
+    fun updatePreset(
+        original: Preset,
+        name: String,
+        frequency: Float,
+    ): Boolean {
+        if (!frequency.isFinite() || frequency !in FM_MIN..FM_MAX) return false
+        val index = _state.value.presets.indexOfFirst { it.id == original.id }
+        if (index < 0) return false
+        val updated = _state.value.presets.toMutableList().apply {
+            this[index] = original.copy(
+                frequency = normalizeFrequency(frequency),
+                name = name.trim().ifBlank { original.name },
+                alternativeFrequencies = emptyList(),
+            )
+        }
         persistPresets(updated)
         _state.update { it.copy(presets = updated) }
+        return true
+    }
+
+    fun removePreset(preset: Preset) {
+        val updated = _state.value.presets.filterNot { it.id == preset.id }
+        receptionPathStore?.removeFavourite(preset.id)
+        persistPresets(updated)
+        _state.update { current ->
+            current.copy(
+                presets = updated,
+                activeFavouriteId = current.activeFavouriteId.takeUnless { it == preset.id }.orEmpty(),
+            )
+        }
+    }
+
+    fun clearPresets() {
+        pendingPresetIdentity = null
+        rememberFmFavouriteSelection(null)
+        receptionPathStore?.clear()
+        persistPresets(emptyList())
+        _state.update {
+            it.copy(
+                presets = emptyList(),
+                activeFavouriteId = "",
+                alternativeFrequencies = emptyList(),
+                rtrAfPredictions = emptyList(),
+            )
+        }
     }
 
     fun removePreset(frequency: Float) {
-        val updated = _state.value.presets.filterNot { abs(it.frequency - frequency) < 0.05f }
-        persistPresets(updated)
-        _state.update { it.copy(presets = updated) }
+        val matching = _state.value.presets.firstOrNull { presetContainsFrequency(it, frequency) }
+        if (matching != null) {
+            removePreset(matching)
+        }
     }
 
     private suspend fun softwareSeek(fm: FmNative, up: Boolean): Float? {
@@ -315,9 +1439,31 @@ object FytPhysicalRadio {
             if (!fm.tune(candidate)) return@repeat
             delay(45)
             val rssi = fm.getRssi()
-            if (rssi >= 38) return candidate
+            if (rssi >= SEEK_RSSI_THRESHOLD) return candidate
         }
         return null
+    }
+
+    private suspend fun softwareBandScan(fm: FmNative): List<Float> {
+        val results = mutableListOf<Float>()
+        val steps = ((FM_MAX - FM_MIN) / FM_STEP).roundToInt()
+        for (index in 0..steps) {
+            if (!_state.value.isScanning) break
+            val frequency = normalizeFrequency(FM_MIN + index * FM_STEP)
+            if (!fm.tune(frequency)) continue
+            delay(58)
+            val rssi = fm.getRssi()
+            if (rssi >= SCAN_RSSI_THRESHOLD) {
+                val previous = results.lastOrNull()
+                if (previous == null || abs(previous - frequency) >= 0.15f) {
+                    results += frequency
+                } else {
+                    results[results.lastIndex] = frequency
+                }
+            }
+            _state.update { it.copy(scanProgress = 0.05f + (index.toFloat() / steps.coerceAtLeast(1)) * 0.42f) }
+        }
+        return results
     }
 
     private fun installRdsListener() {
@@ -326,8 +1472,7 @@ object FytPhysicalRadio {
                 0 -> _state.update { it.copy(tp = value1 != 0) }
                 2, 7 -> _state.update { it.copy(pty = value1) }
                 6 -> _state.update { it.copy(ta = value1 != 0) }
-                10, 11 -> triggerRdsRead()
-                14 -> _state.update { it.copy(pi = value1) }
+                10, 11, 14 -> triggerRdsRead()
             }
         }
     }
@@ -338,6 +1483,21 @@ object FytPhysicalRadio {
             scope.launch {
                 while (isActive && _state.value.isActive) {
                     pollTuner()
+                    val snapshot = _state.value
+                    val now = System.currentTimeMillis()
+                    if (
+                        snapshot.afEnabled &&
+                        (snapshot.pi > 0 || snapshot.currentPreset?.stationId?.isNotBlank() == true) &&
+                        snapshot.afAverageRssi > 0 &&
+                        snapshot.afAverageRssi < snapshot.afSensitivity &&
+                        snapshot.afWeakSamples >= AF_WEAK_SAMPLE_COUNT &&
+                        !snapshot.isScanning &&
+                        !snapshot.isBusy &&
+                        now - lastAfAttemptAt >= AF_POLL_INTERVAL_MS
+                    ) {
+                        lastAfAttemptAt = now
+                        requestAutomaticAlternativeFrequency()
+                    }
                     delay(850)
                 }
             }
@@ -352,32 +1512,148 @@ object FytPhysicalRadio {
 
     private fun pollTuner() {
         val fm = native ?: return
-        if (!_state.value.isActive) return
+        if (!_state.value.isActive || _state.value.isScanning || _state.value.isBusy) return
         runCatching { fm.readRds() }
-        val ps = runCatching { fm.psString }.getOrDefault("")
+        val rawPs = runCatching { fm.psString }.getOrDefault("").trim()
+        if (rawPs.isNotBlank()) {
+            if (rawPs == pendingPs) {
+                pendingPsCount += 1
+            } else {
+                pendingPs = rawPs
+                pendingPsCount = 1
+            }
+        }
+        val psConfirmedNow = rawPs.isNotBlank() && pendingPsCount >= 2
+        val stablePs = if (psConfirmedNow) rawPs else _state.value.ps
+
+        val directPi = runCatching { fm.programIdentifier }.getOrDefault(0) and 0xffff
+        if (directPi > 0) {
+            if (directPi == pendingPi) {
+                pendingPiCount += 1
+            } else {
+                pendingPi = directPi
+                pendingPiCount = 1
+            }
+        }
+        val piConfirmedNow = directPi > 0 && pendingPiCount >= 2
+        val stablePi = if (piConfirmedNow) directPi else _state.value.pi
+        val freshConfirmed = _state.value.rdsConfirmed || psConfirmedNow || piConfirmedNow
+
         val rt = runCatching { fm.radioText }.getOrDefault("")
         val rssi = runCatching { fm.rssi }.getOrDefault(_state.value.rssi)
-        val stereo = runCatching { fm.isStereoReceiving }.getOrDefault(_state.value.stereo)
+        if (rssi > 0) {
+            rssiWindow.addLast(rssi)
+            while (rssiWindow.size > AF_RSSI_WINDOW_SIZE) rssiWindow.removeFirst()
+        }
+        val averageRssi =
+            if (rssiWindow.isNotEmpty()) rssiWindow.sum() / rssiWindow.size else _state.value.afAverageRssi
+        val weakSamples =
+            when {
+                averageRssi <= 0 -> 0
+                averageRssi < _state.value.afSensitivity -> (_state.value.afWeakSamples + 1).coerceAtMost(AF_WEAK_SAMPLE_COUNT)
+                averageRssi >= _state.value.afSensitivity + AF_RSSI_HYSTERESIS -> 0
+                else -> (_state.value.afWeakSamples - 1).coerceAtLeast(0)
+            }
+        val stereoState = runCatching { fm.stereoState }.getOrDefault(-1)
+        val directEcc = runCatching { fm.extendedCountryCode }.getOrDefault("")
+        val identityForPaths = _state.value.currentPreset
+        val regionForPaths = currentRegionKey()
+        val stationForPaths =
+            _state.value.rtrStableId.takeIf {
+                it.isNotBlank() &&
+                    abs(_state.value.rtrMatchedFrequency - _state.value.frequency) < 0.05f &&
+                    _state.value.rtrMatchConfidence >= 60
+            }.orEmpty().ifBlank { identityForPaths?.stationId.orEmpty() }
+        val confirmedLocalAf =
+            if (
+                identityForPaths != null &&
+                regionForPaths != null &&
+                stablePi > 0 &&
+                stationForPaths.isNotBlank()
+            ) {
+                receptionPathStore?.candidatesFor(
+                    favouriteId = identityForPaths.id,
+                    regionKey = regionForPaths,
+                    expectedPi = stablePi,
+                    stationId = stationForPaths,
+                ).orEmpty()
+                    .map(FmReceptionPath::frequency)
+                    .filterNot { abs(it - _state.value.frequency) < 0.05f }
+            } else {
+                emptyList()
+            }
+
         _state.update { current ->
             current.copy(
-                ps = ps.ifBlank { current.ps },
+                ps = stablePs,
                 rt = rt.ifBlank { current.rt },
                 rssi = rssi,
-                stereo = stereo,
+                afAverageRssi = averageRssi,
+                afWeakSamples = weakSamples,
+                stereo = stereoState.takeIf { it >= 0 }?.let { it == 1 } ?: current.stereo,
+                pi = stablePi,
+                ecc = if (piConfirmedNow && directEcc.isNotBlank()) directEcc else current.ecc,
+                alternativeFrequencies = confirmedLocalAf,
+                rdsConfirmed = freshConfirmed,
+                rdsFreshFrequency = if (freshConfirmed) current.frequency else current.rdsFreshFrequency,
             )
         }
+        updateCurrentPresetIdentity()
+        requestRtrResolution()
+    }
+
+    private fun resetPendingRds() {
+        pendingPs = ""
+        pendingPsCount = 0
+        pendingPi = 0
+        pendingPiCount = 0
+        pendingAfFrequencies = emptyList()
+        pendingAfCount = 0
+    }
+
+    private suspend fun readFreshRdsObservation(
+        fm: FmNative,
+        attempts: Int,
+        initialDelayMs: Long,
+    ): FmFreshRdsObservation {
+        delay(initialDelayMs)
+        val samples = mutableListOf<FmRdsSample>()
+        repeat(attempts) {
+            runCatching { fm.readRds() }
+            delay(120)
+            samples += FmRdsSample(
+                ps = runCatching { fm.psString }.getOrDefault("").trim(),
+                pi = runCatching { fm.programIdentifier }.getOrDefault(0),
+                ecc = runCatching { fm.extendedCountryCode }.getOrDefault(""),
+                pty = _state.value.pty,
+                tp = _state.value.tp,
+            )
+        }
+        return FmRdsFreshness.consolidate(samples)
+    }
+
+    private fun resetAfSampling() {
+        rssiWindow.clear()
+        _state.update { it.copy(afAverageRssi = 0, afWeakSamples = 0) }
+    }
+
+    private fun applyRegionalConfig(fm: FmNative, enabled: Boolean) {
+        runCatching {
+            val result = fm.setconfig("reg=${if (enabled) 1 else 0}")
+            Timber.tag(TAG).d("REG config result=%d enabled=%s", result, enabled)
+        }.onFailure { Timber.tag(TAG).w(it, "REG config unavailable") }
     }
 
     private fun cleanupHardware() {
         pollingJob?.cancel()
         pollingJob = null
+        scanJob?.cancel()
+        scanJob = null
         FmService.setRdsListener(null)
         runCatching { native?.setMute(true) }
         runCatching { native?.setRds(false) }
         runCatching { native?.powerDown(0) }
         runCatching { native?.closeDev() }
-        runCatching { twUtil?.radioOff() }
-        runCatching { twUtil?.close() }
         FmNative.setFirmwareFmVolumeEnabled(false)
         appContext?.let(FytAudioRouter::release)
         abandonAudioFocus()
@@ -423,29 +1699,291 @@ object FytPhysicalRadio {
             ?.apply()
     }
 
+    private fun persistBoolean(key: String, value: Boolean) {
+        appContext
+            ?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            ?.edit()
+            ?.putBoolean(key, value)
+            ?.apply()
+    }
+
+    private fun persistInt(key: String, value: Int) {
+        appContext
+            ?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            ?.edit()
+            ?.putInt(key, value)
+            ?.apply()
+    }
+
+    private fun updateCurrentPresetIdentity() {
+        val snapshot = _state.value
+        val activeId = snapshot.activeFavouriteId
+        val index = snapshot.presets.indexOfFirst { it.id == activeId }
+            .takeIf { it >= 0 }
+            ?: findCurrentPresetIndex(
+                presets = snapshot.presets,
+                activeId = activeId,
+                frequency = snapshot.frequency,
+                pi = snapshot.pi,
+                rdsConfirmed = snapshot.rdsConfirmed,
+                stationId = snapshot.rtrStableId,
+            )
+        if (index < 0) return
+        val current = snapshot.presets[index]
+        val currentRtrMatch =
+            snapshot.rtrStableId.isNotBlank() &&
+                kotlin.math.abs(snapshot.rtrMatchedFrequency - snapshot.frequency) < 0.05f &&
+                snapshot.rtrMatchConfidence >= 60
+        if (currentRtrMatch && current.stationId.isNotBlank() && current.stationId != snapshot.rtrStableId) return
+        val freshRds = snapshot.rdsConfirmed && abs(snapshot.rdsFreshFrequency - snapshot.frequency) < 0.05f
+        val rdsCompatible = freshRds && (current.pi <= 0 || snapshot.pi <= 0 || samePi(current.pi, snapshot.pi))
+        val rtrCompatible = currentRtrMatch && (current.stationId.isBlank() || current.stationId == snapshot.rtrStableId)
+        val updatedPreset =
+            current.copy(
+                name = when {
+                    rtrCompatible && current.stationId == snapshot.rtrStableId && current.name.isNotBlank() -> current.name
+                    rtrCompatible -> snapshot.rtrCanonicalName
+                    rdsCompatible -> snapshot.displayStation
+                    else -> current.name
+                },
+                pi = if (rdsCompatible && snapshot.pi > 0) snapshot.pi else current.pi,
+                ecc = if (rdsCompatible && snapshot.ecc.isNotBlank()) snapshot.ecc else current.ecc,
+                alternativeFrequencies = emptyList(),
+                stationId = if (rtrCompatible) snapshot.rtrStableId else current.stationId,
+            )
+        if (updatedPreset != current) {
+            val updated = snapshot.presets.toMutableList().apply { this[index] = updatedPreset }
+            persistPresets(updated)
+            _state.update { it.copy(presets = updated, activeFavouriteId = updatedPreset.id) }
+        }
+
+        val effectivePi = snapshot.pi.takeIf { freshRds && it > 0 } ?: return
+        val effectiveStationId =
+            snapshot.rtrStableId.takeIf { rtrCompatible }.orEmpty().ifBlank { updatedPreset.stationId }
+        if (effectiveStationId.isBlank()) return
+        if (updatedPreset.pi > 0 && !samePi(updatedPreset.pi, effectivePi)) return
+        val regionKey = currentRegionKey() ?: return
+        receptionPathStore?.rememberConfirmed(
+            favouriteId = updatedPreset.id,
+            frequency = snapshot.frequency,
+            regionKey = regionKey,
+            pi = effectivePi,
+            stationId = effectiveStationId,
+            rssi = snapshot.rssi,
+            coverageStrength = snapshot.rtrCoverageStrength,
+        )
+    }
+
     private fun persistPresets(presets: List<Preset>) {
-        val encoded =
-            presets.joinToString("\n") { preset ->
-                "${preset.frequency}\t${preset.name.replace('\n', ' ').replace('\t', ' ')}"
-            }
+        val normalized = normalizePresets(presets)
+        val encoded = normalized.joinToString("\n") { preset ->
+            listOf(
+                "v3",
+                preset.id,
+                preset.frequency.toString(),
+                preset.name.replace('\n', ' ').replace('\t', ' '),
+                preset.pi.toString(),
+                preset.ecc.replace('\n', ' ').replace('\t', ' '),
+                preset.stationId.replace('\n', ' ').replace('\t', ' '),
+            ).joinToString("\t")
+        }
         appContext
             ?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             ?.edit()
             ?.putString(KEY_PRESETS, encoded)
+            ?.remove(LEGACY_KEY_PRESETS)
             ?.apply()
     }
 
-    private fun readPresets(value: String?): List<Preset> =
-        value
-            .orEmpty()
-            .lineSequence()
-            .mapNotNull { line ->
-                val parts = line.split('\t', limit = 2)
-                val frequency = parts.firstOrNull()?.toFloatOrNull() ?: return@mapNotNull null
-                Preset(normalizeFrequency(frequency), parts.getOrNull(1).orEmpty().ifBlank { "FM ${formatFrequency(frequency)}" })
-            }.distinctBy { it.frequency }
-            .sortedBy { it.frequency }
+    private fun readPresets(value: String?): List<Preset> {
+        val parsed = value.orEmpty().lineSequence().mapIndexedNotNull { index, line ->
+            if (line.isBlank()) return@mapIndexedNotNull null
+            val parts = line.split('	')
+            if (parts.firstOrNull() == "v3") {
+                val frequency = parts.getOrNull(2)?.toFloatOrNull() ?: return@mapIndexedNotNull null
+                Preset(
+                    frequency = normalizeFrequency(frequency),
+                    name = parts.getOrNull(3).orEmpty().ifBlank { "FM ${formatFrequency(frequency)}" },
+                    pi = parts.getOrNull(4)?.toIntOrNull() ?: 0,
+                    ecc = parts.getOrNull(5).orEmpty(),
+                    alternativeFrequencies = emptyList(),
+                    stationId = parts.getOrNull(6).orEmpty(),
+                    id = parts.getOrNull(1).orEmpty().ifBlank {
+                        FmFavouriteModel.legacyId(index, frequency, parts.getOrNull(3).orEmpty(), parts.getOrNull(6).orEmpty())
+                    },
+                )
+            } else {
+                val legacy = line.split('	', limit = 6)
+                val frequency = legacy.firstOrNull()?.toFloatOrNull() ?: return@mapIndexedNotNull null
+                val name = legacy.getOrNull(1).orEmpty().ifBlank { "FM ${formatFrequency(frequency)}" }
+                val stationId = legacy.getOrNull(5).orEmpty()
+                Preset(
+                    frequency = normalizeFrequency(frequency),
+                    name = name,
+                    pi = legacy.getOrNull(2)?.toIntOrNull() ?: 0,
+                    ecc = legacy.getOrNull(3).orEmpty(),
+                    alternativeFrequencies = emptyList(),
+                    stationId = stationId,
+                    id = FmFavouriteModel.legacyId(index, frequency, name, stationId),
+                )
+            }
+        }.toList()
+        return normalizePresets(parsed)
+    }
+
+    private fun normalizePresets(presets: Collection<Preset>): List<Preset> =
+        presets.mapIndexed { index, preset ->
+            preset.copy(
+                id = preset.id.ifBlank {
+                    FmFavouriteModel.legacyId(index, preset.frequency, preset.name, preset.stationId)
+                },
+                frequency = normalizeFrequency(preset.frequency),
+                alternativeFrequencies = emptyList(),
+            )
+        }.distinctBy(Preset::id)
+
+    private fun presetRef(preset: Preset): FmFavouriteRef =
+        FmFavouriteRef(preset.id, preset.stationId, preset.frequency, preset.pi)
+
+    fun presetFrequencies(preset: Preset): List<Float> = listOf(normalizeFrequency(preset.frequency))
+
+    fun scanFrequencies(result: ScanResult): List<Float> =
+        normalizeFrequencyList(listOf(result.frequency) + result.alternativeFrequencies)
+
+    fun presetContainsFrequency(
+        preset: Preset,
+        frequency: Float,
+    ): Boolean = abs(preset.frequency - frequency) < 0.05f
+
+    fun presetMatches(
+        preset: Preset,
+        frequency: Float,
+        pi: Int,
+    ): Boolean = presetContainsFrequency(preset, frequency)
+
+    private fun findCurrentPresetIndex(
+        presets: List<Preset>,
+        activeId: String,
+        frequency: Float,
+        pi: Int,
+        rdsConfirmed: Boolean,
+        stationId: String,
+    ): Int =
+        FmFavouriteModel.resolveCurrentIndex(
+            favourites = presets.map(::presetRef),
+            activeId = activeId,
+            frequency = frequency,
+            stationId = stationId,
+            pi = pi,
+            rdsConfirmed = rdsConfirmed,
+        )
+
+    private fun findCurrentPreset(
+        presets: List<Preset>,
+        activeId: String,
+        frequency: Float,
+        pi: Int,
+        rdsConfirmed: Boolean,
+        stationId: String,
+    ): Preset? =
+        findCurrentPresetIndex(presets, activeId, frequency, pi, rdsConfirmed, stationId)
+            .takeIf { it >= 0 }
+            ?.let(presets::get)
+
+    fun stablePresetKey(preset: Preset): String = preset.id
+
+    fun presetOrderKeys(preset: Preset): Set<String> = buildSet {
+        add(preset.id)
+        preset.stationId.takeIf(String::isNotBlank)?.let(::add)
+        addAll(FmStationIdentity.orderKeys(
+            rawPs = preset.name,
+            storedName = preset.name,
+            frequencies = listOf(preset.frequency),
+            pi = preset.pi,
+            ecc = preset.ecc,
+        ))
+    }
+
+    fun formatFrequencies(values: List<Float>): String =
+        normalizeFrequencyList(values).joinToString(" / ") { "${formatFrequency(it)} MHz" }
+
+    private fun groupScanResults(results: Collection<ScanResult>): List<ScanResult> {
+        val groups = mutableListOf<MutableList<ScanResult>>()
+        results.forEach { result ->
+            val group = groups.firstOrNull { existing ->
+                FmFavouriteModel.shouldGroupScan(existing.first().stationId, result.stationId)
+            }
+            if (group == null) groups += mutableListOf(result) else group += result
+        }
+        return groups.map { group ->
+            val strongest = group.maxByOrNull(ScanResult::rssi) ?: group.first()
+            val frequencies = normalizeFrequencyList(group.map(ScanResult::frequency))
+            strongest.copy(
+                name = group.firstOrNull { it.stationId.isNotBlank() }?.name ?: strongest.name,
+                pi = group.firstOrNull { it.rdsConfirmed && it.pi > 0 }?.pi ?: strongest.pi,
+                ecc = group.firstOrNull { it.rdsConfirmed && it.ecc.isNotBlank() }?.ecc ?: strongest.ecc,
+                stationId = group.firstOrNull { it.stationId.isNotBlank() }?.stationId.orEmpty(),
+                rdsConfirmed = group.any(ScanResult::rdsConfirmed),
+                alternativeFrequencies = frequencies.filterNot { abs(it - strongest.frequency) < 0.05f },
+                stereo = when {
+                    group.any { it.stereo == true } -> true
+                    group.any { it.stereo == false } -> false
+                    else -> null
+                },
+            )
+        }
+    }
+
+    private fun samePresetRecord(first: Preset, second: Preset): Boolean = first.id == second.id
+
+    private fun usefulStationIdentity(value: String): String {
+        val normalized =
+            java.text.Normalizer
+                .normalize(value, java.text.Normalizer.Form.NFD)
+                .replace(Regex("\\p{Mn}+"), "")
+                .lowercase(java.util.Locale.ROOT)
+                .replace("&", " and ")
+                .replace(Regex("[^a-z0-9]+"), " ")
+                .trim()
+        if (normalized.isBlank()) return ""
+        if (normalized.matches(Regex("fm \\d{2,3}(?: \\d)?"))) return ""
+        return normalized.takeUnless {
+            it in setOf("fm", "radio", "antennenempfang", "physischer antennenempfang")
+        }.orEmpty()
+    }
+
+    private fun samePi(
+        first: Int,
+        second: Int,
+    ): Boolean = (first and 0xffff) == (second and 0xffff)
+
+    private fun Int?.orZero(): Int = this ?: 0
+
+    private fun currentRegionKey(): String? =
+        FmReceptionRegion.key(_state.value.geoLatitude, _state.value.geoLongitude)
+
+    private fun frequencyKey(value: Float): Int = (normalizeFrequency(value) * 10f).roundToInt()
+
+    private fun normalizeFrequencyList(values: Collection<Float>): List<Float> =
+        values
+            .asSequence()
+            .filter { it.isFinite() && it in FM_MIN..FM_MAX }
+            .map(::normalizeFrequency)
+            .distinctBy(::frequencyKey)
+            .sorted()
             .toList()
+
+    private fun decodeFrequency(value: Float): Float? {
+        val decoded =
+            when {
+                value in FM_MIN..FM_MAX -> value
+                value in 875f..1080f -> value / 10f
+                value in 8750f..10800f -> value / 100f
+                value in 87500f..108000f -> value / 1000f
+                else -> return null
+            }
+        return normalizeFrequency(decoded).takeIf { it in FM_MIN..FM_MAX }
+    }
 
     private fun normalizeFrequency(value: Float): Float =
         ((value.coerceIn(FM_MIN, FM_MAX) * 10f).roundToInt() / 10f)
@@ -458,6 +1996,42 @@ object FytPhysicalRadio {
         }.getOrDefault("")
 
     fun formatFrequency(value: Float): String = String.format(java.util.Locale.GERMANY, "%.1f", value)
+
+    fun ptyLabel(pty: Int): String =
+        when (pty) {
+            1 -> "Nachrichten"
+            2 -> "Aktuelles"
+            3 -> "Information"
+            4 -> "Sport"
+            5 -> "Bildung"
+            6 -> "Hörspiel"
+            7 -> "Kultur"
+            8 -> "Wissenschaft"
+            9 -> "Verschiedenes"
+            10 -> "Pop"
+            11 -> "Rock"
+            12 -> "Unterhaltung"
+            13 -> "Leichte Klassik"
+            14 -> "Klassik"
+            15 -> "Sonstige Musik"
+            16 -> "Wetter"
+            17 -> "Wirtschaft"
+            18 -> "Kinder"
+            19 -> "Gesellschaft"
+            20 -> "Religion"
+            21 -> "Telefon"
+            22 -> "Reise"
+            23 -> "Freizeit"
+            24 -> "Jazz"
+            25 -> "Country"
+            26 -> "Volksmusik"
+            27 -> "Oldies"
+            28 -> "Folk"
+            29 -> "Dokumentation"
+            30 -> "Alarmtest"
+            31 -> "Alarm"
+            else -> ""
+        }
 
     private object FytAudioRouter {
         private const val SYU_MUSIC = "com.syu.music"
@@ -482,93 +2056,4 @@ object FytPhysicalRadio {
         }
     }
 
-    private class TwUtilBridge {
-        private val clazz = runCatching { Class.forName("android.tw.john.TWUtil") }.getOrNull()
-        private var instance: Any? = null
-        private var write2: Method? = null
-        private var write3: Method? = null
-
-        fun open(): Boolean {
-            val type = clazz ?: return false
-            if (instance != null) return true
-            return runCatching {
-                val value = type.getConstructor(Int::class.javaPrimitiveType).newInstance(1)
-                val commands =
-                    shortArrayOf(
-                        0x101,
-                        0x102,
-                        0x103,
-                        0x104,
-                        0x105,
-                        0x106,
-                        0x110,
-                        0x111,
-                        0x112,
-                        0x113,
-                        0x114,
-                        0x115,
-                    )
-                val result = type.getMethod("open", ShortArray::class.java).invoke(value, commands) as? Int ?: -1
-                if (result != 0) return@runCatching false
-                type.getMethod("start").invoke(value)
-                instance = value
-                write2 = type.getMethod("write", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
-                write3 =
-                    type.getMethod(
-                        "write",
-                        Int::class.javaPrimitiveType,
-                        Int::class.javaPrimitiveType,
-                        Int::class.javaPrimitiveType,
-                    )
-                true
-            }.onFailure { Timber.tag(TAG).w(it, "TWUtil open failed") }.getOrDefault(false)
-        }
-
-        fun close() {
-            val value = instance ?: return
-            runCatching { clazz?.getMethod("stop")?.invoke(value) }
-            runCatching { clazz?.getMethod("close")?.invoke(value) }
-            instance = null
-        }
-
-        fun initRadioSequence() {
-            write(0x101, 0xFF)
-            write(0x102, 0xFF)
-            write(0x102, 0xFF, 1)
-            write(0x112, 0xFF)
-            write(0x102, 0xFF, 0)
-            write(0x104, 0xFF)
-            write(0x103, 0)
-            write(0x105, 0xFF)
-            write(0x101, 0xFF)
-            write(0x110, 0xFF)
-        }
-
-        fun radioOnFm() {
-            write(0x101, 1)
-            setAudioSourceFm()
-        }
-
-        fun radioOff() {
-            write(0x101, 0)
-        }
-
-        fun setAudioSourceFm() {
-            write(0x110, 1)
-        }
-
-        fun mute() {
-            write(0x105, 1)
-        }
-
-        fun unmute() {
-            write(0x105, 0)
-        }
-
-        private fun write(command: Int, value: Int): Int =
-            runCatching { write2?.invoke(instance, command, value) as? Int ?: -1 }.getOrDefault(-1)
-
-        private fun write(command: Int, value1: Int, value2: Int): Int =
-            runCatching { write3?.invoke(instance, command, value1, value2) as? Int ?: -1 }.getOrDefault(-1)
-    }
 }

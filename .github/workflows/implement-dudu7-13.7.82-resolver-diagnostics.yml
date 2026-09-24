@@ -1,0 +1,64 @@
+name: Implement dudu7 13.7.82 resolver diagnostics
+
+on:
+  push:
+    branches:
+      - feature/download-resolver-diagnostics-204
+    paths:
+      - .assistant/implement_download_resolver_diagnostics_13_7_82.py
+      - .github/workflows/implement-dudu7-13.7.82-resolver-diagnostics.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: implement-dudu7-13-7-82-resolver-diagnostics
+  cancel-in-progress: true
+
+jobs:
+  apply:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply deterministic implementation patch
+        run: python3 .assistant/implement_download_resolver_diagnostics_13_7_82.py
+
+      - name: Validate patch shape
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git diff --check
+          grep -q 'versionCode = 1370091' app/build.gradle.kts
+          grep -q 'versionName = "13.7.82"' app/build.gradle.kts
+          grep -q 'DownloadResolverDiagnostics' app/src/main/kotlin/com/metrolist/music/playback/DownloadUtil.kt
+          grep -q 'rotateDiagnosticStreamClient' app/src/main/kotlin/com/metrolist/music/playback/DownloadUtil.kt
+          grep -q 'n_parameter_before_transform=' app/src/main/kotlin/com/metrolist/music/ui/screens/library/DownloadQueueScreen.kt
+          grep -q 'stream_client_candidates=' app/src/main/kotlin/com/metrolist/music/ui/screens/library/DownloadQueueScreen.kt
+          grep -q 'preferredStreamClient' app/src/main/kotlin/com/metrolist/music/utils/YTPlayerUtils.kt
+          test -f .github/workflows/build-dudu7-13.7.82-resolver-diagnostics.yml
+          if grep -q 'streamUrl.take(' app/src/main/kotlin/com/metrolist/music/utils/YTPlayerUtils.kt; then
+            echo 'Unsafe stream URL preview remains' >&2
+            exit 1
+          fi
+
+      - name: Commit implementation sources
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/build.gradle.kts \
+            app/src/main/kotlin/com/metrolist/music/playback/DownloadUtil.kt \
+            app/src/main/kotlin/com/metrolist/music/ui/screens/library/DownloadQueueScreen.kt \
+            app/src/main/kotlin/com/metrolist/music/utils/YTPlayerUtils.kt
+          if git diff --cached --quiet; then
+            echo 'No implementation source diff produced' >&2
+            exit 1
+          fi
+          git commit -m 'feat: add resolver diagnostics and streamclient A/B [13.7.82]'
+          git push origin HEAD:feature/download-resolver-diagnostics-204

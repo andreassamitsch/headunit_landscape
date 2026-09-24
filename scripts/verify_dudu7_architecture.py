@@ -2,8 +2,6 @@
 """Fast structural checks for the maintainable Dudu7 overlay."""
 from pathlib import Path
 
-# Keep live history, the direct title-selection queue callback and the
-# independent FYT physical-radio backend protected by the lightweight check.
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = (
     "VehicleVariantConfig.kt",
@@ -25,8 +23,14 @@ required = [
     "app/src/dudu7/java/com/android/fmradio/FmNative.java",
     "app/src/dudu7/java/com/android/fmradio/FmService.java",
     "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt",
+    "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmNowPlayingResolver.kt",
+    "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmPresetOrderStore.kt",
+    "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmStationArtwork.kt",
     "app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt",
     "app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt",
+    "app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleTabOrderStore.kt",
+    "app/src/main/kotlin/com/metrolist/music/ui/screens/artist/EmbeddedArtistScreen.kt",
+    "app/src/main/kotlin/com/metrolist/music/ui/screens/artist/EmbeddedArtistItemsScreen.kt",
     "app/src/dudu7/res/drawable/stop.xml",
 ]
 for source_set in ("standard", "dudu7"):
@@ -77,21 +81,40 @@ checks = {
         "onClick = vehicleVoiceSearch",
         "embeddedInPlayer: Boolean = false",
     ),
+    "app/src/main/kotlin/com/metrolist/music/ui/screens/NavigationBuilder.kt": (
+        "EmbeddedArtistScreen(navController)",
+        "EmbeddedArtistItemsScreen(navController)",
+        "if (embeddedInPlayer)",
+    ),
+    "app/src/main/kotlin/com/metrolist/music/ui/screens/artist/EmbeddedArtistScreen.kt": (
+        "fun EmbeddedArtistScreen(",
+        'text = "Alle anzeigen"',
+        "__artist_songs__",
+        "YouTubeQueue(endpoint)",
+        "ListQueue(",
+    ),
     "app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt": (
         'QUEUE("Warteschlange"',
         'LIBRARY("Bibliothek"',
+        'WEBRADIO("WebRadio"',
+        'PHYSICAL_RADIO("FM"',
         'SEARCH("Suche"',
         'HISTORY("Hörverlauf"',
-        'PHYSICAL_RADIO("FM"',
-        'WEBRADIO("WebRadio"',
-        'HOME("Startseite"',
-        "ScrollableTabRow(",
+        "LazyRow(",
+        "longPressDraggableHandle(",
+        "VehicleTabOrderStore.persist",
         "PhysicalRadioPlayerPane(",
         "PhysicalRadioScreen()",
         "embeddedInPlayer = true",
         "onUserSongSelection = returnToQueue",
         "popBackStack(VEHICLE_QUEUE_ROUTE, inclusive = false)",
         "selectedTab = VehicleRightPaneTab.QUEUE",
+    ),
+    "app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleTabOrderStore.kt": (
+        "object VehicleTabOrderStore",
+        '"QUEUE"',
+        "fun read(",
+        "fun persist(",
     ),
     "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FytPhysicalRadio.kt": (
         'private const val SWITCH_FM = "com.syu.music.switch_fm"',
@@ -102,6 +125,36 @@ checks = {
         "fm.tune(target)",
         "fun powerOff()",
         "fun seek(up: Boolean)",
+        "fun startAutoScan()",
+        "FmNative.autoScan(0)",
+        "fun stopAutoScan()",
+        "fun saveScanResults(",
+        "fun setAfEnabled(",
+        "fm.activeAf()",
+        "fun setTaEnabled(",
+        "fun setRegEnabled(",
+        'fm.setconfig("reg=',
+    ),
+    "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmNowPlayingResolver.kt": (
+        "object FmNowPlayingResolver",
+        "FmNowPlayingResolver",
+        "YouTube.SearchFilter.FILTER_SONG",
+        "isStrongMatch",
+        "preferredCover ?: song.thumbnail.resize(1200, 1200)",
+        "fun applyRecognized(",
+    ),
+    "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmPresetOrderStore.kt": (
+        "object FmPresetOrderStore",
+        "fun ordered(",
+        "fun persist(",
+        "fun FytPhysicalRadio.tuneAdjacentFavourite(",
+    ),
+    "app/src/dudu7/kotlin/com/metrolist/music/radio/fyt/FmStationArtwork.kt": (
+        "object FmStationLogoResolver",
+        "RadioStationStore.get(appContext)",
+        "RadioBrowserClient.search(stationName)",
+        "RadioStationLogoResolver.resolve(station)",
+        "fun FmStationArtwork(",
     ),
     "app/src/dudu7/java/com/android/fmradio/FmNative.java": (
         'System.loadLibrary("fmjni")',
@@ -109,6 +162,9 @@ checks = {
         "public native boolean powerUp(float frequency)",
         "public native boolean tune(float frequency)",
         "public native float[] seek(float frequency, boolean isUp)",
+        "public static native short[] autoScan(int band)",
+        "public native short activeAf()",
+        "public native int setconfig(String config)",
         "public native int fmsyu_jni",
     ),
     "app/src/dudu7/java/com/android/fmradio/FmService.java": (
@@ -116,10 +172,33 @@ checks = {
         "RdsListener",
     ),
     "app/src/dudu7/kotlin/com/metrolist/music/ui/screens/radio/PhysicalRadioScreen.kt": (
-        "FM-Favoriten",
-        "radio.seek(false)",
-        "radio.seek(true)",
-        "radio::saveCurrentPreset",
+        "PhysicalRadioSection.FAVOURITES",
+        "PhysicalRadioSection.SCAN",
+        "PhysicalRadioSection.MANUAL",
+        "PhysicalRadioSection.SETTINGS",
+        'Text("Favoriten")',
+        'Text("Sendersuchlauf")',
+        "rememberReorderableLazyListState",
+        "FmStationArtwork(",
+        "FmPresetOrderStore.persist",
+        "radio.startAutoScan()",
+        "radio.saveScanResults(selectedResults)",
+        "radio::setAfEnabled",
+        "radio::setTaEnabled",
+        "radio::setRegEnabled",
+    ),
+    "app/src/dudu7/kotlin/com/metrolist/music/variant/PhysicalRadioPlayerPane.kt": (
+        "FmNowPlayingResolver.resolve",
+        "FmStationArtwork(",
+        "nowPlaying.coverUrl",
+        "radio.tuneAdjacentFavourite(context, next = false)",
+        "radio.tuneAdjacentFavourite(context, next = true)",
+        "SearchRoutes.resultRoute",
+        "requestRadioArtistNavigation",
+        "syncUtils.likeSong(updated)",
+        "radio.saveCurrentPreset()",
+        "FM-Musik erkennen",
+        "MusicRecognitionService.recognize(context)",
     ),
     "app/src/dudu7/AndroidManifest.xml": (
         "android.permission.MODIFY_AUDIO_SETTINGS",
@@ -127,7 +206,9 @@ checks = {
         'android:name="com.syu.music"',
     ),
     "app/src/main/kotlin/com/metrolist/music/ui/component/BottomSheet.kt": (
-        "if (!isExpandable || !state.isCollapsed)",
+        "val effectiveExpandable =",
+        "state.collapsedBound - state.dismissedBound > 2.dp",
+        "if (!effectiveExpandable || !state.isCollapsed)",
     ),
     "app/src/main/kotlin/com/metrolist/music/ui/player/Thumbnail.kt": (
         "landscapeHorizontalPadding: Dp = PlayerHorizontalPadding",
@@ -146,6 +227,12 @@ checks = {
     "app/src/main/kotlin/com/metrolist/music/playback/MusicService.kt": (
         "database.withTransaction",
         "incrementTotalPlayTime(mediaItem.mediaId, playbackStats.totalPlayTimeMs)",
+        "explicitQueueRequestGate.isCurrent",
+    ),
+    "app/src/main/kotlin/com/metrolist/music/ui/screens/radio/WebRadioScreen.kt": (
+        "RadioBrowserClient.refreshStation",
+        "mergeSavedStationUpdates",
+        "replaceFavoriteStation",
     ),
     "app/src/main/kotlin/com/metrolist/music/playback/PlayerConnection.kt": (
         "var onUserSongSelection: (() -> Unit)? = null",
@@ -164,6 +251,22 @@ for path, tokens in checks.items():
             missing_tokens.append(f"{path}: {token}")
 if missing_tokens:
     raise SystemExit("Fehlende Erweiterungspunkte:\n- " + "\n- ".join(missing_tokens))
+
+layout_path = "app/src/dudu7/kotlin/com/metrolist/music/variant/VehicleLandscapeLayout.kt"
+layout = (ROOT / layout_path).read_text(encoding="utf-8")
+expected_tab_order = (
+    'QUEUE("Warteschlange"',
+    'LIBRARY("Bibliothek"',
+    'WEBRADIO("WebRadio"',
+    'PHYSICAL_RADIO("FM"',
+    'SEARCH("Suche"',
+    'HISTORY("Hörverlauf"',
+)
+positions = [layout.index(token) for token in expected_tab_order]
+if positions != sorted(positions):
+    raise SystemExit("Falsche Dudu7-Tab-Reihenfolge: Warteschlange, Bibliothek, WebRadio, FM, Suche, Hörverlauf erwartet")
+if 'HOME("Startseite"' in layout:
+    raise SystemExit("Der nicht mehr gewünschte Startseite-Tab ist noch vorhanden")
 
 forbidden_dudu_controls = (
     "R.drawable.share",

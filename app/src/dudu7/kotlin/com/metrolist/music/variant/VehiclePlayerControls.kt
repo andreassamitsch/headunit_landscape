@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import com.metrolist.music.R
+import com.metrolist.music.ui.player.VehicleRadioPlayerMetrics
 import com.metrolist.music.utils.makeTimeString
 
 @Suppress("UNUSED_PARAMETER")
@@ -120,21 +121,21 @@ fun ColumnScope.VehiclePlayerControls(
                     },
                 color = if (shuffleModeEnabled) activeControlColor else inactiveControlColor,
                 onClick = onToggleShuffle,
-                buttonSize = 46.dp,
-                iconSize = 27.dp,
+                buttonSize = VehicleRadioPlayerMetrics.SecondaryActionButtonSize,
+                iconSize = VehicleRadioPlayerMetrics.SecondaryActionIconSize,
                 enabled = !isGuest,
             )
 
             IconButton(
                 onClick = onPrevious,
                 enabled = canSkipPrevious,
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier.size(VehicleRadioPlayerMetrics.PreviousNextButtonSize),
                 colors = IconButtonDefaults.iconButtonColors(contentColor = sideButtonContentColor),
             ) {
                 Icon(
                     painter = painterResource(R.drawable.skip_previous),
                     contentDescription = "Vorheriger Titel",
-                    modifier = Modifier.size(30.dp),
+                    modifier = Modifier.size(VehicleRadioPlayerMetrics.PreviousNextIconSize),
                 )
             }
 
@@ -146,7 +147,7 @@ fun ColumnScope.VehiclePlayerControls(
                         containerColor = playButtonContainerColor,
                         contentColor = playButtonContentColor,
                     ),
-                modifier = Modifier.size(68.dp),
+                modifier = Modifier.size(VehicleRadioPlayerMetrics.PlayButtonSize),
             ) {
                 Icon(
                     painter =
@@ -160,20 +161,20 @@ fun ColumnScope.VehiclePlayerControls(
                             },
                         ),
                     contentDescription = "Wiedergabe",
-                    modifier = Modifier.size(36.dp),
+                    modifier = Modifier.size(VehicleRadioPlayerMetrics.PlayIconSize),
                 )
             }
 
             IconButton(
                 onClick = onNext,
                 enabled = canSkipNext,
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier.size(VehicleRadioPlayerMetrics.PreviousNextButtonSize),
                 colors = IconButtonDefaults.iconButtonColors(contentColor = sideButtonContentColor),
             ) {
                 Icon(
                     painter = painterResource(R.drawable.skip_next),
                     contentDescription = "Nächster Titel",
-                    modifier = Modifier.size(30.dp),
+                    modifier = Modifier.size(VehicleRadioPlayerMetrics.PreviousNextIconSize),
                 )
             }
 
@@ -191,8 +192,8 @@ fun ColumnScope.VehiclePlayerControls(
                     },
                 color = if (repeatMode == Player.REPEAT_MODE_OFF) inactiveControlColor else activeControlColor,
                 onClick = onToggleRepeat,
-                buttonSize = 46.dp,
-                iconSize = 27.dp,
+                buttonSize = VehicleRadioPlayerMetrics.SecondaryActionButtonSize,
+                iconSize = VehicleRadioPlayerMetrics.SecondaryActionIconSize,
                 enabled = !isGuest,
             )
         }
@@ -208,8 +209,8 @@ fun ColumnScope.VehiclePlayerControls(
                 description = if (isWebRadio) "WebRadio läuft" else "Radio starten",
                 color = if (isWebRadio) activeControlColor else textColor,
                 onClick = onStartRadio,
-                buttonSize = 46.dp,
-                iconSize = 27.dp,
+                buttonSize = VehicleRadioPlayerMetrics.SecondaryActionButtonSize,
+                iconSize = VehicleRadioPlayerMetrics.SecondaryActionIconSize,
                 enabled = !isWebRadio,
             )
 
@@ -261,8 +262,8 @@ fun ColumnScope.VehiclePlayerControls(
                     description = if (recognitionInProgress) "Musik wird erkannt" else "Musik erkennen",
                     color = if (recognitionInProgress) activeControlColor else textColor,
                     onClick = onRecognize,
-                    buttonSize = 46.dp,
-                    iconSize = 28.dp,
+                    buttonSize = VehicleRadioPlayerMetrics.SecondaryActionButtonSize,
+                    iconSize = VehicleRadioPlayerMetrics.SecondaryActionLargeIconSize,
                     enabled = !recognitionInProgress,
                 )
             } else {
@@ -271,8 +272,8 @@ fun ColumnScope.VehiclePlayerControls(
                     description = if (likeEnabled) "Song gefällt mir" else "Kein eindeutiger YouTube-Music-Treffer",
                     color = if (isFavorite) activeControlColor else textColor.copy(alpha = if (likeEnabled) 1f else 0.35f),
                     onClick = onToggleLike,
-                    buttonSize = 46.dp,
-                    iconSize = 28.dp,
+                    buttonSize = VehicleRadioPlayerMetrics.SecondaryActionButtonSize,
+                    iconSize = VehicleRadioPlayerMetrics.SecondaryActionLargeIconSize,
                     enabled = likeEnabled,
                 )
             }

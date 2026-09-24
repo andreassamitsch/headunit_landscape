@@ -34,9 +34,16 @@ import com.metrolist.music.extensions.getCurrentQueueIndex
 import com.metrolist.music.extensions.getQueueWindows
 import com.metrolist.music.extensions.metadata
 import com.metrolist.music.extensions.togglePlayPause
+import com.metrolist.music.extensions.withResolvedArtistNameAliases
 import com.metrolist.music.playback.MusicService.MusicBinder
+import com.metrolist.music.playback.queues.ListQueue
 import com.metrolist.music.playback.queues.Queue
+import com.metrolist.music.radio.RadioStationStore
+import com.metrolist.music.radio.isClearRadioTrackMetadata
 import com.metrolist.music.radio.isRadioMediaId
+import com.metrolist.music.radio.normalizeRadioTrackText
+import com.metrolist.music.radio.parseRadioStreamTitle
+import com.metrolist.music.radio.radioFavoriteNeighbor
 import com.metrolist.shazamkit.models.RecognitionResult
 import com.metrolist.music.utils.dataStore
 import com.metrolist.music.utils.get
@@ -70,6 +77,7 @@ class PlayerConnection(
     }
 
     val service = binder.service
+    private val radioStationStore = RadioStationStore.get(context.applicationContext)
     private val playerReadinessFlow = service.isPlayerReady
 
     private fun getPlayerSafe(): ExoPlayer {
@@ -97,6 +105,32 @@ class PlayerConnection(
         } catch (_: NullPointerException) {
             null
         }
+
+    private fun withStoredRadioArtwork(
+        metadata: com.metrolist.music.models.MediaMetadata?,
+    ): com.metrolist.music.models.MediaMetadata? {
+        if (metadata == null || !isRadioMediaId(metadata.id)) return metadata
+        val storedArtwork =
+            radioStationStore.stations.value
+                .firstOrNull { it.mediaId == metadata.id }
+                ?.favicon
+                ?.takeIf { it.isNotBlank() }
+                ?: return metadata
+        val itemArtwork =
+            getPlayerOrNull()
+                ?.currentMediaItem
+                ?.mediaMetadata
+                ?.extras
+                ?.getString("radio_favicon")
+                ?.takeIf { it.isNotBlank() }
+        val currentArtwork = metadata.thumbnailUrl
+        val mayFollowStationArtwork = currentArtwork.isNullOrBlank() || currentArtwork == itemArtwork
+        return if (mayFollowStationArtwork && currentArtwork != storedArtwork) {
+            metadata.copy(thumbnailUrl = storedArtwork)
+        } else {
+            metadata
+        }
+    }
 
     val player: ExoPlayer
         get() = getPlayerSafe()
@@ -166,7 +200,7 @@ class PlayerConnection(
             initialState.third,
         )
 
-    val mediaMetadata = MutableStateFlow(getPlayerOrNull()?.currentMetadata)
+    val mediaMetadata = MutableStateFlow(withStoredRadioArtwork(getPlayerOrNull()?.currentMetadata))
     private var radioSongLookupJob: Job? = null
     private val radioSongCache = mutableMapOf<String, SongItem?>()
     /** Prevent repeated ICY/Media3 callbacks from reapplying the same radio song. */
@@ -175,6 +209,8 @@ class PlayerConnection(
     val radioResolvedSong = MutableStateFlow<SongItem?>(null)
     /** True only when the stream or manual recognition supplied artist + title. */
     val radioHasTrackMetadata = MutableStateFlow(false)
+    /** True only when the current WebRadio metadata has a real title artwork, not the station logo fallback. */
+    val radioHasTrackArtwork = MutableStateFlow(false)
     // stateIn so the latest DB result is cached and shared: on resume / re-subscription the value
     // is available immediately instead of re-running the Room query (which delayed now-playing
     // details, format and like-state on every foreground). Lazily keeps it hot across lifecycle
@@ -247,6 +283,18 @@ class PlayerConnection(
     private var attachedPlayer: Player? = null
 
     init {
+        // All StateFlows used by this collector are initialized above this point.
+        // Keep it here so an immediate StateFlow emission during service reconnect
+        // cannot observe a partially constructed PlayerConnection.
+        scope.launch {
+            radioStationStore.stations.collect {
+                if (isRadioMediaId(getPlayerOrNull()?.currentMediaItem?.mediaId)) {
+                    val stableMetadata = withStoredRadioArtwork(mediaMetadata.value)
+                    if (stableMetadata != mediaMetadata.value) mediaMetadata.value = stableMetadata
+                    updateCanSkipPreviousAndNext()
+                }
+            }
+        }
         scope.launch {
             service.playerFlow.collect { newPlayer ->
                 if (newPlayer != null && newPlayer != attachedPlayer) {
@@ -300,6 +348,18 @@ class PlayerConnection(
             Timber.tag(TAG).e(e, "Error in playQueue")
             throw e
         }
+    }
+
+    fun refreshArtistNameAliases() {
+        val player = getPlayerOrNull() ?: return
+        repeat(player.mediaItemCount) { index ->
+            val mediaItem = player.getMediaItemAt(index)
+            val resolvedMediaItem = mediaItem.withResolvedArtistNameAliases()
+            if (resolvedMediaItem !== mediaItem) {
+                player.replaceMediaItem(index, resolvedMediaItem)
+            }
+        }
+        mediaMetadata.value = player.currentMetadata
     }
 
     fun startRadioSeamlessly() {
@@ -472,12 +532,33 @@ class PlayerConnection(
         }
     }
 
+    private fun playAdjacentRadioFavorite(direction: Int): Boolean {
+        val activePlayer = getPlayerOrNull() ?: return false
+        val currentMediaId = activePlayer.currentMediaItem?.mediaId
+        if (!isRadioMediaId(currentMediaId)) return false
+        val target =
+            radioFavoriteNeighbor(
+                ordered = radioStationStore.stations.value,
+                currentMediaId = currentMediaId,
+                direction = direction,
+            ) ?: return false
+        playQueue(
+            queue = ListQueue(title = target.name, items = listOf(target.toMediaItem())),
+            notifyUserSelection = false,
+        )
+        return true
+    }
+
     fun seekToNext() {
         try {
             // When casting, use Cast skip instead of local player
             val castHandler = service.castConnectionHandler
             if (castHandler?.isCasting?.value == true) {
                 castHandler.skipToNext()
+                return
+            }
+            if (isRadioMediaId(player.currentMediaItem?.mediaId)) {
+                if (playAdjacentRadioFavorite(1)) onSkipNext?.invoke()
                 return
             }
             player.seekToNext()
@@ -502,15 +583,10 @@ class PlayerConnection(
                 return
             }
 
-            // A live radio stream has no meaningful "restart current item" position.
-            // Previous must always select the previous saved station.
-            if (isRadioMediaId(player.currentMediaItem?.mediaId) && player.hasPreviousMediaItem()) {
-                player.seekToPreviousMediaItem()
-                if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) {
-                    player.prepare()
-                }
-                player.playWhenReady = true
-                onSkipPrevious?.invoke()
+            // A live radio stream has no seek position. Resolve the previous
+            // saved favorite ourselves and keep ExoPlayer on a single stream.
+            if (isRadioMediaId(player.currentMediaItem?.mediaId)) {
+                if (playAdjacentRadioFavorite(-1)) onSkipPrevious?.invoke()
                 return
             }
 
@@ -689,7 +765,8 @@ class PlayerConnection(
         lastAppliedRadioMetadataKey = null
         radioResolvedSong.value = null
         radioHasTrackMetadata.value = false
-        mediaMetadata.value = mediaItem?.metadata
+        radioHasTrackArtwork.value = false
+        mediaMetadata.value = withStoredRadioArtwork(mediaItem?.metadata)
         currentMediaItemIndex.value = player.currentMediaItemIndex
         currentWindowIndex.value = player.getCurrentQueueIndex()
         updateCanSkipPreviousAndNext()
@@ -697,7 +774,7 @@ class PlayerConnection(
 
     override fun onMediaMetadataChanged(newMetadata: androidx.media3.common.MediaMetadata) {
         val currentItem = getPlayerOrNull()?.currentMediaItem ?: return
-        val base = currentItem.metadata ?: return
+        val base = withStoredRadioArtwork(currentItem.metadata) ?: return
         if (!isRadioMediaId(base.id)) {
             mediaMetadata.value = base
             return
@@ -732,7 +809,7 @@ class PlayerConnection(
 
     private fun applyRadioStreamTitle(rawTitle: String) {
         val currentItem = getPlayerOrNull()?.currentMediaItem ?: return
-        val base = currentItem.metadata ?: return
+        val base = withStoredRadioArtwork(currentItem.metadata) ?: return
         if (!isRadioMediaId(base.id)) return
 
         val stationName =
@@ -741,7 +818,7 @@ class PlayerConnection(
                 ?: base.title
         val parsed = parseRadioStreamTitle(rawTitle)
         val metadataKey =
-            "${base.id}|${normalizeTrackText(parsed.first.orEmpty())}|${normalizeTrackText(parsed.second)}"
+            "${base.id}|${normalizeRadioTrackText(parsed.first.orEmpty())}|${normalizeRadioTrackText(parsed.second)}"
         if (lastAppliedRadioMetadataKey == metadataKey) return
         lastAppliedRadioMetadataKey = metadataKey
         val dynamic =
@@ -756,6 +833,7 @@ class PlayerConnection(
                     ),
             )
         mediaMetadata.value = dynamic
+        radioHasTrackArtwork.value = false
 
         val artist = parsed.first
         val isClear = isClearRadioTrackMetadata(artist, parsed.second, stationName)
@@ -772,11 +850,11 @@ class PlayerConnection(
     /** Apply a manual Shazam result to the current radio item and resolve its YTM identity. */
     fun applyRecognizedRadioTrack(result: RecognitionResult) {
         val currentItem = getPlayerOrNull()?.currentMediaItem ?: return
-        val base = currentItem.metadata ?: return
+        val base = withStoredRadioArtwork(currentItem.metadata) ?: return
         if (!isRadioMediaId(base.id)) return
         val preferredCover = result.coverArtHqUrl ?: result.coverArtUrl
         lastAppliedRadioMetadataKey =
-            "${base.id}|${normalizeTrackText(result.artist)}|${normalizeTrackText(result.title)}"
+            "${base.id}|${normalizeRadioTrackText(result.artist)}|${normalizeRadioTrackText(result.title)}"
         mediaMetadata.value =
             base.copy(
                 title = result.title,
@@ -784,63 +862,11 @@ class PlayerConnection(
                 thumbnailUrl = preferredCover ?: base.thumbnailUrl,
             )
         radioHasTrackMetadata.value = result.artist.isNotBlank() && result.title.isNotBlank()
+        radioHasTrackArtwork.value = !preferredCover.isNullOrBlank()
         if (radioHasTrackMetadata.value) {
             lookupRadioSong(base, result.artist, result.title, preferredCover)
         }
     }
-
-    private fun parseRadioStreamTitle(raw: String): Pair<String?, String> {
-        val cleaned = raw.substringBefore(" [").trim()
-        val separator = listOf(" - ", " – ", " — ", " | ").firstOrNull { it in cleaned }
-        if (separator == null) return null to cleaned
-        val artist = cleaned.substringBefore(separator).trim().takeIf { it.isNotBlank() }
-        val title = cleaned.substringAfter(separator).trim().ifBlank { cleaned }
-        return artist to title
-    }
-
-    private fun isClearRadioTrackMetadata(
-        artist: String?,
-        title: String,
-        stationName: String,
-    ): Boolean {
-        if (artist.isNullOrBlank() || title.isBlank()) return false
-        val normalizedArtist = normalizeTrackText(artist)
-        val normalizedTitle = normalizeTrackText(title)
-        val normalizedStation = normalizeTrackText(stationName)
-        if (normalizedArtist.length < 2 || normalizedTitle.length < 2) return false
-        if (normalizedArtist == normalizedStation || normalizedTitle == normalizedStation) return false
-        if ("http" in normalizedArtist || "http" in normalizedTitle || "www" in normalizedArtist || "www" in normalizedTitle) return false
-
-        val generic =
-            setOf(
-                "radio",
-                "webradio",
-                "live",
-                "stream",
-                "unknown",
-                "unbekannt",
-                "station identification",
-                "jingle",
-                "promo",
-                "advertisement",
-                "commercial",
-                "werbung",
-                "news",
-                "nachrichten",
-            )
-        return normalizedArtist !in generic && normalizedTitle !in generic
-    }
-
-    private fun normalizeTrackText(value: String): String =
-        value
-            .lowercase()
-            .replace(
-                Regex("""[\(\[][^(\[]*(official|music video|video|audio|lyrics?|remaster(?:ed)?|live)[^\)\]]*[\)\]]"""),
-                " ",
-            ).replace(Regex("""\b(feat|ft)\.?\b.*"""), " ")
-            .replace(Regex("""[^\p{L}\p{N}]+"""), " ")
-            .trim()
-            .replace(Regex("""\s+"""), " ")
 
     private fun tokenCoverage(expected: String, actual: String): Double {
         if (expected.isBlank() || actual.isBlank()) return 0.0
@@ -856,10 +882,10 @@ class PlayerConnection(
         artist: String,
         title: String,
     ): Boolean {
-        val expectedTitle = normalizeTrackText(title)
-        val actualTitle = normalizeTrackText(song.title)
-        val expectedArtist = normalizeTrackText(artist)
-        val actualArtist = normalizeTrackText(song.artists.joinToString(" ") { it.name })
+        val expectedTitle = normalizeRadioTrackText(title)
+        val actualTitle = normalizeRadioTrackText(song.title)
+        val expectedArtist = normalizeRadioTrackText(artist)
+        val actualArtist = normalizeRadioTrackText(song.artists.joinToString(" ") { it.name })
         return tokenCoverage(expectedTitle, actualTitle) >= 0.80 &&
             tokenCoverage(expectedArtist, actualArtist) >= 0.70
     }
@@ -870,7 +896,8 @@ class PlayerConnection(
         title: String,
         preferredCover: String? = null,
     ) {
-        val key = "${normalizeTrackText(artist)}|${normalizeTrackText(title)}"
+        val key = "${normalizeRadioTrackText(artist)}|${normalizeRadioTrackText(title)}"
+        radioHasTrackArtwork.value = !preferredCover.isNullOrBlank()
         if (radioSongCache.containsKey(key)) {
             applyResolvedRadioSong(base, title, radioSongCache[key], preferredCover)
             return
@@ -903,6 +930,7 @@ class PlayerConnection(
         if (current?.id != base.id || current.title != expectedTitle) return
         radioResolvedSong.value = song
         val cover = preferredCover ?: song?.thumbnail?.resize(1200, 1200)
+        radioHasTrackArtwork.value = !cover.isNullOrBlank()
         if (song != null) {
             Timber.tag(TAG).d("Resolved radio song to YouTube Music: %s (%s)", song.title, song.id)
             mediaMetadata.value =
@@ -950,6 +978,13 @@ class PlayerConnection(
     }
 
     private fun updateCanSkipPreviousAndNext() {
+        val currentMediaId = player.currentMediaItem?.mediaId
+        if (isRadioMediaId(currentMediaId)) {
+            val favorites = radioStationStore.stations.value
+            canSkipPrevious.value = radioFavoriteNeighbor(favorites, currentMediaId, -1) != null
+            canSkipNext.value = radioFavoriteNeighbor(favorites, currentMediaId, 1) != null
+            return
+        }
         if (!player.currentTimeline.isEmpty) {
             val window =
                 player.currentTimeline.getWindow(player.currentMediaItemIndex, Timeline.Window())

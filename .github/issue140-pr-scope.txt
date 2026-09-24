@@ -1,0 +1,1 @@
+Scope: fix physical touch on song rows after Home -> Genre -> Playlist, preserve keyboard and standard MetroList behavior, validate before updater publication.

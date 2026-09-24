@@ -17,11 +17,38 @@ class RadioStationStore private constructor(context: Context) {
     private val _stations = MutableStateFlow(loadStations())
     val stations: StateFlow<List<RadioStation>> = _stations.asStateFlow()
 
+    /** Background catalogue/metadata updates may not replace a fixed user logo. */
     @Synchronized
     fun addOrUpdate(station: RadioStation) {
+        addOrUpdateInternal(station, preserveExistingManualLogo = true)
+    }
+
+    /** An explicit edit is allowed to replace or clear the previously fixed logo. */
+    @Synchronized
+    fun replaceFromUser(station: RadioStation) {
+        addOrUpdateInternal(station, preserveExistingManualLogo = false)
+    }
+
+    private fun addOrUpdateInternal(
+        station: RadioStation,
+        preserveExistingManualLogo: Boolean,
+    ) {
         val list = _stations.value.toMutableList()
         val index = list.indexOfFirst { it.uuid == station.uuid }
-        if (index >= 0) list[index] = station else list.add(station)
+        if (index >= 0) {
+            val previous = list[index]
+            val stableStation =
+                when {
+                    preserveExistingManualLogo && previous.manualFavicon && previous.favicon.isNotBlank() ->
+                        station.copy(favicon = previous.favicon, manualFavicon = true)
+                    preserveExistingManualLogo && station.favicon.isBlank() && previous.favicon.isNotBlank() ->
+                        station.copy(favicon = previous.favicon)
+                    else -> station
+                }
+            list[index] = stableStation
+        } else {
+            list.add(station)
+        }
         persist(list)
     }
 
