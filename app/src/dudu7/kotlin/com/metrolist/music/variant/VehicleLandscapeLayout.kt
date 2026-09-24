@@ -262,6 +262,7 @@ fun VehicleLandscapeLayout(
     val isPortrait = windowSize.height > windowSize.width
 
     val context = LocalContext.current
+    val tvDpadEnabled = remember(context) { TvDpadNavigation.isEnabled(context) }
     val initialTab =
         remember(context) {
             val storedRoute =
@@ -587,6 +588,7 @@ fun VehicleLandscapeLayout(
                 Modifier
                     .fillMaxSize()
                     .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .tvDpadFocusGroup(tvDpadEnabled)
                     .nestedScroll(state.preUpPostDownNestedScrollConnection),
         ) {
             if (physicalRadioState.isActive) {
@@ -639,6 +641,7 @@ fun VehicleLandscapeLayout(
                     Modifier
                         .fillMaxSize()
                         .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .tvDpadFocusGroup(tvDpadEnabled)
                         .clip(if (frostedIceEnabled) glassShape else RoundedCornerShape(12.dp))
                         .vehicleHazeEffect(
                             state = hazeState,
@@ -676,7 +679,8 @@ fun VehicleLandscapeLayout(
                 ) {
                     LazyRow(
                         state = tabListState,
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp)
+                            .tvDpadFocusGroup(tvDpadEnabled),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         itemsIndexed(
@@ -732,7 +736,8 @@ fun VehicleLandscapeLayout(
                                                 color = itemColor,
                                             )
                                         },
-                                        modifier = Modifier.fillMaxSize(),
+                                        modifier = Modifier.fillMaxSize()
+                                            .tvDpadFocusIndicator(tvDpadEnabled),
                                     )
                                     if (isSelected) {
                                         Box(
@@ -778,6 +783,7 @@ fun VehicleLandscapeLayout(
                             Modifier
                                 .weight(1f)
                                 .fillMaxWidth()
+                                .tvDpadFocusGroup(tvDpadEnabled)
                                 .onGloballyPositioned { coordinates ->
                                     rightPaneOriginInRoot = coordinates.positionInRoot()
                                 }
