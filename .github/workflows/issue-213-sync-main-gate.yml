@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
           submodules: false
-      - name: Merge confirmed release history, keep main-only changes and stop on unresolved conflicts
+      - name: Merge confirmed release history and verify identical product source
         shell: bash
         run: |
           set -euo pipefail
@@ -34,6 +34,8 @@ jobs:
             git diff --name-only --diff-filter=U
             exit 1
           fi
+          # Main's older RadioStation.kt auto-merges but must not replace the released HLS handling.
+          git checkout origin/feature/download-http-chunking-208 -- app/src/main/kotlin/com/metrolist/music/radio/RadioStation.kt
           echo 'Differences from published 13.7.83 in application/build source:'
           git diff --name-status origin/feature/download-http-chunking-208 -- app innertube gradle settings.gradle.kts build.gradle.kts gradle.properties | tee /tmp/release-source-diff.txt
           if test -s /tmp/release-source-diff.txt; then
