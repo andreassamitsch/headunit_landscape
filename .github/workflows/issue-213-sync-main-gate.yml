@@ -1,0 +1,46 @@
+name: Issue 213 Dudu7 13.7.83 safe main integration
+
+on:
+  push:
+    branches:
+      - integration/sync-dudu7-13.7.83-main-213
+    paths:
+      - .github/workflows/issue-213-sync-main-gate.yml
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+          submodules: false
+      - name: Merge confirmed release history, keep main-only changes and stop on unresolved conflicts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin main feature/download-http-chunking-208
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+          git merge --no-commit --no-ff -X theirs origin/feature/download-http-chunking-208 || true
+          if test -n "$(git ls-files -u)"; then
+            echo 'Unresolved merge paths:'
+            git diff --name-only --diff-filter=U
+            exit 1
+          fi
+          echo 'Differences from published 13.7.83 in application/build source:'
+          git diff --name-status origin/feature/download-http-chunking-208 -- app innertube gradle settings.gradle.kts build.gradle.kts gradle.properties | tee /tmp/release-source-diff.txt
+          if test -s /tmp/release-source-diff.txt; then
+            echo 'Application/build differs from published release; stop for manual review.'
+            exit 1
+          fi
+          git diff --cached --check
+          git commit -m 'chore(sync): merge confirmed dudu7 13.7.83 into main baseline (#213)'
+          git merge-base --is-ancestor origin/feature/download-http-chunking-208 HEAD
+          git push origin HEAD:integration/sync-dudu7-13.7.83-main-213
